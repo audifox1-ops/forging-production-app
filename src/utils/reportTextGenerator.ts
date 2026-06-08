@@ -35,9 +35,14 @@ export function generateReportText(
   reportDate: string
 ): string {
   const lines: string[] = [];
+  const productShortfallTotal = Math.max(0, summary.total_product_plan - summary.total_product_actual);
+  const billetShortfallTotal = Math.max(0, summary.total_billet_plan - summary.total_billet_actual);
 
   // 전체 실적 요약
-  lines.push(`전일 전체 생산실적은 계획 ${formatNumber(summary.total_plan)}KG 대비 실적 ${formatNumber(summary.total_actual)}KG로 달성율 ${summary.total_achievement_rate.toFixed(1)}%입니다.`);
+  lines.push(
+    `전일 제품 실적은 계획 ${formatNumber(summary.total_product_plan)}KG 대비 실적 ${formatNumber(summary.total_product_actual)}KG로 달성율 ${summary.product_achievement_rate.toFixed(1)}%이며, ` +
+    `황지 실적은 계획 ${formatNumber(summary.total_billet_plan)}KG 대비 실적 ${formatNumber(summary.total_billet_actual)}KG로 달성율 ${summary.billet_achievement_rate.toFixed(1)}%입니다.`
+  );
 
   // 미달 설비 찾기
   const shortfallEntries = entries.filter(e => {
@@ -59,9 +64,15 @@ export function generateReportText(
       return currShortfall > prevShortfall ? curr : prev;
     });
 
-    const productShortfall = (worst.product_plan || 0) - (worst.product_actual || 0);
+    const productShortfall = Math.max(0, (worst.product_plan || 0) - (worst.product_actual || 0));
+    const billetShortfall = Math.max(0, (worst.billet_plan || 0) - (worst.billet_actual || 0));
+    const focusType = productShortfall >= billetShortfall ? '제품' : '황지';
+    const focusPlan = focusType === '제품' ? worst.product_plan : worst.billet_plan;
+    const focusActual = focusType === '제품' ? worst.product_actual : worst.billet_actual;
+    const focusShortfall = focusType === '제품' ? productShortfall : billetShortfall;
+
     lines.push(
-      `주요 미달 설비는 ${worst.equipment} ${worst.shift}이며, 제품 기준 계획 ${formatNumber(worst.product_plan)}KG 대비 실적 ${formatNumber(worst.product_actual)}KG로 ${formatNumber(productShortfall)}KG 미달되었습니다.`
+      `주요 미달 설비는 ${worst.equipment} ${worst.shift}이며, ${focusType} 기준 계획 ${formatNumber(focusPlan)}KG 대비 실적 ${formatNumber(focusActual)}KG로 ${formatNumber(focusShortfall)}KG 미달되었습니다.`
     );
 
     // 원인 문장
@@ -79,9 +90,9 @@ export function generateReportText(
   }
 
   // 익일 계획
-  if (summary.total_shortfall > 0) {
+  if (productShortfallTotal > 0 || billetShortfallTotal > 0) {
     lines.push(
-      `익일 계획에는 전일 미달분 ${formatNumber(summary.total_shortfall)}KG를 반영하여 총 ${formatNumber(summary.total_plan + summary.total_shortfall)}KG 생산을 목표로 합니다.`
+      `익일 계획에는 제품 미달분 ${formatNumber(productShortfallTotal)}KG, 황지 미달분 ${formatNumber(billetShortfallTotal)}KG를 각각 반영하여 운영합니다.`
     );
   } else {
     lines.push('금일 생산은 계획 대비 정상 달성하였으며, 익일에도 동일한 목표로 운영합니다.');

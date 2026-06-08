@@ -17,6 +17,28 @@ export default function AdminReportPage() {
   const entries = report ? getEntriesByReport(report.id) : [];
   const summary = calcDashboardSummary(entries);
   const reportText = report ? generateReportText(summary, entries, today) : '';
+  const productShortfall = Math.max(0, summary.total_product_plan - summary.total_product_actual);
+  const billetShortfall = Math.max(0, summary.total_billet_plan - summary.total_billet_actual);
+  const summaryItems = [
+    {
+      label: '제품',
+      plan: summary.total_product_plan,
+      actual: summary.total_product_actual,
+      rate: summary.product_achievement_rate,
+      shortfall: productShortfall,
+      panelClass: 'border-blue-200 bg-blue-50',
+      labelClass: 'text-blue-800',
+    },
+    {
+      label: '황지',
+      plan: summary.total_billet_plan,
+      actual: summary.total_billet_actual,
+      rate: summary.billet_achievement_rate,
+      shortfall: billetShortfall,
+      panelClass: 'border-amber-200 bg-amber-50',
+      labelClass: 'text-amber-800',
+    },
+  ];
 
   const handlePrint = () => navigate(`/reports/${today}/print`);
 
@@ -66,19 +88,37 @@ export default function AdminReportPage() {
           <h3 className="font-semibold text-gray-800">전체 실적 요약</h3>
         </div>
         <div className="card-body">
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: '전체 계획', value: `${formatNumber(summary.total_plan)} KG`, color: 'text-gray-700' },
-              { label: '전체 실적', value: `${formatNumber(summary.total_actual)} KG`, color: 'text-blue-700' },
-              {
-                label: '전체 달성율', value: `${summary.total_achievement_rate.toFixed(1)}%`,
-                color: summary.total_achievement_rate >= 100 ? 'text-green-600' :
-                  summary.total_achievement_rate >= 90 ? 'text-yellow-600' : 'text-red-600'
-              },
-            ].map(item => (
-              <div key={item.label} className="text-center py-4 bg-gray-50 rounded-lg">
-                <div className="text-xs text-gray-500 mb-1">{item.label}</div>
-                <div className={`text-xl font-bold ${item.color}`}>{item.value}</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {summaryItems.map(item => (
+              <div key={item.label} className={`rounded-lg border p-4 ${item.panelClass}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className={`text-sm font-bold ${item.labelClass}`}>{item.label}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">계획 대비 실적</div>
+                  </div>
+                  <div className={`text-2xl font-bold ${
+                    item.rate >= 100 ? 'text-green-700' :
+                      item.rate >= 90 ? 'text-yellow-700' : 'text-red-700'
+                  }`}>
+                    {item.rate.toFixed(1)}%
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
+                  <div>
+                    <div className="text-xs text-gray-500">계획</div>
+                    <div className="font-semibold text-gray-800">{formatNumber(item.plan)} KG</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">실적</div>
+                    <div className="font-semibold text-gray-800">{formatNumber(item.actual)} KG</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">미달량</div>
+                    <div className={`font-semibold ${item.shortfall > 0 ? 'text-red-700' : 'text-gray-500'}`}>
+                      {item.shortfall > 0 ? `${formatNumber(item.shortfall)} KG` : '-'}
+                    </div>
+                  </div>
+                </div>
               </div>
             ))}
           </div>

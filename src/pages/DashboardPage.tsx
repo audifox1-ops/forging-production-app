@@ -1,28 +1,135 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import {
+  endOfMonth,
+  endOfWeek,
+  endOfYear,
+  format,
+  isWithinInterval,
+  parseISO,
+  startOfMonth,
+  startOfWeek,
+  startOfYear,
+} from 'date-fns';
 import { ko } from 'date-fns/locale';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
 } from 'recharts';
 import {
-  TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Clock,
+  AlertTriangle, CalendarRange, CheckCircle, Clock,
   Printer, PlusCircle, RefreshCw, Users,
 } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { calcDashboardSummary, formatNumber, getAchievementStatus } from '../utils/calculations';
-import { getKPIStatusText } from '../utils/reportTextGenerator';
+import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import KPIStatusCard from '../components/KPIStatusCard';
 import SubmitStatusBadge from '../components/SubmitStatusBadge';
+
+type SummaryPeriod = 'day' | 'week' | 'month' | 'year';
+
+const PERIOD_OPTIONS: { value: SummaryPeriod; label: string }[] = [
+  { value: 'day', label: '일간' },
+  { value: 'week', label: '주간' },
+  { value: 'month', label: '월간' },
+  { value: 'year', label: '연간' },
+];
+
+function getPeriodRange(dateString: string, period: SummaryPeriod) {
+  const baseDate = parseISO(dateString);
+
+  switch (period) {
+    case 'week':
+      return {
+        start: startOfWeek(baseDate, { weekStartsOn: 1 }),
+        end: endOfWeek(baseDate, { weekStartsOn: 1 }),
+      };
+    case 'month':
+      return {
+        start: startOfMonth(baseDate),
+        end: endOfMonth(baseDate),
+      };
+    case 'year':
+      return {
+        start: startOfYear(baseDate),
+        end: endOfYear(baseDate),
+      };
+    default:
+      return { start: baseDate, end: baseDate };
+  }
+}
+
+function formatPeriodRange(range: { start: Date; end: Date }, period: SummaryPeriod) {
+  if (period === 'day') {
+    return format(range.start, 'yyyy년 MM월 dd일 (eee)', { locale: ko });
+  }
+  if (period === 'month') {
+    return format(range.start, 'yyyy년 MM월', { locale: ko });
+  }
+  if (period === 'year') {
+    return format(range.start, 'yyyy년', { locale: ko });
+  }
+  return `${format(range.start, 'yyyy년 MM월 dd일', { locale: ko })} - ${format(range.end, 'MM월 dd일', { locale: ko })}`;
+}
+
+function getRateColor(rate: number) {
+  if (rate >= 100) return 'text-green-700';
+  if (rate >= 90) return 'text-yellow-700';
+  return 'text-red-700';
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { reports, getEntriesByReport, createReport } = useReportStore();
   const [selectedDate, setSelectedDate] = React.useState(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedPeriod, setSelectedPeriod] = React.useState<SummaryPeriod>('day');
 
   const report = reports.find(r => r.report_date === selectedDate);
-  const entries = report ? getEntriesByReport(report.id) : [];
+  const periodRange = React.useMemo(
+    () => getPeriodRange(selectedDate, selectedPeriod),
+    [selectedDate, selectedPeriod]
+  );
+  const periodReports = React.useMemo(
+    () => reports
+      .filter(r => isWithinInterval(parseISO(r.report_date), periodRange))
+      .sort((a, b) => new Date(a.report_date).getTime() - new Date(b.report_date).getTime()),
+    [reports, periodRange]
+  );
+  const reportDateById = React.useMemo(
+    () => new Map(reports.map(r => [r.id, r.report_date])),
+    [reports]
+  );
+  const entries = React.useMemo(() => {
+    if (selectedPeriod === 'day') {
+      return report ? getEntriesByReport(report.id) : [];
+    }
+
+    return periodReports.flatMap(periodReport => getEntriesByReport(periodReport.id));
+  }, [selectedPeriod, report, periodReports, getEntriesByReport]);
   const summary = calcDashboardSummary(entries);
+  const hasPeriodData = selectedPeriod === 'day' ? Boolean(report) : periodReports.length > 0;
+  const periodLabel = PERIOD_OPTIONS.find(option => option.value === selectedPeriod)?.label ?? '일간';
+  const periodRangeLabel = formatPeriodRange(periodRange, selectedPeriod);
+  const productShortfall = Math.max(0, summary.total_product_plan - summary.total_product_actual);
+  const billetShortfall = Math.max(0, summary.total_billet_plan - summary.total_billet_actual);
+  const summaryCards = [
+    {
+      label: '제품',
+      plan: summary.total_product_plan,
+      actual: summary.total_product_actual,
+      rate: summary.product_achievement_rate,
+      shortfall: productShortfall,
+      panelClass: 'border-blue-200 bg-blue-50',
+      labelClass: 'text-blue-800',
+    },
+    {
+      label: '황지',
+      plan: summary.total_billet_plan,
+      actual: summary.total_billet_actual,
+      rate: summary.billet_achievement_rate,
+      shortfall: billetShortfall,
+      panelClass: 'border-amber-200 bg-amber-50',
+      labelClass: 'text-amber-800',
+    },
+  ];
 
   const handleCreateReport = () => {
     createReport(selectedDate);
@@ -66,22 +173,44 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">생산 대시보드</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {format(new Date(selectedDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko })} 기준
+            {periodLabel} · {periodRangeLabel} 기준
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1">
+            {PERIOD_OPTIONS.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setSelectedPeriod(option.value)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  selectedPeriod === option.value
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <input
             type="date"
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
             className="form-input w-auto"
           />
-          {!report ? (
+          {selectedPeriod !== 'day' && (
+            <button onClick={() => navigate('/reports')} className="btn-secondary flex items-center gap-2">
+              <CalendarRange size={16} />
+              보고 이력
+            </button>
+          )}
+          {selectedPeriod === 'day' && !report ? (
             <button onClick={handleCreateReport} className="btn-primary flex items-center gap-2">
               <PlusCircle size={16} />
               보고서 생성
             </button>
-          ) : (
+          ) : selectedPeriod === 'day' ? (
             <>
               <button onClick={handleGoInput} className="btn-secondary flex items-center gap-2">
                 <RefreshCw size={16} />
@@ -92,59 +221,121 @@ export default function DashboardPage() {
                 보고서 출력
               </button>
             </>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {!report ? (
+      {!hasPeriodData ? (
         <div className="card">
           <div className="card-body text-center py-12">
             <AlertTriangle className="mx-auto mb-3 text-yellow-400" size={40} />
-            <p className="text-gray-600">해당 날짜의 보고서가 없습니다.</p>
-            <button onClick={handleCreateReport} className="btn-primary mt-4">
-              오늘 보고서 생성
-            </button>
+            <p className="text-gray-600">
+              {selectedPeriod === 'day' ? '해당 날짜의 보고서가 없습니다.' : '선택 기간의 보고서가 없습니다.'}
+            </p>
+            {selectedPeriod === 'day' && (
+              <button onClick={handleCreateReport} className="btn-primary mt-4">
+                보고서 생성
+              </button>
+            )}
           </div>
         </div>
       ) : (
         <>
           {/* 보고서 상태 배너 */}
           <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-            <div className="flex items-center gap-2">
-              {report.status === 'closed' ? (
-                <CheckCircle size={18} className="text-green-600" />
-              ) : (
-                <Clock size={18} className="text-blue-600" />
-              )}
-              <span className="font-medium text-blue-800">
-                보고서 상태:{' '}
-                <span className={report.status === 'closed' ? 'text-green-700' : 'text-blue-700'}>
-                  {report.status === 'draft' ? '작성중' :
-                    report.status === 'collecting' ? '입력중' :
-                      report.status === 'submitted' ? '제출완료' :
-                        report.status === 'reviewed' ? '검토완료' : '마감'}
-                </span>
-              </span>
+            {selectedPeriod === 'day' && report ? (
+              <>
+                <div className="flex items-center gap-2">
+                  {report.status === 'closed' ? (
+                    <CheckCircle size={18} className="text-green-600" />
+                  ) : (
+                    <Clock size={18} className="text-blue-600" />
+                  )}
+                  <span className="font-medium text-blue-800">
+                    보고서 상태:{' '}
+                    <span className={report.status === 'closed' ? 'text-green-700' : 'text-blue-700'}>
+                      {report.status === 'draft' ? '작성중' :
+                        report.status === 'collecting' ? '입력중' :
+                          report.status === 'submitted' ? '제출완료' :
+                            report.status === 'reviewed' ? '검토완료' : '마감'}
+                    </span>
+                  </span>
+                </div>
+                <div className="ml-auto text-sm text-blue-600">
+                  제출: {summary.submit_status_count.submitted}/{summary.submit_status_count.total}명 ·
+                  미입력: {summary.submit_status_count.not_started}명
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <CalendarRange size={18} className="text-blue-600" />
+                  <span className="font-medium text-blue-800">
+                    기간 집계: {periodReports.length}건 보고서
+                  </span>
+                </div>
+                <div className="ml-auto text-sm text-blue-600">
+                  제출: {summary.submit_status_count.submitted}/{summary.submit_status_count.total}명 ·
+                  미입력: {summary.submit_status_count.not_started}명
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* 전체 실적 요약 */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="font-semibold text-gray-800">전체 실적 요약</h3>
+              <span className="text-sm text-gray-500">{periodLabel} 기준</span>
             </div>
-            <div className="ml-auto text-sm text-blue-600">
-              제출: {summary.submit_status_count.submitted}/{summary.submit_status_count.total}명 ·
-              미입력: {summary.submit_status_count.not_started}명
+            <div className="card-body">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {summaryCards.map(item => (
+                  <div key={item.label} className={`rounded-lg border p-4 ${item.panelClass}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className={`text-sm font-bold ${item.labelClass}`}>{item.label}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">계획 대비 실적</div>
+                      </div>
+                      <div className={`text-2xl font-bold tabular-nums ${getRateColor(item.rate)}`}>
+                        {item.rate.toFixed(1)}%
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
+                      <div>
+                        <div className="text-xs text-gray-500">계획</div>
+                        <div className="font-semibold text-gray-800 tabular-nums">{formatNumber(item.plan)} KG</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">실적</div>
+                        <div className="font-semibold text-gray-800 tabular-nums">{formatNumber(item.actual)} KG</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">미달량</div>
+                        <div className={`font-semibold tabular-nums ${item.shortfall > 0 ? 'text-red-700' : 'text-gray-500'}`}>
+                          {item.shortfall > 0 ? `${formatNumber(item.shortfall)} KG` : '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
           {/* KPI 카드 */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <KPIStatusCard
-              title="전체 달성율"
-              value={`${summary.total_achievement_rate.toFixed(1)}%`}
-              rate={summary.total_achievement_rate}
-              subtitle={`${formatNumber(summary.total_actual)} / ${formatNumber(summary.total_plan)} KG`}
-            />
-            <KPIStatusCard
               title="제품 달성율"
               value={`${summary.product_achievement_rate.toFixed(1)}%`}
               rate={summary.product_achievement_rate}
               subtitle={`${formatNumber(summary.total_product_actual)} / ${formatNumber(summary.total_product_plan)} KG`}
+            />
+            <KPIStatusCard
+              title="제품 미달량"
+              value={`${formatNumber(productShortfall)} KG`}
+              rate={productShortfall === 0 ? 100 : summary.product_achievement_rate}
+              subtitle={productShortfall === 0 ? '미달 없음' : '만회 필요'}
             />
             <KPIStatusCard
               title="황지 달성율"
@@ -153,11 +344,10 @@ export default function DashboardPage() {
               subtitle={`${formatNumber(summary.total_billet_actual)} / ${formatNumber(summary.total_billet_plan)} KG`}
             />
             <KPIStatusCard
-              title="총 미달량"
-              value={`${formatNumber(summary.total_shortfall)} KG`}
-              rate={summary.total_shortfall === 0 ? 100 : summary.total_achievement_rate}
-              subtitle={summary.total_shortfall === 0 ? '미달 없음' : '만회 필요'}
-              invertColor
+              title="황지 미달량"
+              value={`${formatNumber(billetShortfall)} KG`}
+              rate={billetShortfall === 0 ? 100 : summary.billet_achievement_rate}
+              subtitle={billetShortfall === 0 ? '미달 없음' : '만회 필요'}
             />
             <KPIStatusCard
               title="제출완료"
@@ -274,6 +464,9 @@ export default function DashboardPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
+                      {selectedPeriod !== 'day' && (
+                        <th className="px-4 py-2.5 text-left text-gray-600 font-medium">보고일자</th>
+                      )}
                       <th className="px-4 py-2.5 text-left text-gray-600 font-medium">담당자</th>
                       <th className="px-4 py-2.5 text-center text-gray-600 font-medium">설비</th>
                       <th className="px-4 py-2.5 text-center text-gray-600 font-medium">근무조</th>
@@ -283,6 +476,11 @@ export default function DashboardPage() {
                   <tbody className="divide-y divide-gray-50">
                     {entries.map(entry => (
                       <tr key={entry.id} className="hover:bg-gray-50">
+                        {selectedPeriod !== 'day' && (
+                          <td className="px-4 py-2.5 text-gray-500">
+                            {format(parseISO(reportDateById.get(entry.report_id) ?? selectedDate), 'MM.dd')}
+                          </td>
+                        )}
                         <td className="px-4 py-2.5 text-gray-700">{entry.user_name || '-'}</td>
                         <td className="px-4 py-2.5 text-center font-medium">{entry.equipment}</td>
                         <td className="px-4 py-2.5 text-center text-gray-600">{entry.shift}</td>
@@ -293,7 +491,7 @@ export default function DashboardPage() {
                     ))}
                     {entries.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                        <td colSpan={selectedPeriod !== 'day' ? 5 : 4} className="px-4 py-6 text-center text-gray-400">
                           입력 데이터가 없습니다
                         </td>
                       </tr>
@@ -309,7 +507,7 @@ export default function DashboardPage() {
             <div className="card-header">
               <h3 className="font-semibold text-gray-800">설비별 상세 실적</h3>
               <div className="flex gap-2">
-                {report.status !== 'closed' && (
+                {selectedPeriod === 'day' && report && report.status !== 'closed' && (
                   <button
                     onClick={() => useReportStore.getState().updateReportStatus(report.id, 'closed')}
                     className="btn-danger text-sm px-3 py-1.5"
@@ -317,16 +515,21 @@ export default function DashboardPage() {
                     마감 처리
                   </button>
                 )}
-                <button onClick={handlePrint} className="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5">
-                  <Printer size={14} />
-                  출력
-                </button>
+                {selectedPeriod === 'day' && (
+                  <button onClick={handlePrint} className="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5">
+                    <Printer size={14} />
+                    출력
+                  </button>
+                )}
               </div>
             </div>
             <div className="table-wrapper">
               <table className="production-table w-full">
                 <thead>
                   <tr>
+                    {selectedPeriod !== 'day' && (
+                      <th className="px-3 py-2.5" rowSpan={2}>보고일자</th>
+                    )}
                     <th className="px-3 py-2.5" rowSpan={2}>설비</th>
                     <th className="px-3 py-2.5" rowSpan={2}>근무조</th>
                     <th className="px-3 py-2.5 text-center" colSpan={4}>제품 (KG)</th>
@@ -355,6 +558,11 @@ export default function DashboardPage() {
 
                     return (
                       <tr key={entry.id} className={hasShortfall && entry.submit_status !== 'not_started' ? 'shortfall-row' : ''}>
+                        {selectedPeriod !== 'day' && (
+                          <td className="text-center-cell">
+                            {format(parseISO(reportDateById.get(entry.report_id) ?? selectedDate), 'MM.dd')}
+                          </td>
+                        )}
                         <td className="text-center-cell font-bold">{entry.equipment}</td>
                         <td className="text-center-cell">{entry.shift}</td>
                         <td>{formatNumber(entry.product_plan)}</td>
@@ -397,7 +605,7 @@ export default function DashboardPage() {
 
                   {/* 합계 행 */}
                   <tr className="bg-blue-50 font-bold border-t-2 border-blue-200">
-                    <td colSpan={2} className="text-center-cell">합 계</td>
+                    <td colSpan={selectedPeriod !== 'day' ? 3 : 2} className="text-center-cell">합 계</td>
                     <td>{formatNumber(summary.total_product_plan)}</td>
                     <td>{formatNumber(summary.total_product_actual)}</td>
                     <td className={`text-center-cell ${
@@ -407,8 +615,8 @@ export default function DashboardPage() {
                       {summary.product_achievement_rate.toFixed(1)}%
                     </td>
                     <td className="text-red-600">
-                      {summary.total_product_plan - summary.total_product_actual > 0
-                        ? `▼ ${formatNumber(summary.total_product_plan - summary.total_product_actual)}`
+                      {productShortfall > 0
+                        ? `▼ ${formatNumber(productShortfall)}`
                         : '-'}
                     </td>
                     <td>{formatNumber(summary.total_billet_plan)}</td>
@@ -420,8 +628,8 @@ export default function DashboardPage() {
                       {summary.billet_achievement_rate.toFixed(1)}%
                     </td>
                     <td className="text-red-600">
-                      {summary.total_billet_plan - summary.total_billet_actual > 0
-                        ? `▼ ${formatNumber(summary.total_billet_plan - summary.total_billet_actual)}`
+                      {billetShortfall > 0
+                        ? `▼ ${formatNumber(billetShortfall)}`
                         : '-'}
                     </td>
                     <td colSpan={2}></td>
@@ -445,6 +653,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 mb-3">
                         <AlertTriangle size={16} className="text-orange-500" />
                         <span className="font-semibold text-orange-800">
+                          {selectedPeriod !== 'day' && `${format(parseISO(reportDateById.get(entry.report_id) ?? selectedDate), 'MM.dd')} · `}
                           {entry.equipment} / {entry.shift} — {entry.reason_category}
                         </span>
                       </div>
