@@ -4,14 +4,12 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { useAuthStore } from '../store/authStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
-import { generateReportText, generateReasonSentence } from '../utils/reportTextGenerator';
+import { generateReportText } from '../utils/reportTextGenerator';
 
 export default function AdminReportPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
   const navigate = useNavigate();
-  const { currentUser } = useAuthStore();
   const { reports, getEntriesByReport } = useReportStore();
 
   const today = reportDate || format(new Date(), 'yyyy-MM-dd');

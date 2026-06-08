@@ -10,7 +10,6 @@ import {
   Printer, PlusCircle, RefreshCw, Users,
 } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { useAuthStore } from '../store/authStore';
 import { calcDashboardSummary, formatNumber, getAchievementStatus } from '../utils/calculations';
 import { getKPIStatusText } from '../utils/reportTextGenerator';
 import KPIStatusCard from '../components/KPIStatusCard';
@@ -18,7 +17,6 @@ import SubmitStatusBadge from '../components/SubmitStatusBadge';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { currentUser } = useAuthStore();
   const { reports, getEntriesByReport, createReport } = useReportStore();
   const [selectedDate, setSelectedDate] = React.useState(format(new Date(), 'yyyy-MM-dd'));
 

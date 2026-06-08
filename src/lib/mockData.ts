@@ -180,19 +180,3 @@ export const DEMO_TARGETS: EquipmentTarget[] = [
   { id: 't5', equipment: 'R/M', shift: '주간', product_target: 200000, billet_target: 0, effective_date: '2026-01-01', created_at: '2026-01-01T00:00:00Z' },
   { id: 't6', equipment: 'R/M', shift: '야간', product_target: 0, billet_target: 0, effective_date: '2026-01-01', created_at: '2026-01-01T00:00:00Z' },
 ];
-
-// 데모 로그인 비밀번호 (이메일: 비밀번호)
-export const DEMO_PASSWORDS: Record<string, string> = {
-  'admin@forging.com': 'admin1234',
-  '10001': 'admin1234',
-  'kim@forging.com': 'user1234',
-  '10002': 'user1234',
-  'park@forging.com': 'user1234',
-  '10003': 'user1234',
-  'lee@forging.com': 'user1234',
-  '10004': 'user1234',
-  'night@forging.com': 'user1234',
-  '10005': 'user1234',
-  'viewer@forging.com': 'view1234',
-  '10006': 'view1234',
-};

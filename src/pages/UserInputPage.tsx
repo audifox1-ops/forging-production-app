@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Save, Send, AlertCircle, CheckCircle, Info, ChevronDown, ChevronUp } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
 import { useReportStore } from '../store/reportStore';
-import { REASON_CATEGORIES, ReasonCategory, Equipment, Shift } from '../types';
+import { REASON_CATEGORIES, ReasonCategory } from '../types';
 import { formatNumber } from '../utils/calculations';
 
 export default function UserInputPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
-  const navigate = useNavigate();
-  const { currentUser } = useAuthStore();
   const { getReport, getEntriesByReport, saveEntry, submitEntry, createReport } = useReportStore();
 
   const today = reportDate || format(new Date(), 'yyyy-MM-dd');
@@ -26,15 +23,6 @@ export default function UserInputPage() {
 
   report = getReport(today);
   const entries = report ? getEntriesByReport(report.id) : [];
-
-  // 현재 유저의 담당 설비/근무조 필터
-  const userEntries = currentUser?.role === 'admin' || currentUser?.role === 'manager'
-    ? entries
-    : entries.filter(e =>
-      currentUser?.assigned_equipment?.includes(e.equipment as Equipment) &&
-      (currentUser?.assigned_shift === null || e.shift === currentUser?.assigned_shift)
-    );
-
   const isClosed = report?.status === 'closed';
 
   if (!report) {
@@ -58,11 +46,7 @@ export default function UserInputPage() {
                   {format(new Date(today), 'yyyy년 MM월 dd일 (eee)', { locale: ko })}
                 </span>
               </p>
-              {currentUser?.role === 'user' && (
-                <p className="text-sm text-gray-500">
-                  담당: {currentUser.assigned_equipment.join(', ')} / {currentUser.assigned_shift}
-                </p>
-              )}
+              <p className="text-sm text-gray-500">공용 편집 모드: 전체 설비/근무조 입력 가능</p>
             </div>
             {isClosed && (
               <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm">
@@ -86,14 +70,14 @@ export default function UserInputPage() {
       )}
 
       {/* 입력 카드 목록 */}
-      {userEntries.length === 0 ? (
+      {entries.length === 0 ? (
         <div className="card">
           <div className="card-body text-center py-10 text-gray-400">
-            배정된 입력 항목이 없습니다.
+            입력 항목이 없습니다.
           </div>
         </div>
       ) : (
-        userEntries.map(entry => (
+        entries.map(entry => (
           <EntryInputCard
             key={entry.id}
             entry={entry}
@@ -254,7 +238,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.product_plan}
                       onChange={e => handleChange('product_plan', Number(e.target.value))}
-                      disabled={isClosed || isSubmitted}
+                      disabled={isClosed}
                       min={0}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded text-right text-sm bg-gray-50 disabled:bg-gray-100"
                     />
@@ -264,7 +248,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.product_actual}
                       onChange={e => handleChange('product_actual', Number(e.target.value))}
-                      disabled={isClosed || isSubmitted}
+                      disabled={isClosed}
                       min={0}
                       className="w-full px-2 py-1.5 border border-blue-300 rounded text-right text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-100"
                     />
@@ -283,7 +267,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.billet_plan}
                       onChange={e => handleChange('billet_plan', Number(e.target.value))}
-                      disabled={isClosed || isSubmitted}
+                      disabled={isClosed}
                       min={0}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded text-right text-sm bg-gray-50 disabled:bg-gray-100"
                     />
@@ -293,7 +277,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.billet_actual}
                       onChange={e => handleChange('billet_actual', Number(e.target.value))}
-                      disabled={isClosed || isSubmitted}
+                      disabled={isClosed}
                       min={0}
                       className="w-full px-2 py-1.5 border border-blue-300 rounded text-right text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-100"
                     />
@@ -347,7 +331,7 @@ function EntryInputCard({
                     <select
                       value={formData.reason_category}
                       onChange={e => handleChange('reason_category', e.target.value)}
-                      disabled={isClosed || isSubmitted}
+                      disabled={isClosed}
                       className="form-select"
                     >
                       <option value="">선택하세요</option>
@@ -376,7 +360,7 @@ function EntryInputCard({
                   <textarea
                     value={formData.reason_detail}
                     onChange={e => handleChange('reason_detail', e.target.value)}
-                    disabled={isClosed || isSubmitted}
+                    disabled={isClosed}
                     placeholder="구체적인 원인을 작성해 주세요 (설비명, 시간, 수량 등 포함)"
                     className="form-textarea"
                     rows={3}
@@ -392,7 +376,7 @@ function EntryInputCard({
                     <textarea
                       value={formData.action_today}
                       onChange={e => handleChange('action_today', e.target.value)}
-                      disabled={isClosed || isSubmitted}
+                      disabled={isClosed}
                       placeholder="금일 즉시 취한 또는 취할 조치를 작성해 주세요"
                       className="form-textarea"
                       rows={3}
@@ -407,7 +391,7 @@ function EntryInputCard({
                     <textarea
                       value={formData.recovery_plan}
                       onChange={e => handleChange('recovery_plan', e.target.value)}
-                      disabled={isClosed || isSubmitted}
+                      disabled={isClosed}
                       placeholder="언제, 어느 설비에서, 얼마를 추가 생산할지 수량 기준으로 작성"
                       className="form-textarea"
                       rows={3}
@@ -421,7 +405,7 @@ function EntryInputCard({
                   <textarea
                     value={formData.support_request}
                     onChange={e => handleChange('support_request', e.target.value)}
-                    disabled={isClosed || isSubmitted}
+                    disabled={isClosed}
                     placeholder="관리자 또는 타 부서에 지원이 필요한 사항을 작성해 주세요 (선택)"
                     className="form-textarea"
                     rows={2}
@@ -445,7 +429,7 @@ function EntryInputCard({
         )}
 
         {/* 저장/제출 버튼 */}
-        {!isClosed && !isSubmitted && (
+        {!isClosed && (
           <div className="flex items-center justify-between pt-2">
             <div className="text-xs text-gray-400">
               마지막 저장: {entry.updated_at ? format(new Date(entry.updated_at), 'HH:mm') : '-'}
@@ -469,10 +453,10 @@ function EntryInputCard({
           </div>
         )}
 
-        {isSubmitted && (
+        {isSubmitted && !isClosed && (
           <div className="flex items-center justify-center gap-2 py-2 text-green-600 font-medium text-sm">
             <CheckCircle size={18} />
-            제출완료 — 관리자 확인 대기중
+            제출완료 상태이며, 공용 편집 모드에서 수정할 수 있습니다.
           </div>
         )}
       </div>

@@ -140,7 +140,14 @@ export const useReportStore = create<ReportStore>((set, get) => ({
       set(state => ({
         entries: state.entries.map(e =>
           e.id === existing.id
-            ? { ...e, ...entryData, submit_status: e.submit_status === 'submitted' ? 'submitted' : 'saved', updated_at: now }
+            ? {
+                ...e,
+                ...entryData,
+                submit_status: e.submit_status === 'submitted' || e.submit_status === 'approved'
+                  ? e.submit_status
+                  : 'saved',
+                updated_at: now,
+              }
             : e
         ),
       }));

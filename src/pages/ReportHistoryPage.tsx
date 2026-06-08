@@ -4,16 +4,13 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Plus, FileText, Calendar, Eye, Printer, Copy } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { useAuthStore } from '../store/authStore';
 import { calcDashboardSummary } from '../utils/calculations';
 import { STATUS_LABELS } from '../types';
 import SubmitStatusBadge from '../components/SubmitStatusBadge';
 
 export default function ReportHistoryPage() {
   const navigate = useNavigate();
-  const { currentUser } = useAuthStore();
   const { reports, getEntriesByReport, createReport } = useReportStore();
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
   const sortedReports = [...reports].sort(
     (a, b) => new Date(b.report_date).getTime() - new Date(a.report_date).getTime()
@@ -39,12 +36,10 @@ export default function ReportHistoryPage() {
           <h1 className="text-2xl font-bold text-gray-900">보고 이력</h1>
           <p className="text-sm text-gray-500 mt-0.5">날짜별 생산 보고서 목록</p>
         </div>
-        {isAdmin && (
-          <button onClick={handleCreate} className="btn-primary flex items-center gap-2">
-            <Plus size={16} />
-            새 보고서 작성
-          </button>
-        )}
+        <button onClick={handleCreate} className="btn-primary flex items-center gap-2">
+          <Plus size={16} />
+          새 보고서 작성
+        </button>
       </div>
 
       {/* 보고서 목록 */}
@@ -107,15 +102,13 @@ export default function ReportHistoryPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
-                        {isAdmin && (
-                          <button
-                            onClick={() => navigate(`/reports/${report.report_date}`)}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="보고서 보기"
-                          >
-                            <Eye size={15} />
-                          </button>
-                        )}
+                        <button
+                          onClick={() => navigate(`/reports/${report.report_date}`)}
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="보고서 보기"
+                        >
+                          <Eye size={15} />
+                        </button>
                         <button
                           onClick={() => navigate(`/reports/${report.report_date}/input`)}
                           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -130,15 +123,13 @@ export default function ReportHistoryPage() {
                         >
                           <Printer size={15} />
                         </button>
-                        {isAdmin && (
-                          <button
-                            onClick={() => handleCopy(report.report_date)}
-                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                            title="복사해서 새 보고서 생성"
-                          >
-                            <Copy size={15} />
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleCopy(report.report_date)}
+                          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                          title="복사해서 새 보고서 생성"
+                        >
+                          <Copy size={15} />
+                        </button>
                       </div>
                     </td>
                   </tr>
