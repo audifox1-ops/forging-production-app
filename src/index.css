@@ -1,0 +1,244 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* 폰트 */
+body {
+  font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+  background-color: #f1f5f9;
+  color: #1e293b;
+}
+
+/* 커스텀 컴포넌트 */
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 active:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:opacity-50;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 active:bg-red-800 transition-colors;
+  }
+
+  .btn-success {
+    @apply px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 active:bg-green-800 transition-colors;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden;
+  }
+
+  .card-header {
+    @apply px-6 py-4 border-b border-gray-100 flex items-center justify-between;
+  }
+
+  .card-body {
+    @apply p-6;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+
+  .form-input {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+
+  .form-input-readonly {
+    @apply w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed;
+  }
+
+  .form-textarea {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y min-h-[80px];
+  }
+
+  .form-select {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white;
+  }
+
+  /* 테이블 스타일 */
+  .table-wrapper {
+    @apply overflow-x-auto rounded-lg border border-gray-200;
+  }
+
+  .production-table {
+    @apply w-full text-sm border-collapse;
+  }
+
+  .production-table th {
+    @apply px-3 py-2.5 text-center font-semibold text-white bg-blue-800 border-r border-blue-700 whitespace-nowrap;
+  }
+
+  .production-table th:last-child {
+    @apply border-r-0;
+  }
+
+  .production-table td {
+    @apply px-3 py-2.5 border-r border-b border-gray-200 text-right whitespace-nowrap;
+  }
+
+  .production-table td.text-center-cell {
+    @apply text-center;
+  }
+
+  .production-table td.input-cell {
+    @apply bg-blue-50 text-right p-1;
+  }
+
+  .production-table tr:hover td {
+    @apply bg-gray-50;
+  }
+
+  .production-table tr:hover td.input-cell {
+    @apply bg-blue-100;
+  }
+
+  /* KPI 카드 */
+  .kpi-card {
+    @apply bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex flex-col gap-1;
+  }
+
+  /* 배지 */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-normal {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .badge-gray {
+    @apply badge bg-gray-100 text-gray-700;
+  }
+
+  .badge-blue {
+    @apply badge bg-blue-100 text-blue-800;
+  }
+}
+
+/* 인쇄 전용 CSS */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    background: white !important;
+    font-size: 10pt !important;
+    color: black !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .page-break {
+    page-break-after: always;
+  }
+
+  .no-break {
+    page-break-inside: avoid;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 15mm 12mm;
+  }
+
+  /* 인쇄용 테이블 */
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+
+  .print-table th,
+  .print-table td {
+    border: 1px solid #333;
+    padding: 4px 6px;
+  }
+
+  .print-table th {
+    background-color: #1e3a8a !important;
+    color: white !important;
+    text-align: center;
+    font-weight: bold;
+  }
+
+  .print-header {
+    text-align: center;
+    font-size: 14pt;
+    font-weight: bold;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #1e3a8a;
+  }
+
+  .print-section-title {
+    font-size: 10pt;
+    font-weight: bold;
+    background-color: #dbeafe !important;
+    padding: 4px 8px;
+    margin: 8px 0 4px 0;
+    border-left: 3px solid #1e3a8a;
+  }
+}
+
+/* 스크롤바 스타일 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 입력 숫자 우측 정렬 */
+input[type="number"] {
+  text-align: right;
+}
+
+/* 애니메이션 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* 미달성 강조 */
+.shortfall-row {
+  background-color: #fff7ed !important;
+}
+
+.shortfall-row:hover td {
+  background-color: #ffedd5 !important;
+}

@@ -1,0 +1,198 @@
+import { User, ProductionReport, ProductionEntry, EquipmentTarget } from '../types';
+import { format } from 'date-fns';
+
+const today = format(new Date(), 'yyyy-MM-dd');
+const yesterday = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
+
+// 데모 유저 목록
+export const DEMO_USERS: User[] = [
+  {
+    id: 'user-admin',
+    name: '관리자',
+    email: 'admin@forging.com',
+    employee_no: '10001',
+    role: 'admin',
+    assigned_equipment: [],
+    assigned_shift: null,
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'user-p15-day',
+    name: '김과장',
+    email: 'kim@forging.com',
+    employee_no: '10002',
+    role: 'user',
+    assigned_equipment: ['P15'],
+    assigned_shift: '주간',
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'user-p5-day',
+    name: '박차장',
+    email: 'park@forging.com',
+    employee_no: '10003',
+    role: 'user',
+    assigned_equipment: ['P5'],
+    assigned_shift: '주간',
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'user-rm-day',
+    name: '이대리',
+    email: 'lee@forging.com',
+    employee_no: '10004',
+    role: 'user',
+    assigned_equipment: ['R/M'],
+    assigned_shift: '주간',
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'user-night',
+    name: '야간반장',
+    email: 'night@forging.com',
+    employee_no: '10005',
+    role: 'user',
+    assigned_equipment: ['P15', 'P5', 'R/M'],
+    assigned_shift: '야간',
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'user-viewer',
+    name: '조회자',
+    email: 'viewer@forging.com',
+    employee_no: '10006',
+    role: 'viewer',
+    assigned_equipment: [],
+    assigned_shift: null,
+    created_at: '2026-01-01T00:00:00Z',
+  },
+];
+
+// 데모 보고서
+export const DEMO_REPORTS: ProductionReport[] = [
+  {
+    id: 'report-today',
+    report_date: today,
+    next_plan_date: format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'),
+    status: 'collecting',
+    created_by: 'user-admin',
+    created_at: today + 'T08:00:00Z',
+    updated_at: today + 'T08:00:00Z',
+  },
+  {
+    id: 'report-yesterday',
+    report_date: yesterday,
+    next_plan_date: today,
+    status: 'closed',
+    created_by: 'user-admin',
+    closed_by: 'user-admin',
+    closed_at: yesterday + 'T18:00:00Z',
+    created_at: yesterday + 'T08:00:00Z',
+    updated_at: yesterday + 'T18:00:00Z',
+  },
+];
+
+// 데모 실적 데이터
+export const DEMO_ENTRIES: ProductionEntry[] = [
+  // 오늘 - P15 주간 (제출완료)
+  {
+    id: 'entry-1',
+    report_id: 'report-today',
+    user_id: 'user-p15-day',
+    user_name: '김과장',
+    equipment: 'P15',
+    shift: '주간',
+    product_plan: 145000,
+    product_actual: 132000,
+    billet_plan: 150000,
+    billet_actual: 148000,
+    reason_category: '설비 문제',
+    reason_detail: '2호 해머 유압 실린더 씰 교체로 2.5시간 손실 발생. 보전팀 즉시 투입하여 11:30 복구 완료.',
+    action_today: '복구 후 잔여 시간 최대 가동. 금형 준비 사전 완료.',
+    recovery_plan: '익일 주간에 P15 추가 13,000KG 생산 계획. 잔업 1시간 적용.',
+    support_request: '보전팀 예방 점검 주기 단축 요청',
+    submit_status: 'submitted',
+    submitted_at: today + 'T17:30:00Z',
+    created_at: today + 'T09:00:00Z',
+    updated_at: today + 'T17:30:00Z',
+  },
+  // 오늘 - P5 주간 (임시저장)
+  {
+    id: 'entry-2',
+    report_id: 'report-today',
+    user_id: 'user-p5-day',
+    user_name: '박차장',
+    equipment: 'P5',
+    shift: '주간',
+    product_plan: 70000,
+    product_actual: 65000,
+    billet_plan: 50000,
+    billet_actual: 52000,
+    reason_category: '소재 문제',
+    reason_detail: '아침 소재 입고 지연으로 오전 작업 1시간 대기. 소재 준비팀 연락 지연.',
+    action_today: '오후 작업량 증대를 통해 부분 만회.',
+    recovery_plan: '',
+    support_request: '',
+    submit_status: 'saved',
+    created_at: today + 'T09:00:00Z',
+    updated_at: today + 'T14:00:00Z',
+  },
+  // 오늘 - R/M 주간 (미입력)
+  {
+    id: 'entry-3',
+    report_id: 'report-today',
+    user_id: 'user-rm-day',
+    user_name: '이대리',
+    equipment: 'R/M',
+    shift: '주간',
+    product_plan: 200000,
+    product_actual: 0,
+    billet_plan: 0,
+    billet_actual: 0,
+    submit_status: 'not_started',
+    created_at: today + 'T09:00:00Z',
+    updated_at: today + 'T09:00:00Z',
+  },
+  // 오늘 - 야간
+  {
+    id: 'entry-4',
+    report_id: 'report-today',
+    user_id: 'user-night',
+    user_name: '야간반장',
+    equipment: 'P15',
+    shift: '야간',
+    product_plan: 0,
+    product_actual: 0,
+    billet_plan: 0,
+    billet_actual: 0,
+    submit_status: 'not_started',
+    created_at: today + 'T09:00:00Z',
+    updated_at: today + 'T09:00:00Z',
+  },
+];
+
+// 데모 목표값
+export const DEMO_TARGETS: EquipmentTarget[] = [
+  { id: 't1', equipment: 'P15', shift: '주간', product_target: 145000, billet_target: 150000, effective_date: '2026-01-01', created_at: '2026-01-01T00:00:00Z' },
+  { id: 't2', equipment: 'P15', shift: '야간', product_target: 0, billet_target: 0, effective_date: '2026-01-01', created_at: '2026-01-01T00:00:00Z' },
+  { id: 't3', equipment: 'P5', shift: '주간', product_target: 70000, billet_target: 50000, effective_date: '2026-01-01', created_at: '2026-01-01T00:00:00Z' },
+  { id: 't4', equipment: 'P5', shift: '야간', product_target: 0, billet_target: 0, effective_date: '2026-01-01', created_at: '2026-01-01T00:00:00Z' },
+  { id: 't5', equipment: 'R/M', shift: '주간', product_target: 200000, billet_target: 0, effective_date: '2026-01-01', created_at: '2026-01-01T00:00:00Z' },
+  { id: 't6', equipment: 'R/M', shift: '야간', product_target: 0, billet_target: 0, effective_date: '2026-01-01', created_at: '2026-01-01T00:00:00Z' },
+];
+
+// 데모 로그인 비밀번호 (이메일: 비밀번호)
+export const DEMO_PASSWORDS: Record<string, string> = {
+  'admin@forging.com': 'admin1234',
+  '10001': 'admin1234',
+  'kim@forging.com': 'user1234',
+  '10002': 'user1234',
+  'park@forging.com': 'user1234',
+  '10003': 'user1234',
+  'lee@forging.com': 'user1234',
+  '10004': 'user1234',
+  'night@forging.com': 'user1234',
+  '10005': 'user1234',
+  'viewer@forging.com': 'view1234',
+  '10006': 'view1234',
+};
