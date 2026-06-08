@@ -128,7 +128,7 @@ export default function AdminReportPage() {
       {/* 설비별 실적 */}
       <div className="card">
         <div className="card-header">
-          <h3 className="font-semibold text-gray-800">설비별 목표 대비 실적</h3>
+          <h3 className="font-semibold text-gray-800">전일 계획 대비 실적</h3>
         </div>
         <div className="table-wrapper">
           <table className="production-table">
@@ -136,11 +136,11 @@ export default function AdminReportPage() {
               <tr>
                 <th>설비</th>
                 <th>근무조</th>
-                <th>제품 계획</th>
+                <th>전일 제품 계획</th>
                 <th>제품 실적</th>
                 <th>제품 달성율</th>
                 <th>제품 미달량</th>
-                <th>황지 계획</th>
+                <th>전일 황지 계획</th>
                 <th>황지 실적</th>
                 <th>황지 달성율</th>
                 <th>황지 미달량</th>
@@ -213,6 +213,53 @@ export default function AdminReportPage() {
                   {summary.total_billet_plan - summary.total_billet_actual > 0
                     ? formatNumber(summary.total_billet_plan - summary.total_billet_actual) : '-'}
                 </td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 금일 생산계획 */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="font-semibold text-gray-800">금일 생산계획</h3>
+        </div>
+        <div className="table-wrapper">
+          <table className="production-table">
+            <thead>
+              <tr>
+                <th>설비</th>
+                <th>근무조</th>
+                <th>제품 계획</th>
+                <th>황지 계획</th>
+                <th>합계</th>
+                <th>만회계획</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map(entry => {
+                const nextProductPlan = entry.next_product_plan || 0;
+                const nextBilletPlan = entry.next_billet_plan || 0;
+
+                return (
+                  <tr key={entry.id}>
+                    <td className="text-center-cell font-bold">{entry.equipment}</td>
+                    <td className="text-center-cell">{entry.shift}</td>
+                    <td>{formatNumber(nextProductPlan)}</td>
+                    <td>{formatNumber(nextBilletPlan)}</td>
+                    <td className="font-medium">{formatNumber(nextProductPlan + nextBilletPlan)}</td>
+                    <td className="text-center-cell text-xs">
+                      {entry.recovery_plan || <span className="text-gray-300">-</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="bg-green-50 font-bold border-t-2 border-green-200">
+                <td colSpan={2} className="text-center-cell">합 계</td>
+                <td>{formatNumber(summary.total_next_product_plan)}</td>
+                <td>{formatNumber(summary.total_next_billet_plan)}</td>
+                <td>{formatNumber(summary.total_next_plan)}</td>
                 <td></td>
               </tr>
             </tbody>

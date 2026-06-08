@@ -10,19 +10,26 @@ import SubmitStatusBadge from '../components/SubmitStatusBadge';
 
 export default function ReportHistoryPage() {
   const navigate = useNavigate();
-  const { reports, getEntriesByReport, createReport } = useReportStore();
+  const { reports, getEntriesByReport, createReport, getCurrentUser } = useReportStore();
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.role === 'admin';
+  const canWrite = isAdmin || Boolean(currentUser?.can_write);
+  const canEdit = isAdmin || Boolean(currentUser?.can_edit);
+  const canCreateReport = canWrite || canEdit;
 
   const sortedReports = [...reports].sort(
     (a, b) => new Date(b.report_date).getTime() - new Date(a.report_date).getTime()
   );
 
   const handleCreate = () => {
+    if (!canCreateReport) return;
     const today = format(new Date(), 'yyyy-MM-dd');
     createReport(today);
     navigate(`/reports/${today}/input`);
   };
 
   const handleCopy = (reportDate: string) => {
+    if (!canCreateReport) return;
     const newDate = format(new Date(), 'yyyy-MM-dd');
     createReport(newDate);
     navigate(`/reports/${newDate}/input`);
@@ -36,9 +43,9 @@ export default function ReportHistoryPage() {
           <h1 className="text-2xl font-bold text-gray-900">보고 이력</h1>
           <p className="text-sm text-gray-500 mt-0.5">날짜별 생산 보고서 목록</p>
         </div>
-        <button onClick={handleCreate} className="btn-primary flex items-center gap-2">
+        <button onClick={handleCreate} disabled={!canCreateReport} className="btn-primary flex items-center gap-2">
           <Plus size={16} />
-          새 보고서 작성
+          {canCreateReport ? '새 보고서 작성' : '권한 필요'}
         </button>
       </div>
 
@@ -49,7 +56,7 @@ export default function ReportHistoryPage() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-4 py-3 text-left text-gray-600 font-semibold">보고일자</th>
-                <th className="px-4 py-3 text-left text-gray-600 font-semibold">익일 계획일</th>
+                <th className="px-4 py-3 text-left text-gray-600 font-semibold">금일 계획일</th>
                 <th className="px-4 py-3 text-center text-gray-600 font-semibold">상태</th>
                 <th className="px-4 py-3 text-right text-gray-600 font-semibold">전체 계획</th>
                 <th className="px-4 py-3 text-right text-gray-600 font-semibold">전체 실적</th>
@@ -125,6 +132,7 @@ export default function ReportHistoryPage() {
                         </button>
                         <button
                           onClick={() => handleCopy(report.report_date)}
+                          disabled={!canCreateReport}
                           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                           title="복사해서 새 보고서 생성"
                         >

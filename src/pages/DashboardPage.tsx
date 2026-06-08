@@ -23,6 +23,7 @@ import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import KPIStatusCard from '../components/KPIStatusCard';
 import SubmitStatusBadge from '../components/SubmitStatusBadge';
+import { PeriodTargetType } from '../types';
 
 type SummaryPeriod = 'day' | 'week' | 'month' | 'year';
 
@@ -32,6 +33,12 @@ const PERIOD_OPTIONS: { value: SummaryPeriod; label: string }[] = [
   { value: 'month', label: '월간' },
   { value: 'year', label: '연간' },
 ];
+
+const PERIOD_TARGET_MAP: Partial<Record<SummaryPeriod, PeriodTargetType>> = {
+  week: 'weekly',
+  month: 'monthly',
+  year: 'yearly',
+};
 
 function getPeriodRange(dateString: string, period: SummaryPeriod) {
   const baseDate = parseISO(dateString);
@@ -78,7 +85,12 @@ function getRateColor(rate: number) {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { reports, getEntriesByReport, createReport } = useReportStore();
+  const { reports, periodTargets, getEntriesByReport, createReport, getCurrentUser } = useReportStore();
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.role === 'admin';
+  const canWrite = isAdmin || Boolean(currentUser?.can_write);
+  const canEdit = isAdmin || Boolean(currentUser?.can_edit);
+  const canCreateReport = canWrite || canEdit;
   const [selectedDate, setSelectedDate] = React.useState(format(new Date(), 'yyyy-MM-dd'));
   const [selectedPeriod, setSelectedPeriod] = React.useState<SummaryPeriod>('day');
 
@@ -108,23 +120,38 @@ export default function DashboardPage() {
   const hasPeriodData = selectedPeriod === 'day' ? Boolean(report) : periodReports.length > 0;
   const periodLabel = PERIOD_OPTIONS.find(option => option.value === selectedPeriod)?.label ?? '일간';
   const periodRangeLabel = formatPeriodRange(periodRange, selectedPeriod);
-  const productShortfall = Math.max(0, summary.total_product_plan - summary.total_product_actual);
-  const billetShortfall = Math.max(0, summary.total_billet_plan - summary.total_billet_actual);
+  const entryProductShortfall = Math.max(0, summary.total_product_plan - summary.total_product_actual);
+  const entryBilletShortfall = Math.max(0, summary.total_billet_plan - summary.total_billet_actual);
+  const selectedPeriodTarget = PERIOD_TARGET_MAP[selectedPeriod]
+    ? periodTargets.find(target => target.period === PERIOD_TARGET_MAP[selectedPeriod])
+    : undefined;
+  const usesConfiguredPeriodTarget = selectedPeriod !== 'day' &&
+    Boolean(selectedPeriodTarget && (selectedPeriodTarget.product_target > 0 || selectedPeriodTarget.billet_target > 0));
+  const summaryProductPlan = usesConfiguredPeriodTarget ? selectedPeriodTarget!.product_target : summary.total_product_plan;
+  const summaryBilletPlan = usesConfiguredPeriodTarget ? selectedPeriodTarget!.billet_target : summary.total_billet_plan;
+  const summaryProductRate = summaryProductPlan > 0
+    ? Math.round((summary.total_product_actual / summaryProductPlan) * 1000) / 10
+    : 0;
+  const summaryBilletRate = summaryBilletPlan > 0
+    ? Math.round((summary.total_billet_actual / summaryBilletPlan) * 1000) / 10
+    : 0;
+  const productShortfall = Math.max(0, summaryProductPlan - summary.total_product_actual);
+  const billetShortfall = Math.max(0, summaryBilletPlan - summary.total_billet_actual);
   const summaryCards = [
     {
       label: '제품',
-      plan: summary.total_product_plan,
+      plan: summaryProductPlan,
       actual: summary.total_product_actual,
-      rate: summary.product_achievement_rate,
+      rate: summaryProductRate,
       shortfall: productShortfall,
       panelClass: 'border-blue-200 bg-blue-50',
       labelClass: 'text-blue-800',
     },
     {
       label: '황지',
-      plan: summary.total_billet_plan,
+      plan: summaryBilletPlan,
       actual: summary.total_billet_actual,
-      rate: summary.billet_achievement_rate,
+      rate: summaryBilletRate,
       shortfall: billetShortfall,
       panelClass: 'border-amber-200 bg-amber-50',
       labelClass: 'text-amber-800',
@@ -132,6 +159,7 @@ export default function DashboardPage() {
   ];
 
   const handleCreateReport = () => {
+    if (!canCreateReport) return;
     createReport(selectedDate);
   };
 
@@ -206,7 +234,11 @@ export default function DashboardPage() {
             </button>
           )}
           {selectedPeriod === 'day' && !report ? (
-            <button onClick={handleCreateReport} className="btn-primary flex items-center gap-2">
+            <button
+              onClick={handleCreateReport}
+              disabled={!canCreateReport}
+              className="btn-primary flex items-center gap-2"
+            >
               <PlusCircle size={16} />
               보고서 생성
             </button>
@@ -233,8 +265,8 @@ export default function DashboardPage() {
               {selectedPeriod === 'day' ? '해당 날짜의 보고서가 없습니다.' : '선택 기간의 보고서가 없습니다.'}
             </p>
             {selectedPeriod === 'day' && (
-              <button onClick={handleCreateReport} className="btn-primary mt-4">
-                보고서 생성
+              <button onClick={handleCreateReport} disabled={!canCreateReport} className="btn-primary mt-4">
+                {canCreateReport ? '보고서 생성' : '권한 필요'}
               </button>
             )}
           </div>
@@ -286,7 +318,9 @@ export default function DashboardPage() {
           <div className="card">
             <div className="card-header">
               <h3 className="font-semibold text-gray-800">전체 실적 요약</h3>
-              <span className="text-sm text-gray-500">{periodLabel} 기준</span>
+              <span className="text-sm text-gray-500">
+                {periodLabel} 기준{usesConfiguredPeriodTarget ? ' · 기간 목표 적용' : ''}
+              </span>
             </div>
             <div className="card-body">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -327,26 +361,26 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <KPIStatusCard
               title="제품 달성율"
-              value={`${summary.product_achievement_rate.toFixed(1)}%`}
-              rate={summary.product_achievement_rate}
-              subtitle={`${formatNumber(summary.total_product_actual)} / ${formatNumber(summary.total_product_plan)} KG`}
+              value={`${summaryProductRate.toFixed(1)}%`}
+              rate={summaryProductRate}
+              subtitle={`${formatNumber(summary.total_product_actual)} / ${formatNumber(summaryProductPlan)} KG`}
             />
             <KPIStatusCard
               title="제품 미달량"
               value={`${formatNumber(productShortfall)} KG`}
-              rate={productShortfall === 0 ? 100 : summary.product_achievement_rate}
+              rate={productShortfall === 0 ? 100 : summaryProductRate}
               subtitle={productShortfall === 0 ? '미달 없음' : '만회 필요'}
             />
             <KPIStatusCard
               title="황지 달성율"
-              value={`${summary.billet_achievement_rate.toFixed(1)}%`}
-              rate={summary.billet_achievement_rate}
-              subtitle={`${formatNumber(summary.total_billet_actual)} / ${formatNumber(summary.total_billet_plan)} KG`}
+              value={`${summaryBilletRate.toFixed(1)}%`}
+              rate={summaryBilletRate}
+              subtitle={`${formatNumber(summary.total_billet_actual)} / ${formatNumber(summaryBilletPlan)} KG`}
             />
             <KPIStatusCard
               title="황지 미달량"
               value={`${formatNumber(billetShortfall)} KG`}
-              rate={billetShortfall === 0 ? 100 : summary.billet_achievement_rate}
+              rate={billetShortfall === 0 ? 100 : summaryBilletRate}
               subtitle={billetShortfall === 0 ? '미달 없음' : '만회 필요'}
             />
             <KPIStatusCard
@@ -371,7 +405,7 @@ export default function DashboardPage() {
             {/* 설비별 목표/실적 */}
             <div className="card">
               <div className="card-header">
-                <h3 className="font-semibold text-gray-800">설비별 목표 대비 실적</h3>
+                <h3 className="font-semibold text-gray-800">설비별 전일 계획 대비 실적</h3>
               </div>
               <div className="card-body">
                 <ResponsiveContainer width="100%" height={240}>
@@ -507,7 +541,7 @@ export default function DashboardPage() {
             <div className="card-header">
               <h3 className="font-semibold text-gray-800">설비별 상세 실적</h3>
               <div className="flex gap-2">
-                {selectedPeriod === 'day' && report && report.status !== 'closed' && (
+                {selectedPeriod === 'day' && report && report.status !== 'closed' && canEdit && (
                   <button
                     onClick={() => useReportStore.getState().updateReportStatus(report.id, 'closed')}
                     className="btn-danger text-sm px-3 py-1.5"
@@ -615,8 +649,8 @@ export default function DashboardPage() {
                       {summary.product_achievement_rate.toFixed(1)}%
                     </td>
                     <td className="text-red-600">
-                      {productShortfall > 0
-                        ? `▼ ${formatNumber(productShortfall)}`
+                      {entryProductShortfall > 0
+                        ? `▼ ${formatNumber(entryProductShortfall)}`
                         : '-'}
                     </td>
                     <td>{formatNumber(summary.total_billet_plan)}</td>
@@ -628,8 +662,8 @@ export default function DashboardPage() {
                       {summary.billet_achievement_rate.toFixed(1)}%
                     </td>
                     <td className="text-red-600">
-                      {billetShortfall > 0
-                        ? `▼ ${formatNumber(billetShortfall)}`
+                      {entryBilletShortfall > 0
+                        ? `▼ ${formatNumber(entryBilletShortfall)}`
                         : '-'}
                     </td>
                     <td colSpan={2}></td>
@@ -672,7 +706,7 @@ export default function DashboardPage() {
                         )}
                         {entry.recovery_plan && (
                           <div>
-                            <div className="text-xs text-gray-500 mb-1 font-medium">익일 만회계획</div>
+                            <div className="text-xs text-gray-500 mb-1 font-medium">금일 만회계획</div>
                             <div className="text-gray-700">{entry.recovery_plan}</div>
                           </div>
                         )}

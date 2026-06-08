@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS public.users (
   role TEXT NOT NULL CHECK (role IN ('admin', 'manager', 'user', 'viewer')),
   assigned_equipment TEXT[] DEFAULT '{}',
   assigned_shift TEXT CHECK (assigned_shift IN ('주간', '야간')),
+  can_write BOOLEAN NOT NULL DEFAULT FALSE,
+  can_edit BOOLEAN NOT NULL DEFAULT FALSE,
+  can_delete BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -39,6 +42,8 @@ CREATE TABLE IF NOT EXISTS public.production_entries (
   product_actual INTEGER NOT NULL DEFAULT 0,
   billet_plan INTEGER NOT NULL DEFAULT 0,
   billet_actual INTEGER NOT NULL DEFAULT 0,
+  next_product_plan INTEGER NOT NULL DEFAULT 0,
+  next_billet_plan INTEGER NOT NULL DEFAULT 0,
   product_achievement_rate NUMERIC(5,2),
   billet_achievement_rate NUMERIC(5,2),
   reason_category TEXT CHECK (reason_category IN (
@@ -69,6 +74,17 @@ CREATE TABLE IF NOT EXISTS public.equipment_targets (
   UNIQUE(equipment, shift, effective_date)
 );
 
+-- 기간별 생산 목표값 테이블
+CREATE TABLE IF NOT EXISTS public.production_period_targets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  period TEXT NOT NULL CHECK (period IN ('weekly', 'monthly', 'yearly')),
+  product_target INTEGER NOT NULL DEFAULT 0,
+  billet_target INTEGER NOT NULL DEFAULT 0,
+  effective_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(period, effective_date)
+);
+
 -- 보고서 코멘트 테이블
 CREATE TABLE IF NOT EXISTS public.report_comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -90,6 +106,27 @@ CREATE TABLE IF NOT EXISTS public.report_status_logs (
 );
 
 -- ============================================================
+-- 기본 사용자 INSERT
+-- ============================================================
+INSERT INTO public.users (id, name, email, employee_no, role, assigned_equipment, assigned_shift, can_write, can_edit, can_delete)
+VALUES
+  ('11111111-1111-1111-1111-111111111111', '관리자', 'admin@forging.com', '10001', 'admin', ARRAY['P15', 'P5', 'R/M'], NULL, TRUE, TRUE, TRUE),
+  ('22222222-2222-2222-2222-222222222222', '김회근 부장', 'hoegeun.kim@forging.com', '10002', 'user', ARRAY['P15'], '주간', FALSE, FALSE, FALSE),
+  ('33333333-3333-3333-3333-333333333333', '김현 차장', 'hyun.kim@forging.com', '10003', 'user', ARRAY['P5'], '주간', FALSE, FALSE, FALSE),
+  ('44444444-4444-4444-4444-444444444444', '구병준 차장', 'byeongjun.koo@forging.com', '10004', 'user', ARRAY['R/M'], '주간', FALSE, FALSE, FALSE),
+  ('55555555-5555-5555-5555-555555555555', '우재한 과장', 'jaehan.woo@forging.com', '10005', 'user', ARRAY['P15', 'P5'], '야간', FALSE, FALSE, FALSE),
+  ('66666666-6666-6666-6666-666666666666', '이은서 대리', 'eunseo.lee@forging.com', '10006', 'user', ARRAY['R/M'], '야간', FALSE, FALSE, FALSE)
+ON CONFLICT (email) DO UPDATE SET
+  name = EXCLUDED.name,
+  employee_no = EXCLUDED.employee_no,
+  role = EXCLUDED.role,
+  assigned_equipment = EXCLUDED.assigned_equipment,
+  assigned_shift = EXCLUDED.assigned_shift,
+  can_write = EXCLUDED.can_write,
+  can_edit = EXCLUDED.can_edit,
+  can_delete = EXCLUDED.can_delete;
+
+-- ============================================================
 -- 기본 목표값 INSERT
 -- ============================================================
 INSERT INTO public.equipment_targets (equipment, shift, product_target, billet_target, effective_date)
@@ -100,6 +137,13 @@ VALUES
   ('P5', '야간', 35000, 25000, '2026-01-01'),
   ('R/M', '주간', 100000, 0, '2026-01-01'),
   ('R/M', '야간', 100000, 0, '2026-01-01')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO public.production_period_targets (period, product_target, billet_target, effective_date)
+VALUES
+  ('weekly', 0, 0, '2026-01-01'),
+  ('monthly', 0, 0, '2026-01-01'),
+  ('yearly', 0, 0, '2026-01-01')
 ON CONFLICT DO NOTHING;
 
 -- ============================================================
@@ -128,6 +172,7 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.production_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.production_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.equipment_targets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.production_period_targets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.report_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.report_status_logs ENABLE ROW LEVEL SECURITY;
 
@@ -140,6 +185,24 @@ CREATE POLICY "Users can view entries" ON public.production_entries
 
 CREATE POLICY "Users can view targets" ON public.equipment_targets
   FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Users can view period targets" ON public.production_period_targets
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Users can view users" ON public.users
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Authenticated users can manage users" ON public.users
+  FOR ALL USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Authenticated users can manage targets" ON public.equipment_targets
+  FOR ALL USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Authenticated users can manage period targets" ON public.production_period_targets
+  FOR ALL USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
 
 -- 인증된 사용자: 본인 항목 수정 가능 (자세한 권한은 앱 레벨에서 처리)
 CREATE POLICY "Authenticated users can insert entries" ON public.production_entries

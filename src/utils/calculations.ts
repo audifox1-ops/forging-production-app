@@ -73,6 +73,9 @@ export function calcDashboardSummary(entries: ProductionEntry[]): DashboardSumma
   const total_product_actual = entries.reduce((s, e) => s + (e.product_actual || 0), 0);
   const total_billet_plan = entries.reduce((s, e) => s + (e.billet_plan || 0), 0);
   const total_billet_actual = entries.reduce((s, e) => s + (e.billet_actual || 0), 0);
+  const total_next_product_plan = entries.reduce((s, e) => s + (e.next_product_plan || 0), 0);
+  const total_next_billet_plan = entries.reduce((s, e) => s + (e.next_billet_plan || 0), 0);
+  const total_next_plan = total_next_product_plan + total_next_billet_plan;
   const total_plan = total_product_plan + total_billet_plan;
   const total_actual = total_product_actual + total_billet_actual;
 
@@ -132,6 +135,9 @@ export function calcDashboardSummary(entries: ProductionEntry[]): DashboardSumma
     total_product_actual,
     total_billet_plan,
     total_billet_actual,
+    total_next_product_plan,
+    total_next_billet_plan,
+    total_next_plan,
     total_plan,
     total_actual,
     total_achievement_rate,

@@ -4,6 +4,7 @@ export type UserRole = 'admin' | 'manager' | 'user' | 'viewer';
 export type Equipment = 'P15' | 'P5' | 'R/M';
 export type Shift = '주간' | '야간';
 export type ProductionType = '제품' | '황지';
+export type PeriodTargetType = 'weekly' | 'monthly' | 'yearly';
 
 export type ReportStatus = 'draft' | 'collecting' | 'submitted' | 'reviewed' | 'closed';
 export type EntryStatus = 'not_started' | 'saved' | 'submitted' | 'returned' | 'approved';
@@ -26,6 +27,9 @@ export interface User {
   role: UserRole;
   assigned_equipment: Equipment[];
   assigned_shift: Shift | null;
+  can_write: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
   created_at: string;
 }
 
@@ -52,6 +56,8 @@ export interface ProductionEntry {
   product_actual: number;
   billet_plan: number;
   billet_actual: number;
+  next_product_plan: number;
+  next_billet_plan: number;
   product_achievement_rate?: number;
   billet_achievement_rate?: number;
   product_shortfall?: number;
@@ -71,6 +77,15 @@ export interface EquipmentTarget {
   id: string;
   equipment: Equipment;
   shift: Shift;
+  product_target: number;
+  billet_target: number;
+  effective_date: string;
+  created_at: string;
+}
+
+export interface ProductionPeriodTarget {
+  id: string;
+  period: PeriodTargetType;
   product_target: number;
   billet_target: number;
   effective_date: string;
@@ -109,6 +124,9 @@ export interface DashboardSummaryData {
   total_product_actual: number;
   total_billet_plan: number;
   total_billet_actual: number;
+  total_next_product_plan: number;
+  total_next_billet_plan: number;
+  total_next_plan: number;
   total_plan: number;
   total_actual: number;
   total_achievement_rate: number;
@@ -157,6 +175,12 @@ export const DEFAULT_TARGETS: Omit<EquipmentTarget, 'id' | 'created_at'>[] = [
 
 export const EQUIPMENT_LIST: Equipment[] = ['P15', 'P5', 'R/M'];
 export const SHIFT_LIST: Shift[] = ['주간', '야간'];
+
+export const PERIOD_TARGET_LABELS: Record<PeriodTargetType, string> = {
+  weekly: '주간생산량',
+  monthly: '월간생산량',
+  yearly: '연간생산량',
+};
 
 export const REASON_CATEGORIES: ReasonCategory[] = [
   '소재 문제',

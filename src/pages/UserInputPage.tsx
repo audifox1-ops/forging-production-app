@@ -4,22 +4,27 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Save, Send, AlertCircle, CheckCircle, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { REASON_CATEGORIES, ReasonCategory } from '../types';
+import { EquipmentTarget, REASON_CATEGORIES, ReasonCategory } from '../types';
 import { formatNumber } from '../utils/calculations';
 
 export default function UserInputPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
-  const { getReport, getEntriesByReport, saveEntry, submitEntry, createReport } = useReportStore();
+  const { targets, getReport, getEntriesByReport, saveEntry, submitEntry, createReport, getCurrentUser } = useReportStore();
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.role === 'admin';
+  const canWrite = isAdmin || Boolean(currentUser?.can_write);
+  const canEdit = isAdmin || Boolean(currentUser?.can_edit);
+  const canCreateReport = canWrite || canEdit;
 
   const today = reportDate || format(new Date(), 'yyyy-MM-dd');
   let report = getReport(today);
 
   // 보고서가 없으면 자동 생성
   useEffect(() => {
-    if (!report) {
+    if (!report && canCreateReport) {
       createReport(today);
     }
-  }, [today]);
+  }, [today, canCreateReport]);
 
   report = getReport(today);
   const entries = report ? getEntriesByReport(report.id) : [];
@@ -28,7 +33,9 @@ export default function UserInputPage() {
   if (!report) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-400">보고서를 불러오는 중...</div>
+        <div className="text-gray-400">
+          {canCreateReport ? '보고서를 불러오는 중...' : '보고서를 생성하려면 관리자에게 쓰기 또는 편집 권한을 받아야 합니다.'}
+        </div>
       </div>
     );
   }
@@ -46,7 +53,9 @@ export default function UserInputPage() {
                   {format(new Date(today), 'yyyy년 MM월 dd일 (eee)', { locale: ko })}
                 </span>
               </p>
-              <p className="text-sm text-gray-500">공용 편집 모드: 전체 설비/근무조 입력 가능</p>
+              <p className="text-sm text-gray-500">
+                현재 계정: {currentUser?.name || '-'} · {isAdmin ? '관리자 전체 권한' : canWrite || canEdit ? '권한 부여됨' : '읽기 전용'}
+              </p>
             </div>
             {isClosed && (
               <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm">
@@ -60,11 +69,19 @@ export default function UserInputPage() {
 
       {/* 안내 배너 */}
       {!isClosed && (
-        <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-          <Info size={18} className="text-blue-500 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-blue-700">
-            <strong>전일 생산실적을 입력해 주세요.</strong>{' '}
-            목표 대비 미달 항목은 미달성 사유와 만회대책을 반드시 작성해야 합니다.
+        <div className={`flex items-start gap-3 p-4 border rounded-xl ${
+          canWrite || canEdit ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+        }`}>
+          <Info size={18} className={`${canWrite || canEdit ? 'text-blue-500' : 'text-gray-400'} flex-shrink-0 mt-0.5`} />
+          <div className={`text-sm ${canWrite || canEdit ? 'text-blue-700' : 'text-gray-600'}`}>
+            {canWrite || canEdit ? (
+              <>
+                <strong>전일 생산계획과 실적, 금일 생산계획을 입력해 주세요.</strong>{' '}
+                목표값은 기준값으로만 표시되며, 전일 계획 대비 미달 항목은 사유와 만회대책을 작성해야 합니다.
+              </>
+            ) : (
+              <>관리자에게 쓰기 또는 편집 권한을 받아야 실적을 입력하거나 수정할 수 있습니다.</>
+            )}
           </div>
         </div>
       )}
@@ -82,7 +99,10 @@ export default function UserInputPage() {
             key={entry.id}
             entry={entry}
             reportId={report!.id}
+            targets={targets}
             isClosed={isClosed}
+            canWrite={canWrite}
+            canEdit={canEdit}
             onSave={saveEntry}
             onSubmit={submitEntry}
           />
@@ -96,22 +116,31 @@ export default function UserInputPage() {
 function EntryInputCard({
   entry,
   reportId,
+  targets,
   isClosed,
+  canWrite,
+  canEdit,
   onSave,
   onSubmit,
 }: {
   entry: any;
   reportId: string;
+  targets: EquipmentTarget[];
   isClosed: boolean;
+  canWrite: boolean;
+  canEdit: boolean;
   onSave: (data: any) => void;
   onSubmit: (id: string) => void;
 }) {
   const isSubmitted = entry.submit_status === 'submitted' || entry.submit_status === 'approved';
+  const canModify = !isClosed && (isSubmitted ? canEdit : (canWrite || canEdit));
   const [formData, setFormData] = useState({
     product_plan: entry.product_plan,
     product_actual: entry.product_actual,
     billet_plan: entry.billet_plan,
     billet_actual: entry.billet_actual,
+    next_product_plan: entry.next_product_plan || 0,
+    next_billet_plan: entry.next_billet_plan || 0,
     reason_category: entry.reason_category || '',
     reason_detail: entry.reason_detail || '',
     action_today: entry.action_today || '',
@@ -132,6 +161,10 @@ function EntryInputCard({
   const productShortfall = Math.max(0, (formData.product_plan || 0) - (formData.product_actual || 0));
   const billetShortfall = Math.max(0, (formData.billet_plan || 0) - (formData.billet_actual || 0));
   const hasShortfall = productShortfall > 0 || billetShortfall > 0;
+  const shiftTarget = targets.find(target => target.equipment === entry.equipment && target.shift === entry.shift);
+  const equipmentTargets = targets.filter(target => target.equipment === entry.equipment);
+  const equipmentProductTarget = equipmentTargets.reduce((sum, target) => sum + (target.product_target || 0), 0);
+  const equipmentBilletTarget = equipmentTargets.reduce((sum, target) => sum + (target.billet_target || 0), 0);
 
   useEffect(() => {
     setShowReasonSection(hasShortfall);
@@ -146,19 +179,23 @@ function EntryInputCard({
   const validate = (): boolean => {
     const errs: string[] = [];
     if (formData.product_actual === 0 && formData.billet_actual === 0) {
-      errs.push('제품 또는 황지 실적 중 하나 이상 입력해주세요.');
+      errs.push('전일 제품 또는 황지 실적 중 하나 이상 입력해주세요.');
+    }
+    if (formData.next_product_plan === 0 && formData.next_billet_plan === 0) {
+      errs.push('금일 제품 또는 황지 생산계획 중 하나 이상 입력해주세요.');
     }
     if (hasShortfall) {
       if (!formData.reason_category) errs.push('미달성 사유를 선택해주세요.');
       if (!formData.reason_detail.trim()) errs.push('상세 원인을 입력해주세요.');
       if (!formData.action_today.trim()) errs.push('금일 조치사항을 입력해주세요.');
-      if (!formData.recovery_plan.trim()) errs.push('익일 만회계획을 입력해주세요.');
+      if (!formData.recovery_plan.trim()) errs.push('금일 만회계획을 입력해주세요.');
     }
     setErrors(errs);
     return errs.length === 0;
   };
 
   const handleSave = () => {
+    if (!canModify) return;
     onSave({
       id: entry.id,
       report_id: reportId,
@@ -172,6 +209,7 @@ function EntryInputCard({
   };
 
   const handleSubmit = () => {
+    if (!canModify) return;
     if (!validate()) return;
     handleSave();
     onSubmit(entry.id);
@@ -219,26 +257,47 @@ function EntryInputCard({
       <div className="card-body space-y-5">
         {/* 실적 입력 섹션 */}
         <div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 text-sm">
+            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+              <div className="text-xs text-slate-500 mb-1">설비 일일 목표 (주야 합산)</div>
+              <div className="flex justify-between gap-3">
+                <span className="text-blue-700 font-semibold">제품 {formatNumber(equipmentProductTarget)} KG</span>
+                <span className="text-amber-700 font-semibold">황지 {formatNumber(equipmentBilletTarget)} KG</span>
+              </div>
+            </div>
+            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+              <div className="text-xs text-slate-500 mb-1">{entry.shift} 기준 목표</div>
+              <div className="flex justify-between gap-3">
+                <span className="text-blue-700 font-semibold">제품 {formatNumber(shiftTarget?.product_target || 0)} KG</span>
+                <span className="text-amber-700 font-semibold">황지 {formatNumber(shiftTarget?.billet_target || 0)} KG</span>
+              </div>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr>
                   <th className="px-3 py-2 bg-gray-700 text-white text-center rounded-tl-lg">구분</th>
-                  <th className="px-3 py-2 bg-gray-700 text-white text-right">계획 (KG)</th>
-                  <th className="px-3 py-2 bg-blue-600 text-white text-right">실적 (KG)</th>
+                  <th className="px-3 py-2 bg-gray-700 text-white text-right">기준 목표 (KG)</th>
+                  <th className="px-3 py-2 bg-gray-700 text-white text-right">전일 계획 (KG)</th>
+                  <th className="px-3 py-2 bg-blue-600 text-white text-right">전일 실적 (KG)</th>
                   <th className="px-3 py-2 bg-gray-700 text-white text-center">달성율</th>
-                  <th className="px-3 py-2 bg-gray-700 text-white text-right rounded-tr-lg">미달량 (KG)</th>
+                  <th className="px-3 py-2 bg-gray-700 text-white text-right">미달량 (KG)</th>
+                  <th className="px-3 py-2 bg-green-700 text-white text-right rounded-tr-lg">금일 계획 (KG)</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b border-gray-100">
                   <td className="px-3 py-3 font-semibold text-gray-700 bg-gray-50 text-center">제 품</td>
+                  <td className="px-3 py-3 text-right font-semibold text-slate-600 bg-slate-50">
+                    {formatNumber(shiftTarget?.product_target || 0)}
+                  </td>
                   <td className="px-3 py-3 text-right">
                     <input
                       type="number"
                       value={formData.product_plan}
                       onChange={e => handleChange('product_plan', Number(e.target.value))}
-                      disabled={isClosed}
+                      disabled={!canModify}
                       min={0}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded text-right text-sm bg-gray-50 disabled:bg-gray-100"
                     />
@@ -248,7 +307,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.product_actual}
                       onChange={e => handleChange('product_actual', Number(e.target.value))}
-                      disabled={isClosed}
+                      disabled={!canModify}
                       min={0}
                       className="w-full px-2 py-1.5 border border-blue-300 rounded text-right text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-100"
                     />
@@ -259,15 +318,28 @@ function EntryInputCard({
                   <td className={`px-3 py-3 text-right font-medium ${productShortfall > 0 ? 'text-red-600' : 'text-gray-300'}`}>
                     {productShortfall > 0 ? `▼ ${formatNumber(productShortfall)}` : '-'}
                   </td>
+                  <td className="px-3 py-3 text-right">
+                    <input
+                      type="number"
+                      value={formData.next_product_plan}
+                      onChange={e => handleChange('next_product_plan', Number(e.target.value))}
+                      disabled={!canModify}
+                      min={0}
+                      className="w-full px-2 py-1.5 border border-green-300 rounded text-right text-sm bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-100"
+                    />
+                  </td>
                 </tr>
                 <tr>
                   <td className="px-3 py-3 font-semibold text-gray-700 bg-gray-50 text-center">황 지</td>
+                  <td className="px-3 py-3 text-right font-semibold text-slate-600 bg-slate-50">
+                    {formatNumber(shiftTarget?.billet_target || 0)}
+                  </td>
                   <td className="px-3 py-3 text-right">
                     <input
                       type="number"
                       value={formData.billet_plan}
                       onChange={e => handleChange('billet_plan', Number(e.target.value))}
-                      disabled={isClosed}
+                      disabled={!canModify}
                       min={0}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded text-right text-sm bg-gray-50 disabled:bg-gray-100"
                     />
@@ -277,7 +349,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.billet_actual}
                       onChange={e => handleChange('billet_actual', Number(e.target.value))}
-                      disabled={isClosed}
+                      disabled={!canModify}
                       min={0}
                       className="w-full px-2 py-1.5 border border-blue-300 rounded text-right text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-100"
                     />
@@ -287,6 +359,16 @@ function EntryInputCard({
                   </td>
                   <td className={`px-3 py-3 text-right font-medium ${billetShortfall > 0 ? 'text-red-600' : 'text-gray-300'}`}>
                     {billetShortfall > 0 ? `▼ ${formatNumber(billetShortfall)}` : '-'}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <input
+                      type="number"
+                      value={formData.next_billet_plan}
+                      onChange={e => handleChange('next_billet_plan', Number(e.target.value))}
+                      disabled={!canModify}
+                      min={0}
+                      className="w-full px-2 py-1.5 border border-green-300 rounded text-right text-sm bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-100"
+                    />
                   </td>
                 </tr>
               </tbody>
@@ -318,7 +400,7 @@ function EntryInputCard({
                 {hasShortfall && (
                   <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
                     <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-                    목표 대비 실적이 미달되었습니다. 미달성 사유, 상세 원인, 금일 조치사항, 익일 만회계획을 작성해 주세요.
+                    전일 계획 대비 실적이 미달되었습니다. 미달성 사유, 상세 원인, 금일 조치사항, 금일 만회계획을 작성해 주세요.
                   </div>
                 )}
 
@@ -331,7 +413,7 @@ function EntryInputCard({
                     <select
                       value={formData.reason_category}
                       onChange={e => handleChange('reason_category', e.target.value)}
-                      disabled={isClosed}
+                      disabled={!canModify}
                       className="form-select"
                     >
                       <option value="">선택하세요</option>
@@ -360,7 +442,7 @@ function EntryInputCard({
                   <textarea
                     value={formData.reason_detail}
                     onChange={e => handleChange('reason_detail', e.target.value)}
-                    disabled={isClosed}
+                    disabled={!canModify}
                     placeholder="구체적인 원인을 작성해 주세요 (설비명, 시간, 수량 등 포함)"
                     className="form-textarea"
                     rows={3}
@@ -376,23 +458,23 @@ function EntryInputCard({
                     <textarea
                       value={formData.action_today}
                       onChange={e => handleChange('action_today', e.target.value)}
-                      disabled={isClosed}
+                      disabled={!canModify}
                       placeholder="금일 즉시 취한 또는 취할 조치를 작성해 주세요"
                       className="form-textarea"
                       rows={3}
                     />
                   </div>
 
-                  {/* 익일 만회계획 */}
+                  {/* 금일 만회계획 */}
                   <div>
                     <label className="form-label">
-                      익일 만회계획 {hasShortfall && <span className="text-red-500">*</span>}
+                      금일 만회계획 {hasShortfall && <span className="text-red-500">*</span>}
                     </label>
                     <textarea
                       value={formData.recovery_plan}
                       onChange={e => handleChange('recovery_plan', e.target.value)}
-                      disabled={isClosed}
-                      placeholder="언제, 어느 설비에서, 얼마를 추가 생산할지 수량 기준으로 작성"
+                      disabled={!canModify}
+                      placeholder="금일 어느 설비에서 얼마를 추가 생산할지 수량 기준으로 작성"
                       className="form-textarea"
                       rows={3}
                     />
@@ -405,7 +487,7 @@ function EntryInputCard({
                   <textarea
                     value={formData.support_request}
                     onChange={e => handleChange('support_request', e.target.value)}
-                    disabled={isClosed}
+                    disabled={!canModify}
                     placeholder="관리자 또는 타 부서에 지원이 필요한 사항을 작성해 주세요 (선택)"
                     className="form-textarea"
                     rows={2}
@@ -429,7 +511,7 @@ function EntryInputCard({
         )}
 
         {/* 저장/제출 버튼 */}
-        {!isClosed && (
+        {!isClosed && canModify && (
           <div className="flex items-center justify-between pt-2">
             <div className="text-xs text-gray-400">
               마지막 저장: {entry.updated_at ? format(new Date(entry.updated_at), 'HH:mm') : '-'}
@@ -456,7 +538,13 @@ function EntryInputCard({
         {isSubmitted && !isClosed && (
           <div className="flex items-center justify-center gap-2 py-2 text-green-600 font-medium text-sm">
             <CheckCircle size={18} />
-            제출완료 상태이며, 공용 편집 모드에서 수정할 수 있습니다.
+            {canEdit ? '제출완료 상태이며, 편집 권한으로 수정할 수 있습니다.' : '제출완료 상태입니다. 수정하려면 관리자에게 편집 권한을 요청하세요.'}
+          </div>
+        )}
+        {!isClosed && !canModify && (
+          <div className="flex items-center justify-center gap-2 py-2 text-gray-500 font-medium text-sm">
+            <AlertCircle size={18} />
+            관리자에게 필요한 권한을 받아야 이 항목을 수정할 수 있습니다.
           </div>
         )}
       </div>

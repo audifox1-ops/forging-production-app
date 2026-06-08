@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useReportStore } from '../store/reportStore';
-import { EQUIPMENT_LIST, SHIFT_LIST, Equipment, Shift } from '../types';
+import { EQUIPMENT_LIST, SHIFT_LIST, PERIOD_TARGET_LABELS, PeriodTargetType } from '../types';
 import { formatNumber } from '../utils/calculations';
-import { Save, Plus } from 'lucide-react';
+import { Save, Lock } from 'lucide-react';
 
 export default function TargetManagementPage() {
-  const { targets, updateTarget } = useReportStore();
+  const { targets, periodTargets, updateTarget, updatePeriodTarget, getCurrentUser } = useReportStore();
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.role === 'admin';
+  const canManageTargets = isAdmin || Boolean(currentUser?.can_edit);
   const [localTargets, setLocalTargets] = useState(
     targets.reduce((acc, t) => {
       const key = `${t.equipment}-${t.shift}`;
@@ -13,9 +16,19 @@ export default function TargetManagementPage() {
       return acc;
     }, {} as Record<string, { product: number; billet: number }>)
   );
+  const [localPeriodTargets, setLocalPeriodTargets] = useState(
+    periodTargets.reduce((acc, target) => {
+      acc[target.period] = {
+        product: target.product_target,
+        billet: target.billet_target,
+      };
+      return acc;
+    }, {} as Record<PeriodTargetType, { product: number; billet: number }>)
+  );
   const [saved, setSaved] = useState(false);
 
   const handleChange = (equipment: string, shift: string, field: 'product' | 'billet', value: number) => {
+    if (!canManageTargets) return;
     const key = `${equipment}-${shift}`;
     setLocalTargets(prev => ({
       ...prev,
@@ -24,7 +37,17 @@ export default function TargetManagementPage() {
     setSaved(false);
   };
 
+  const handlePeriodChange = (period: PeriodTargetType, field: 'product' | 'billet', value: number) => {
+    if (!canManageTargets) return;
+    setLocalPeriodTargets(prev => ({
+      ...prev,
+      [period]: { ...prev[period], [field]: value },
+    }));
+    setSaved(false);
+  };
+
   const handleSaveAll = () => {
+    if (!canManageTargets) return;
     EQUIPMENT_LIST.forEach(equipment => {
       SHIFT_LIST.forEach(shift => {
         const key = `${equipment}-${shift}`;
@@ -33,6 +56,10 @@ export default function TargetManagementPage() {
           updateTarget(equipment, shift, val.product, val.billet);
         }
       });
+    });
+    (Object.keys(PERIOD_TARGET_LABELS) as PeriodTargetType[]).forEach(period => {
+      const val = localPeriodTargets[period] || { product: 0, billet: 0 };
+      updatePeriodTarget(period, val.product, val.billet);
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -45,23 +72,40 @@ export default function TargetManagementPage() {
   const totalBillet = EQUIPMENT_LIST.reduce((sum, eq) => {
     return sum + (localTargets[`${eq}-주간`]?.billet || 0) + (localTargets[`${eq}-야간`]?.billet || 0);
   }, 0);
+  const periodTotalProduct = (Object.keys(PERIOD_TARGET_LABELS) as PeriodTargetType[]).reduce((sum, period) => {
+    return sum + (localPeriodTargets[period]?.product || 0);
+  }, 0);
+  const periodTotalBillet = (Object.keys(PERIOD_TARGET_LABELS) as PeriodTargetType[]).reduce((sum, period) => {
+    return sum + (localPeriodTargets[period]?.billet || 0);
+  }, 0);
 
   return (
     <div className="space-y-5 fade-in max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">목표값 관리</h1>
-          <p className="text-sm text-gray-500 mt-0.5">설비별 일일 생산 목표량을 설정합니다 (단위: KG)</p>
+          <p className="text-sm text-gray-500 mt-0.5">일일·주간·월간·연간 생산 목표량을 설정합니다 (단위: KG)</p>
         </div>
-        <button onClick={handleSaveAll} className="btn-primary flex items-center gap-2">
+        <button
+          onClick={handleSaveAll}
+          disabled={!canManageTargets}
+          className="btn-primary flex items-center gap-2"
+        >
           <Save size={16} />
           {saved ? '저장완료 ✓' : '전체 저장'}
         </button>
       </div>
 
+      {!canManageTargets && (
+        <div className="flex items-start gap-3 p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-600">
+          <Lock size={18} className="text-gray-400 flex-shrink-0 mt-0.5" />
+          <div>목표값을 입력하거나 수정하려면 관리자에게 편집 권한을 받아야 합니다.</div>
+        </div>
+      )}
+
       <div className="card">
         <div className="card-header">
-          <h3 className="font-semibold text-gray-800">설비별 생산 목표 (KG)</h3>
+          <h3 className="font-semibold text-gray-800">설비별 일일 생산 목표 (KG)</h3>
         </div>
         <div className="table-wrapper">
           <table className="w-full text-sm">
@@ -102,6 +146,7 @@ export default function TargetManagementPage() {
                           onChange={e => handleChange(equipment, shift, 'product', Number(e.target.value))}
                           min={0}
                           step={1000}
+                          disabled={!canManageTargets}
                           className="w-32 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50"
                         />
                       </td>
@@ -112,6 +157,7 @@ export default function TargetManagementPage() {
                           onChange={e => handleChange(equipment, shift, 'billet', Number(e.target.value))}
                           min={0}
                           step={1000}
+                          disabled={!canManageTargets}
                           className="w-32 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-amber-50"
                         />
                       </td>
@@ -128,6 +174,69 @@ export default function TargetManagementPage() {
                 <td className="px-4 py-3 text-right text-blue-700">{formatNumber(totalProduct)}</td>
                 <td className="px-4 py-3 text-right text-amber-700">{formatNumber(totalBillet)}</td>
                 <td className="px-4 py-3 text-right">{formatNumber(totalProduct + totalBillet)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h3 className="font-semibold text-gray-800">기간별 생산 목표 (KG)</h3>
+        </div>
+        <div className="table-wrapper">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-blue-800 text-white">
+                <th className="px-4 py-3 text-center">기간</th>
+                <th className="px-4 py-3 text-right">제품 목표 (KG)</th>
+                <th className="px-4 py-3 text-right">황지 목표 (KG)</th>
+                <th className="px-4 py-3 text-right">합계 (KG)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(Object.keys(PERIOD_TARGET_LABELS) as PeriodTargetType[]).map(period => {
+                const val = localPeriodTargets[period] || { product: 0, billet: 0 };
+                const rowTotal = (val.product || 0) + (val.billet || 0);
+
+                return (
+                  <tr key={period} className="border-b border-gray-100">
+                    <td className="px-4 py-3 text-center font-bold text-blue-800 bg-blue-50">
+                      {PERIOD_TARGET_LABELS[period]}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <input
+                        type="number"
+                        value={val.product}
+                        onChange={e => handlePeriodChange(period, 'product', Number(e.target.value))}
+                        min={0}
+                        step={1000}
+                        disabled={!canManageTargets}
+                        className="w-36 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 disabled:bg-gray-100"
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <input
+                        type="number"
+                        value={val.billet}
+                        onChange={e => handlePeriodChange(period, 'billet', Number(e.target.value))}
+                        min={0}
+                        step={1000}
+                        disabled={!canManageTargets}
+                        className="w-36 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-amber-50 disabled:bg-gray-100"
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-gray-700">
+                      {formatNumber(rowTotal)}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="bg-blue-50 font-bold border-t-2 border-blue-200">
+                <td className="px-4 py-3 text-center">기간 목표 합계</td>
+                <td className="px-4 py-3 text-right text-blue-700">{formatNumber(periodTotalProduct)}</td>
+                <td className="px-4 py-3 text-right text-amber-700">{formatNumber(periodTotalBillet)}</td>
+                <td className="px-4 py-3 text-right">{formatNumber(periodTotalProduct + periodTotalBillet)}</td>
               </tr>
             </tbody>
           </table>

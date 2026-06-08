@@ -12,9 +12,16 @@ import {
   X,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useReportStore } from '../store/reportStore';
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
+  const { users, currentUserId, setCurrentUserId } = useReportStore();
+  const currentUser = users.find(user => user.id === currentUserId) ?? users[0];
+  const isAdmin = currentUser?.role === 'admin';
+  const canWrite = isAdmin || Boolean(currentUser?.can_write);
+  const canEdit = isAdmin || Boolean(currentUser?.can_edit);
+  const canDelete = isAdmin || Boolean(currentUser?.can_delete);
 
   const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: '대시보드' },
@@ -63,11 +70,13 @@ export default function Layout() {
         <div className="border-t border-blue-800 p-3">
           {sidebarOpen ? (
             <div className="overflow-hidden">
-              <div className="text-sm font-medium truncate">공용 편집 모드</div>
-              <div className="text-xs text-blue-300 truncate">전체 기능 사용 가능</div>
+              <div className="text-sm font-medium truncate">{currentUser?.name || '계정 선택'}</div>
+              <div className="text-xs text-blue-300 truncate">
+                {isAdmin ? '관리자 전체 권한' : canWrite || canEdit ? '권한 부여됨' : '읽기 전용'}
+              </div>
             </div>
           ) : (
-            <div className="w-full flex justify-center text-blue-300" title="공용 편집 모드">
+            <div className="w-full flex justify-center text-blue-300" title={currentUser?.name || '계정 선택'}>
               <Users size={16} />
             </div>
           )}
@@ -90,12 +99,28 @@ export default function Layout() {
             </span>
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <span className="text-sm text-gray-600">
-              공용 편집
-              <span className="ml-1.5 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                전체 권한
+            <select
+              value={currentUserId}
+              onChange={event => setCurrentUserId(event.target.value)}
+              className="form-select w-auto py-1.5 text-sm"
+            >
+              {users.map(user => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))}
+            </select>
+            <div className="hidden md:flex items-center gap-1.5 text-xs">
+              <span className={`px-2 py-0.5 rounded-full ${isAdmin ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                {isAdmin ? '관리자' : '사용자'}
               </span>
-            </span>
+              {canWrite && <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">쓰기</span>}
+              {canEdit && <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">편집</span>}
+              {canDelete && <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700">삭제</span>}
+              {!isAdmin && !canWrite && !canEdit && !canDelete && (
+                <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">읽기 전용</span>
+              )}
+            </div>
           </div>
         </header>
 

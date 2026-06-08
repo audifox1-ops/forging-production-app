@@ -5,11 +5,11 @@ import { formatNumber } from './calculations';
 export function generateOverallSummary(summary: DashboardSummaryData): string {
   const rate = summary.total_achievement_rate;
   if (rate >= 100) {
-    return '금일 생산은 목표 대비 정상 달성하였습니다.';
+    return '전일 생산은 계획 대비 정상 달성하였습니다.';
   } else if (rate >= 90) {
-    return '금일 생산은 목표 대비 일부 미달되었으며, 익일 계획에 미달분을 반영하여 회복 예정입니다.';
+    return '전일 생산은 계획 대비 일부 미달되었으며, 금일 계획에 미달분을 반영하여 회복 예정입니다.';
   } else {
-    return '금일 생산은 목표 대비 크게 미달되었으며, 설비별 원인 분석 및 구체적인 만회대책이 필요합니다.';
+    return '전일 생산은 계획 대비 크게 미달되었으며, 설비별 원인 분석 및 구체적인 만회대책이 필요합니다.';
   }
 }
 
@@ -22,8 +22,8 @@ export function generateReasonSentence(category: ReasonCategory): string {
     '설비 문제': '설비 이상 또는 보전 대기로 인해 계획 대비 실적이 감소하였습니다.',
     '인원/조직 문제': '작업 인원 배치 및 지원 지연으로 생산 효율이 저하되었습니다.',
     '품질 문제': '품질 확인 및 재작업 영향으로 계획 대비 생산량이 감소하였습니다.',
-    '계획 변경': '생산 계획 변경으로 인해 목표 대비 실적 차이가 발생하였습니다.',
-    '기타': '기타 현장 변수로 인해 목표 대비 실적이 미달되었습니다.',
+    '계획 변경': '생산 계획 변경으로 인해 전일 계획 대비 실적 차이가 발생하였습니다.',
+    '기타': '기타 현장 변수로 인해 전일 계획 대비 실적이 미달되었습니다.',
   };
   return map[category] || '';
 }
@@ -40,8 +40,11 @@ export function generateReportText(
 
   // 전체 실적 요약
   lines.push(
-    `전일 제품 실적은 계획 ${formatNumber(summary.total_product_plan)}KG 대비 실적 ${formatNumber(summary.total_product_actual)}KG로 달성율 ${summary.product_achievement_rate.toFixed(1)}%이며, ` +
-    `황지 실적은 계획 ${formatNumber(summary.total_billet_plan)}KG 대비 실적 ${formatNumber(summary.total_billet_actual)}KG로 달성율 ${summary.billet_achievement_rate.toFixed(1)}%입니다.`
+    `전일 제품 실적은 생산계획 ${formatNumber(summary.total_product_plan)}KG 대비 실적 ${formatNumber(summary.total_product_actual)}KG로 달성율 ${summary.product_achievement_rate.toFixed(1)}%이며, ` +
+    `황지 실적은 생산계획 ${formatNumber(summary.total_billet_plan)}KG 대비 실적 ${formatNumber(summary.total_billet_actual)}KG로 달성율 ${summary.billet_achievement_rate.toFixed(1)}%입니다.`
+  );
+  lines.push(
+    `금일 생산계획은 제품 ${formatNumber(summary.total_next_product_plan)}KG, 황지 ${formatNumber(summary.total_next_billet_plan)}KG, 합계 ${formatNumber(summary.total_next_plan)}KG입니다.`
   );
 
   // 미달 설비 찾기
@@ -89,13 +92,13 @@ export function generateReportText(
     }
   }
 
-  // 익일 계획
+  // 금일 계획
   if (productShortfallTotal > 0 || billetShortfallTotal > 0) {
     lines.push(
-      `익일 계획에는 제품 미달분 ${formatNumber(productShortfallTotal)}KG, 황지 미달분 ${formatNumber(billetShortfallTotal)}KG를 각각 반영하여 운영합니다.`
+      `금일 계획에는 제품 미달분 ${formatNumber(productShortfallTotal)}KG, 황지 미달분 ${formatNumber(billetShortfallTotal)}KG를 각각 검토하여 운영합니다.`
     );
   } else {
-    lines.push('금일 생산은 계획 대비 정상 달성하였으며, 익일에도 동일한 목표로 운영합니다.');
+    lines.push('전일 생산은 계획 대비 정상 달성하였으며, 금일 계획에 따라 운영합니다.');
   }
 
   return lines.join('\n\n');

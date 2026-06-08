@@ -1,9 +1,10 @@
 import { create } from 'zustand';
-import { ProductionReport, ProductionEntry, EquipmentTarget, User } from '../types';
+import { ProductionReport, ProductionEntry, EquipmentTarget, User, ProductionPeriodTarget, PeriodTargetType } from '../types';
 import {
   DEMO_REPORTS,
   DEMO_ENTRIES,
   DEMO_TARGETS,
+  DEMO_PERIOD_TARGETS,
   DEMO_USERS,
 } from '../lib/mockData';
 import { format } from 'date-fns';
@@ -12,7 +13,9 @@ interface ReportStore {
   reports: ProductionReport[];
   entries: ProductionEntry[];
   targets: EquipmentTarget[];
+  periodTargets: ProductionPeriodTarget[];
   users: User[];
+  currentUserId: string;
 
   // 보고서 관련
   getReport: (reportDate: string) => ProductionReport | undefined;
@@ -30,11 +33,16 @@ interface ReportStore {
   // 목표값 관련
   getTargets: () => EquipmentTarget[];
   updateTarget: (equipment: string, shift: string, productTarget: number, billetTarget: number) => void;
+  getPeriodTargets: () => ProductionPeriodTarget[];
+  updatePeriodTarget: (period: PeriodTargetType, productTarget: number, billetTarget: number) => void;
 
   // 유저 관련
+  setCurrentUserId: (userId: string) => void;
+  getCurrentUser: () => User | undefined;
   getUsers: () => User[];
   updateUser: (userId: string, updates: Partial<User>) => void;
   addUser: (user: Omit<User, 'id' | 'created_at'>) => void;
+  deleteUser: (userId: string) => void;
 }
 
 let nextId = 100;
@@ -44,7 +52,9 @@ export const useReportStore = create<ReportStore>((set, get) => ({
   reports: [...DEMO_REPORTS],
   entries: [...DEMO_ENTRIES],
   targets: [...DEMO_TARGETS],
+  periodTargets: [...DEMO_PERIOD_TARGETS],
   users: [...DEMO_USERS],
+  currentUserId: 'user-admin',
 
   getReport: (reportDate) => {
     return get().reports.find(r => r.report_date === reportDate);
@@ -88,10 +98,12 @@ export const useReportStore = create<ReportStore>((set, get) => ({
           user_name: assignedUser?.name,
           equipment,
           shift,
-          product_plan: target?.product_target || 0,
+          product_plan: 0,
           product_actual: 0,
-          billet_plan: target?.billet_target || 0,
+          billet_plan: 0,
           billet_actual: 0,
+          next_product_plan: 0,
+          next_billet_plan: 0,
           submit_status: 'not_started',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -161,6 +173,8 @@ export const useReportStore = create<ReportStore>((set, get) => ({
         product_actual: 0,
         billet_plan: 0,
         billet_actual: 0,
+        next_product_plan: 0,
+        next_billet_plan: 0,
         ...entryData,
       };
       set(state => ({ entries: [...state.entries, newEntry] }));
@@ -205,20 +219,74 @@ export const useReportStore = create<ReportStore>((set, get) => ({
     }));
   },
 
+  getPeriodTargets: () => get().periodTargets,
+
+  updatePeriodTarget: (period, productTarget, billetTarget) => {
+    set(state => ({
+      periodTargets: state.periodTargets.map(target =>
+        target.period === period
+          ? { ...target, product_target: productTarget, billet_target: billetTarget }
+          : target
+      ),
+    }));
+  },
+
+  setCurrentUserId: (userId) => {
+    set({ currentUserId: userId });
+  },
+
+  getCurrentUser: () => {
+    const state = get();
+    return state.users.find(user => user.id === state.currentUserId);
+  },
+
   getUsers: () => get().users,
 
   updateUser: (userId, updates) => {
     set(state => ({
-      users: state.users.map(u => u.id === userId ? { ...u, ...updates } : u),
+      users: state.users.map(u => {
+        if (u.id !== userId) return u;
+        if (u.role === 'admin') {
+          return {
+            ...u,
+            ...updates,
+            role: 'admin',
+            can_write: true,
+            can_edit: true,
+            can_delete: true,
+          };
+        }
+        return { ...u, ...updates };
+      }),
     }));
   },
 
   addUser: (userData) => {
+    const { role, can_write, can_edit, can_delete, ...rest } = userData;
     const newUser: User = {
       id: genId(),
       created_at: new Date().toISOString(),
-      ...userData,
+      ...rest,
+      role: role === 'admin' ? 'user' : role,
+      can_write: can_write ?? false,
+      can_edit: can_edit ?? false,
+      can_delete: can_delete ?? false,
     };
     set(state => ({ users: [...state.users, newUser] }));
+  },
+
+  deleteUser: (userId) => {
+    const user = get().users.find(u => u.id === userId);
+    if (!user || user.role === 'admin') return;
+
+    set(state => ({
+      users: state.users.filter(u => u.id !== userId),
+      entries: state.entries.map(entry =>
+        entry.user_id === userId
+          ? { ...entry, user_id: 'unassigned', user_name: undefined }
+          : entry
+      ),
+      currentUserId: state.currentUserId === userId ? 'user-admin' : state.currentUserId,
+    }));
   },
 }));

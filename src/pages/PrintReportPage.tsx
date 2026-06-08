@@ -59,8 +59,8 @@ export default function PrintReportPage() {
           <div className="print-header text-center mb-6 pb-4 border-b-2 border-blue-800">
             <h1 className="text-2xl font-bold text-blue-900">단조 생산 일일 보고서</h1>
             <div className="flex justify-between items-center mt-2 text-sm text-gray-600">
-              <span>보고일자: {formattedDate}</span>
-              <span>익일계획일: {format(new Date(report.next_plan_date), 'yyyy년 MM월 dd일', { locale: ko })}</span>
+              <span>전일 실적일: {formattedDate}</span>
+              <span>금일 계획일: {format(new Date(report.next_plan_date), 'yyyy년 MM월 dd일', { locale: ko })}</span>
               <span>출력일시: {format(new Date(), 'yyyy.MM.dd HH:mm')}</span>
             </div>
           </div>
@@ -68,9 +68,9 @@ export default function PrintReportPage() {
           {/* 1. 종합 요약 */}
           <div className="mb-5">
             <div className="print-section-title bg-blue-100 px-3 py-2 font-bold text-blue-900 text-sm mb-2 border-l-4 border-blue-700">
-              1. 종합 실적 요약
+              1. 전일 실적 및 금일 계획 요약
             </div>
-            <div className="grid grid-cols-3 gap-3 mb-3">
+            <div className="grid grid-cols-4 gap-3 mb-3">
               <div className={`p-3 rounded-lg text-center border-2 ${
                 summary.total_achievement_rate >= 100 ? 'bg-green-50 border-green-300' :
                   summary.total_achievement_rate >= 90 ? 'bg-yellow-50 border-yellow-300' : 'bg-red-50 border-red-300'
@@ -104,6 +104,15 @@ export default function PrintReportPage() {
                   {formatNumber(summary.total_billet_actual)} / {formatNumber(summary.total_billet_plan)} KG
                 </div>
               </div>
+              <div className="p-3 rounded-lg text-center border bg-green-50 border-green-200">
+                <div className="text-xs text-gray-500">금일 계획</div>
+                <div className="text-2xl font-bold mt-1 text-green-700">
+                  {formatNumber(summary.total_next_plan)}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  제품 {formatNumber(summary.total_next_product_plan)} / 황지 {formatNumber(summary.total_next_billet_plan)} KG
+                </div>
+              </div>
             </div>
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 leading-relaxed">
               {overallSummary}
@@ -125,11 +134,11 @@ export default function PrintReportPage() {
                   <th rowSpan={2} className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">미달 사유</th>
                 </tr>
                 <tr>
-                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">계획</th>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">전일계획</th>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">실적</th>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">달성율</th>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">미달량</th>
-                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">계획</th>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">전일계획</th>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">실적</th>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">달성율</th>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">미달량</th>
@@ -221,7 +230,7 @@ export default function PrintReportPage() {
                     <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400 w-20">미달 사유</th>
                     <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">상세 원인</th>
                     <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">금일 조치사항</th>
-                    <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">익일 만회계획</th>
+                    <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">금일 만회계획</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -251,10 +260,10 @@ export default function PrintReportPage() {
             </div>
           )}
 
-          {/* 4. 익일 생산계획 */}
+          {/* 4. 금일 생산계획 */}
           <div className="mb-5">
             <div className="print-section-title bg-blue-100 px-3 py-2 font-bold text-blue-900 text-sm mb-2 border-l-4 border-blue-700">
-              4. 일일 생산계획 보고 (익일: {format(new Date(report.next_plan_date), 'yyyy년 MM월 dd일', { locale: ko })})
+              4. 금일 생산계획 보고 (계획일: {format(new Date(report.next_plan_date), 'yyyy년 MM월 dd일', { locale: ko })})
             </div>
             <table className="print-table w-full text-xs">
               <thead>
@@ -263,35 +272,32 @@ export default function PrintReportPage() {
                   <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">근무조</th>
                   <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">제품 계획 (KG)</th>
                   <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">황지 계획 (KG)</th>
-                  <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">만회계획 포함량</th>
+                  <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">합계 (KG)</th>
                   <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">비고</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map(entry => {
-                  const pShortfall = Math.max(0, (entry.product_plan || 0) - (entry.product_actual || 0));
+                  const nextProductPlan = entry.next_product_plan || 0;
+                  const nextBilletPlan = entry.next_billet_plan || 0;
                   return (
                     <tr key={entry.id}>
                       <td className="px-2 py-1.5 text-center font-bold border border-gray-300">{entry.equipment}</td>
                       <td className="px-2 py-1.5 text-center border border-gray-300">{entry.shift}</td>
-                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(entry.product_plan)}</td>
-                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(entry.billet_plan)}</td>
-                      <td className={`px-2 py-1.5 text-right border border-gray-300 ${pShortfall > 0 ? 'text-red-700 font-medium' : ''}`}>
-                        {pShortfall > 0 ? `+${formatNumber(pShortfall)}` : '-'}
-                      </td>
+                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(nextProductPlan)}</td>
+                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(nextBilletPlan)}</td>
+                      <td className="px-2 py-1.5 text-right border border-gray-300 font-medium">{formatNumber(nextProductPlan + nextBilletPlan)}</td>
                       <td className="px-2 py-1.5 text-center border border-gray-300 text-gray-500">
-                        {entry.recovery_plan ? '만회계획 포함' : '-'}
+                        {entry.recovery_plan || '-'}
                       </td>
                     </tr>
                   );
                 })}
                 <tr style={{ backgroundColor: '#dbeafe', fontWeight: 'bold' }}>
                   <td colSpan={2} className="px-2 py-1.5 text-center border border-gray-400">합 계</td>
-                  <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_product_plan)}</td>
-                  <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_billet_plan)}</td>
-                  <td className="px-2 py-1.5 text-right text-red-700 border border-gray-400">
-                    {summary.total_shortfall > 0 ? `+${formatNumber(summary.total_shortfall)}` : '-'}
-                  </td>
+                  <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_next_product_plan)}</td>
+                  <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_next_billet_plan)}</td>
+                  <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_next_plan)}</td>
                   <td className="border border-gray-400"></td>
                 </tr>
               </tbody>
@@ -307,7 +313,7 @@ export default function PrintReportPage() {
               {overallSummary}
               {summary.total_shortfall > 0 && (
                 <div className="mt-2 text-red-700">
-                  ※ 총 미달량 {formatNumber(summary.total_shortfall)} KG — 익일 계획에 만회분 반영 요망
+                  ※ 총 미달량 {formatNumber(summary.total_shortfall)} KG — 금일 계획에 만회분 반영 검토 요망
                 </div>
               )}
             </div>
