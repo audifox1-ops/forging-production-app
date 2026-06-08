@@ -147,12 +147,12 @@ export interface ShiftSummary {
 
 // 기본 목표값
 export const DEFAULT_TARGETS: Omit<EquipmentTarget, 'id' | 'created_at'>[] = [
-  { equipment: 'P15', shift: '주간', product_target: 145000, billet_target: 150000, effective_date: '2026-01-01' },
-  { equipment: 'P15', shift: '야간', product_target: 0, billet_target: 0, effective_date: '2026-01-01' },
-  { equipment: 'P5', shift: '주간', product_target: 70000, billet_target: 50000, effective_date: '2026-01-01' },
-  { equipment: 'P5', shift: '야간', product_target: 0, billet_target: 0, effective_date: '2026-01-01' },
-  { equipment: 'R/M', shift: '주간', product_target: 200000, billet_target: 0, effective_date: '2026-01-01' },
-  { equipment: 'R/M', shift: '야간', product_target: 0, billet_target: 0, effective_date: '2026-01-01' },
+  { equipment: 'P15', shift: '주간', product_target: 72500, billet_target: 75000, effective_date: '2026-01-01' },
+  { equipment: 'P15', shift: '야간', product_target: 72500, billet_target: 75000, effective_date: '2026-01-01' },
+  { equipment: 'P5', shift: '주간', product_target: 35000, billet_target: 25000, effective_date: '2026-01-01' },
+  { equipment: 'P5', shift: '야간', product_target: 35000, billet_target: 25000, effective_date: '2026-01-01' },
+  { equipment: 'R/M', shift: '주간', product_target: 100000, billet_target: 0, effective_date: '2026-01-01' },
+  { equipment: 'R/M', shift: '야간', product_target: 100000, billet_target: 0, effective_date: '2026-01-01' },
 ];
 
 export const EQUIPMENT_LIST: Equipment[] = ['P15', 'P5', 'R/M'];
