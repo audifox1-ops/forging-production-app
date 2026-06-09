@@ -12,6 +12,67 @@ import {
   getTodayPlanDate,
 } from '../utils/reportDates';
 
+type ReasonFormData = {
+  reason_category: ReasonCategory | '';
+  reason_detail: string;
+  action_today: string;
+  recovery_plan: string;
+  support_request: string;
+};
+
+const EMPTY_REASON: ReasonFormData = {
+  reason_category: '',
+  reason_detail: '',
+  action_today: '',
+  recovery_plan: '',
+  support_request: '',
+};
+
+function getEntryShortfall(entry: { product_plan?: number; product_actual?: number; billet_plan?: number; billet_actual?: number }) {
+  const productShortfall = Math.max(0, (entry.product_plan || 0) - (entry.product_actual || 0));
+  const billetShortfall = Math.max(0, (entry.billet_plan || 0) - (entry.billet_actual || 0));
+  return { productShortfall, billetShortfall, hasShortfall: productShortfall > 0 || billetShortfall > 0 };
+}
+
+function getReasonFromEntry(entry?: Partial<ReasonFormData>): ReasonFormData {
+  return {
+    reason_category: entry?.reason_category || '',
+    reason_detail: entry?.reason_detail || '',
+    action_today: entry?.action_today || '',
+    recovery_plan: entry?.recovery_plan || '',
+    support_request: entry?.support_request || '',
+  };
+}
+
+function hasReasonContent(entry: Partial<ReasonFormData>) {
+  return Boolean(
+    entry.reason_category ||
+    entry.reason_detail?.trim() ||
+    entry.action_today?.trim() ||
+    entry.recovery_plan?.trim() ||
+    entry.support_request?.trim()
+  );
+}
+
+function isReasonComplete(reason: ReasonFormData) {
+  return Boolean(
+    reason.reason_category &&
+    reason.reason_detail.trim() &&
+    reason.action_today.trim() &&
+    reason.recovery_plan.trim()
+  );
+}
+
+function getReasonPayload(reason: ReasonFormData) {
+  return {
+    reason_category: reason.reason_category || null,
+    reason_detail: reason.reason_detail.trim() || null,
+    action_today: reason.action_today.trim() || null,
+    recovery_plan: reason.recovery_plan.trim() || null,
+    support_request: reason.support_request.trim() || null,
+  } as any;
+}
+
 export default function UserInputPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
   const navigate = useNavigate();
@@ -51,6 +112,12 @@ export default function UserInputPage() {
   const selectedEntries = entries
     .filter(entry => entry.equipment === selectedEquipment)
     .sort((a, b) => SHIFT_LIST.indexOf(a.shift) - SHIFT_LIST.indexOf(b.shift));
+  const selectedReasonSource = selectedEntries.find(hasReasonContent) ?? selectedEntries[0];
+  const selectedHasShortfall = selectedEntries.some(entry => getEntryShortfall(entry).hasShortfall);
+  const [sharedReasons, setSharedReasons] = useState<Partial<Record<Equipment, ReasonFormData>>>({});
+  const [sharedReasonErrors, setSharedReasonErrors] = useState<string[]>([]);
+  const [sharedReasonSaved, setSharedReasonSaved] = useState(false);
+  const sharedReason = sharedReasons[selectedEquipment] ?? getReasonFromEntry(selectedReasonSource);
 
   useEffect(() => {
     if (entries.length === 0) return;
@@ -64,9 +131,71 @@ export default function UserInputPage() {
     }
   }, [entries, selectedEquipment]);
 
+  useEffect(() => {
+    setSharedReasons(prev => ({
+      ...prev,
+      [selectedEquipment]: getReasonFromEntry(selectedReasonSource),
+    }));
+    setSharedReasonErrors([]);
+    setSharedReasonSaved(false);
+  }, [
+    selectedEquipment,
+    selectedReasonSource?.id,
+    selectedReasonSource?.reason_category,
+    selectedReasonSource?.reason_detail,
+    selectedReasonSource?.action_today,
+    selectedReasonSource?.recovery_plan,
+    selectedReasonSource?.support_request,
+  ]);
+
   const handlePlanDateChange = (value: string) => {
     if (!value) return;
     navigate(`/reports/${getActualDateFromPlanDate(value)}/input`);
+  };
+
+  const handleSharedReasonChange = (field: keyof ReasonFormData, value: string) => {
+    setSharedReasons(prev => ({
+      ...prev,
+      [selectedEquipment]: {
+        ...(prev[selectedEquipment] ?? getReasonFromEntry(selectedReasonSource)),
+        [field]: value,
+      },
+    }));
+    setSharedReasonErrors([]);
+    setSharedReasonSaved(false);
+  };
+
+  const saveSharedReasonForEntries = (skipEntryId?: string) => {
+    selectedEntries
+      .filter(entry => entry.id !== skipEntryId)
+      .forEach(entry => {
+        saveEntry({
+          id: entry.id,
+          report_id: entry.report_id,
+          user_id: entry.user_id,
+          equipment: entry.equipment,
+          shift: entry.shift,
+          ...getReasonPayload(sharedReason),
+        });
+      });
+    setSharedReasonSaved(true);
+    setTimeout(() => setSharedReasonSaved(false), 2000);
+  };
+
+  const validateSharedReason = () => {
+    if (!selectedHasShortfall) {
+      setSharedReasonErrors([]);
+      return true;
+    }
+
+    const errors: string[] = [];
+    if (!sharedReason.reason_category) errors.push('미달성 사유를 선택해주세요.');
+    if (!sharedReason.reason_detail.trim()) errors.push('상세 원인을 입력해주세요.');
+    if (!sharedReason.action_today.trim()) errors.push('금일 조치사항을 입력해주세요.');
+    if (!sharedReason.recovery_plan.trim()) errors.push('금일 만회계획을 입력해주세요.');
+
+    setSharedReasonErrors(errors);
+    return errors.length === 0;
   };
 
   if (!report) {
@@ -192,18 +321,37 @@ export default function UserInputPage() {
               선택한 부서의 입력 항목이 없습니다.
             </div>
           </div>
-        ) : selectedEntries.map(entry => (
-          <EntryInputCard
-            key={entry.id}
-            entry={entry}
-            reportId={report!.id}
-            targets={targets}
-            canWrite={canWrite}
-            canEdit={canEdit}
-            onSave={saveEntry}
-            onSubmit={submitEntry}
-          />
-        ))
+        ) : (
+          <div className="space-y-4">
+            {selectedEntries.map(entry => (
+              <EntryInputCard
+                key={entry.id}
+                entry={entry}
+                reportId={report!.id}
+                targets={targets}
+                canWrite={canWrite}
+                canEdit={canEdit}
+                sharedReason={sharedReason}
+                hasEquipmentShortfall={selectedHasShortfall}
+                validateSharedReason={validateSharedReason}
+                onSave={saveEntry}
+                onSaveSharedReason={saveSharedReasonForEntries}
+                onSubmit={submitEntry}
+              />
+            ))}
+            <SharedReasonSection
+              equipment={selectedEquipment}
+              entries={selectedEntries}
+              reason={sharedReason}
+              errors={sharedReasonErrors}
+              saved={sharedReasonSaved}
+              canModify={canWrite || canEdit}
+              hasShortfall={selectedHasShortfall}
+              onChange={handleSharedReasonChange}
+              onSave={() => saveSharedReasonForEntries()}
+            />
+          </div>
+        )
       )}
     </div>
   );
@@ -216,7 +364,11 @@ function EntryInputCard({
   targets,
   canWrite,
   canEdit,
+  sharedReason,
+  hasEquipmentShortfall,
+  validateSharedReason,
   onSave,
+  onSaveSharedReason,
   onSubmit,
 }: {
   entry: any;
@@ -224,7 +376,11 @@ function EntryInputCard({
   targets: EquipmentTarget[];
   canWrite: boolean;
   canEdit: boolean;
+  sharedReason: ReasonFormData;
+  hasEquipmentShortfall: boolean;
+  validateSharedReason: () => boolean;
   onSave: (data: any) => void;
+  onSaveSharedReason: (skipEntryId?: string) => void;
   onSubmit: (id: string) => void;
 }) {
   const isSubmitted = entry.submit_status === 'submitted' || entry.submit_status === 'approved';
@@ -236,14 +392,8 @@ function EntryInputCard({
     billet_actual: entry.billet_actual,
     next_product_plan: entry.next_product_plan || 0,
     next_billet_plan: entry.next_billet_plan || 0,
-    reason_category: entry.reason_category || '',
-    reason_detail: entry.reason_detail || '',
-    action_today: entry.action_today || '',
-    recovery_plan: entry.recovery_plan || '',
-    support_request: entry.support_request || '',
   });
   const [errors, setErrors] = useState<string[]>([]);
-  const [showReasonSection, setShowReasonSection] = useState(false);
   const [saved, setSaved] = useState(false);
 
   // 달성율 계산
@@ -261,10 +411,6 @@ function EntryInputCard({
   const equipmentProductTarget = equipmentTargets.reduce((sum, target) => sum + (target.product_target || 0), 0);
   const equipmentBilletTarget = equipmentTargets.reduce((sum, target) => sum + (target.billet_target || 0), 0);
 
-  useEffect(() => {
-    setShowReasonSection(hasShortfall);
-  }, [hasShortfall]);
-
   const handleChange = (field: string, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setErrors([]);
@@ -279,12 +425,6 @@ function EntryInputCard({
     if (formData.next_product_plan === 0 && formData.next_billet_plan === 0) {
       errs.push('금일 제품 또는 황지 생산계획 중 하나 이상 입력해주세요.');
     }
-    if (hasShortfall) {
-      if (!formData.reason_category) errs.push('미달성 사유를 선택해주세요.');
-      if (!formData.reason_detail.trim()) errs.push('상세 원인을 입력해주세요.');
-      if (!formData.action_today.trim()) errs.push('금일 조치사항을 입력해주세요.');
-      if (!formData.recovery_plan.trim()) errs.push('금일 만회계획을 입력해주세요.');
-    }
     setErrors(errs);
     return errs.length === 0;
   };
@@ -298,7 +438,9 @@ function EntryInputCard({
       equipment: entry.equipment,
       shift: entry.shift,
       ...formData,
+      ...getReasonPayload(sharedReason),
     });
+    onSaveSharedReason(entry.id);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -306,6 +448,10 @@ function EntryInputCard({
   const handleSubmit = () => {
     if (!canModify) return;
     if (!validate()) return;
+    if (hasEquipmentShortfall && !validateSharedReason()) {
+      setErrors(['미달성 사유는 하단의 설비 공통 입력란에 작성해주세요.']);
+      return;
+    }
     handleSave();
     onSubmit(entry.id);
   };
@@ -471,128 +617,6 @@ function EntryInputCard({
           </div>
         </div>
 
-        {/* 미달성 사유 섹션 */}
-        {(hasShortfall || showReasonSection) && (
-          <div className={`border rounded-xl overflow-hidden ${hasShortfall ? 'border-orange-200' : 'border-gray-200'}`}>
-            <button
-              type="button"
-              onClick={() => setShowReasonSection(!showReasonSection)}
-              className={`w-full flex items-center justify-between px-4 py-3 text-sm font-semibold ${
-                hasShortfall ? 'bg-orange-50 text-orange-700' : 'bg-gray-50 text-gray-700'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <AlertCircle size={15} />
-                미달성 사유 및 만회대책
-                {hasShortfall && <span className="text-red-500 text-xs">* 필수 입력</span>}
-              </span>
-              {showReasonSection ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-
-            {showReasonSection && (
-              <div className="p-4 space-y-4 bg-orange-50/30">
-                {/* 미달 안내 */}
-                {hasShortfall && (
-                  <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                    <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-                    전일 계획 대비 실적이 미달되었습니다. 미달성 사유, 상세 원인, 금일 조치사항, 금일 만회계획을 작성해 주세요.
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 미달성 사유 선택 */}
-                  <div>
-                    <label className="form-label">
-                      미달성 사유 {hasShortfall && <span className="text-red-500">*</span>}
-                    </label>
-                    <select
-                      value={formData.reason_category}
-                      onChange={e => handleChange('reason_category', e.target.value)}
-                      disabled={!canModify}
-                      className="form-select"
-                    >
-                      <option value="">선택하세요</option>
-                      {REASON_CATEGORIES.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* 상세 원인 작성 가이드 */}
-                  {formData.reason_category && (
-                    <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                      <strong className="text-gray-700">작성 가이드:</strong>
-                      <div className="mt-1">
-                        {getReasonGuide(formData.reason_category as ReasonCategory)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 상세 원인 */}
-                <div>
-                  <label className="form-label">
-                    상세 원인 {hasShortfall && <span className="text-red-500">*</span>}
-                  </label>
-                  <textarea
-                    value={formData.reason_detail}
-                    onChange={e => handleChange('reason_detail', e.target.value)}
-                    disabled={!canModify}
-                    placeholder="구체적인 원인을 작성해 주세요 (설비명, 시간, 수량 등 포함)"
-                    className="form-textarea"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 금일 조치사항 */}
-                  <div>
-                    <label className="form-label">
-                      금일 조치사항 {hasShortfall && <span className="text-red-500">*</span>}
-                    </label>
-                    <textarea
-                      value={formData.action_today}
-                      onChange={e => handleChange('action_today', e.target.value)}
-                      disabled={!canModify}
-                      placeholder="금일 즉시 취한 또는 취할 조치를 작성해 주세요"
-                      className="form-textarea"
-                      rows={3}
-                    />
-                  </div>
-
-                  {/* 금일 만회계획 */}
-                  <div>
-                    <label className="form-label">
-                      금일 만회계획 {hasShortfall && <span className="text-red-500">*</span>}
-                    </label>
-                    <textarea
-                      value={formData.recovery_plan}
-                      onChange={e => handleChange('recovery_plan', e.target.value)}
-                      disabled={!canModify}
-                      placeholder="금일 어느 설비에서 얼마를 추가 생산할지 수량 기준으로 작성"
-                      className="form-textarea"
-                      rows={3}
-                    />
-                  </div>
-                </div>
-
-                {/* 지원 요청사항 */}
-                <div>
-                  <label className="form-label">지원 요청사항</label>
-                  <textarea
-                    value={formData.support_request}
-                    onChange={e => handleChange('support_request', e.target.value)}
-                    disabled={!canModify}
-                    placeholder="관리자 또는 타 부서에 지원이 필요한 사항을 작성해 주세요 (선택)"
-                    className="form-textarea"
-                    rows={2}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* 검증 오류 */}
         {errors.length > 0 && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -643,6 +667,184 @@ function EntryInputCard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function SharedReasonSection({
+  equipment,
+  entries,
+  reason,
+  errors,
+  saved,
+  canModify,
+  hasShortfall,
+  onChange,
+  onSave,
+}: {
+  equipment: Equipment;
+  entries: any[];
+  reason: ReasonFormData;
+  errors: string[];
+  saved: boolean;
+  canModify: boolean;
+  hasShortfall: boolean;
+  onChange: (field: keyof ReasonFormData, value: string) => void;
+  onSave: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(hasShortfall);
+  const shortfallRows = entries
+    .map(entry => ({ entry, ...getEntryShortfall(entry) }))
+    .filter(row => row.hasShortfall);
+
+  useEffect(() => {
+    if (hasShortfall) setIsOpen(true);
+  }, [equipment, hasShortfall]);
+
+  return (
+    <div className={`card ${hasShortfall ? 'border-orange-200' : ''}`}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full flex items-center justify-between px-4 py-3 text-sm font-semibold ${
+          hasShortfall ? 'bg-orange-50 text-orange-700' : 'bg-gray-50 text-gray-700'
+        }`}
+      >
+        <span className="flex items-center gap-2">
+          <AlertCircle size={15} />
+          {equipment} 공통 미달성 사유 및 만회대책
+          {hasShortfall && <span className="text-red-500 text-xs">* 필수 입력</span>}
+        </span>
+        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button>
+
+      {isOpen && (
+        <div className="card-body space-y-4 bg-orange-50/30">
+          {hasShortfall ? (
+            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+              <div>
+                <div>주간/야간 중 미달이 발생했습니다. 사유와 만회대책은 이 공통 입력란에 한 번만 작성합니다.</div>
+                <div className="mt-1 text-xs">
+                  {shortfallRows.map(row => (
+                    <span key={row.entry.id} className="mr-3">
+                      {row.entry.shift}: 제품 {formatNumber(row.productShortfall)} KG · 황지 {formatNumber(row.billetShortfall)} KG
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">
+              현재 선택한 설비의 주간/야간 입력에는 미달이 없습니다. 필요 시 공통 메모로 작성할 수 있습니다.
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">
+                미달성 사유 {hasShortfall && <span className="text-red-500">*</span>}
+              </label>
+              <select
+                value={reason.reason_category}
+                onChange={e => onChange('reason_category', e.target.value)}
+                disabled={!canModify}
+                className="form-select"
+              >
+                <option value="">선택하세요</option>
+                {REASON_CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
+            {reason.reason_category && (
+              <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <strong className="text-gray-700">작성 가이드:</strong>
+                <div className="mt-1">
+                  {getReasonGuide(reason.reason_category as ReasonCategory)}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="form-label">
+              상세 원인 {hasShortfall && <span className="text-red-500">*</span>}
+            </label>
+            <textarea
+              value={reason.reason_detail}
+              onChange={e => onChange('reason_detail', e.target.value)}
+              disabled={!canModify}
+              placeholder="구체적인 원인을 작성해 주세요 (설비명, 시간, 수량 등 포함)"
+              className="form-textarea"
+              rows={3}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">
+                금일 조치사항 {hasShortfall && <span className="text-red-500">*</span>}
+              </label>
+              <textarea
+                value={reason.action_today}
+                onChange={e => onChange('action_today', e.target.value)}
+                disabled={!canModify}
+                placeholder="금일 즉시 취한 또는 취할 조치를 작성해 주세요"
+                className="form-textarea"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <label className="form-label">
+                금일 만회계획 {hasShortfall && <span className="text-red-500">*</span>}
+              </label>
+              <textarea
+                value={reason.recovery_plan}
+                onChange={e => onChange('recovery_plan', e.target.value)}
+                disabled={!canModify}
+                placeholder="금일 어느 설비에서 얼마를 추가 생산할지 수량 기준으로 작성"
+                className="form-textarea"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="form-label">지원 요청사항</label>
+            <textarea
+              value={reason.support_request}
+              onChange={e => onChange('support_request', e.target.value)}
+              disabled={!canModify}
+              placeholder="관리자 또는 타 부서에 지원이 필요한 사항을 작성해 주세요 (선택)"
+              className="form-textarea"
+              rows={2}
+            />
+          </div>
+
+          {errors.length > 0 && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="text-red-700 text-sm font-medium mb-1">미달성 사유 입력 오류</div>
+              {errors.map((error, index) => (
+                <div key={index} className="text-red-600 text-sm flex items-center gap-1.5">
+                  <span>•</span>{error}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {canModify && (
+            <div className="flex justify-end">
+              <button onClick={onSave} className="btn-secondary flex items-center gap-2">
+                <Save size={16} />
+                {saved ? '사유 저장됨 ✓' : '공통 사유 저장'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
