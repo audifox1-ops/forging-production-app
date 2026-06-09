@@ -1,6 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  addDays,
+  addMonths,
+  addWeeks,
+  addYears,
   eachDayOfInterval,
   eachMonthOfInterval,
   endOfMonth,
@@ -19,14 +23,14 @@ import {
 } from 'recharts';
 import {
   AlertTriangle, CalendarRange, Clock,
-  ClipboardCheck, Printer, PlusCircle, RefreshCw, Users,
+  ChevronLeft, ChevronRight, ClipboardCheck, Printer, PlusCircle, RefreshCw, Users,
 } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import KPIStatusCard from '../components/KPIStatusCard';
 import SubmitStatusBadge from '../components/SubmitStatusBadge';
 import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
-import type { PeriodTargetType, ProductionReport } from '../types';
+import type { Equipment, PeriodTargetType, ProductionReport } from '../types';
 import {
   getActualDateFromPlanDate,
   getReportPlanDate,
@@ -84,6 +88,19 @@ function formatPeriodRange(range: { start: Date; end: Date }, period: SummaryPer
     return format(range.start, 'yyyy년', { locale: ko });
   }
   return `${format(range.start, 'yyyy년 MM월 dd일', { locale: ko })} - ${format(range.end, 'MM월 dd일', { locale: ko })}`;
+}
+
+function shiftPlanDate(dateString: string, period: SummaryPeriod, direction: -1 | 1) {
+  const baseDate = parseISO(dateString);
+  const nextDate = period === 'week'
+    ? addWeeks(baseDate, direction)
+    : period === 'month'
+      ? addMonths(baseDate, direction)
+      : period === 'year'
+        ? addYears(baseDate, direction)
+        : addDays(baseDate, direction);
+
+  return format(nextDate, 'yyyy-MM-dd');
 }
 
 function getRateColor(rate: number) {
@@ -386,6 +403,52 @@ export default function DashboardPage() {
       })
       .sort((a, b) => b.totalShortfall - a.totalShortfall || b.count - a.count);
   }, [detailRows]);
+  const reasonGroups = React.useMemo(() => {
+    const addUnique = (items: string[], value?: string | null) => {
+      const trimmed = value?.trim();
+      if (trimmed && !items.includes(trimmed)) items.push(trimmed);
+    };
+    const groupMap = new Map<string, {
+      key: string;
+      equipment: Equipment;
+      actualDate: string;
+      categories: string[];
+      reasonDetails: string[];
+      actionsToday: string[];
+      recoveryPlans: string[];
+      supportRequests: string[];
+    }>();
+
+    entries
+      .filter(entry => entry.reason_category && entry.submit_status === 'submitted')
+      .forEach(entry => {
+        const actualDate = reportDateById.get(entry.report_id) ?? selectedActualDate;
+        const key = `${selectedPeriod === 'day' ? selectedActualDate : actualDate}-${entry.equipment}`;
+        const group = groupMap.get(key) ?? {
+          key,
+          equipment: entry.equipment,
+          actualDate,
+          categories: [],
+          reasonDetails: [],
+          actionsToday: [],
+          recoveryPlans: [],
+          supportRequests: [],
+        };
+
+        addUnique(group.categories, entry.reason_category);
+        addUnique(group.reasonDetails, entry.reason_detail);
+        addUnique(group.actionsToday, entry.action_today);
+        addUnique(group.recoveryPlans, entry.recovery_plan);
+        addUnique(group.supportRequests, entry.support_request);
+        groupMap.set(key, group);
+      });
+
+    return Array.from(groupMap.values()).sort((a, b) => {
+      const dateOrder = a.actualDate.localeCompare(b.actualDate);
+      if (dateOrder !== 0) return dateOrder;
+      return EQUIPMENT_LIST.indexOf(a.equipment) - EQUIPMENT_LIST.indexOf(b.equipment);
+    });
+  }, [entries, reportDateById, selectedActualDate, selectedPeriod]);
   const topReason = reasonAnalysis[0];
   const missingReasonCount = reasonAnalysis.find(item => item.category === '사유 미입력')?.count ?? 0;
   const totalReasonShortfall = reasonAnalysis.reduce((sum, item) => sum + item.totalShortfall, 0);
@@ -456,6 +519,10 @@ export default function DashboardPage() {
 
   const handlePrint = () => {
     navigate(`/reports/${selectedActualDate}/print`);
+  };
+
+  const handleMoveDate = (direction: -1 | 1) => {
+    setSelectedPlanDate(current => shiftPlanDate(current, selectedPeriod, direction));
   };
 
   // 차트용 데이터
@@ -532,13 +599,33 @@ export default function DashboardPage() {
                 </button>
               ))}
             </div>
-            <input
-              type="date"
-              value={selectedPlanDate}
-              onChange={e => setSelectedPlanDate(e.target.value)}
-              className="form-input w-auto bg-white"
-              aria-label="금일 계획일"
-            />
+            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <button
+                type="button"
+                onClick={() => handleMoveDate(-1)}
+                className="h-10 w-10 inline-flex items-center justify-center text-slate-600 hover:bg-slate-50 border-r border-slate-200"
+                aria-label={`이전 ${periodLabel}로 이동`}
+                title={`이전 ${periodLabel}`}
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <input
+                type="date"
+                value={selectedPlanDate}
+                onChange={e => setSelectedPlanDate(e.target.value)}
+                className="h-10 w-[150px] border-0 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                aria-label="금일 계획일"
+              />
+              <button
+                type="button"
+                onClick={() => handleMoveDate(1)}
+                className="h-10 w-10 inline-flex items-center justify-center text-slate-600 hover:bg-slate-50 border-l border-slate-200"
+                aria-label={`다음 ${periodLabel}로 이동`}
+                title={`다음 ${periodLabel}`}
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
             {selectedPeriod !== 'day' && (
               <button onClick={() => navigate('/reports')} className="btn-secondary flex items-center gap-2">
                 <CalendarRange size={16} />
@@ -1245,51 +1332,61 @@ export default function DashboardPage() {
           </div>
 
           {/* 미달성 사유 및 만회대책 섹션 */}
-          {entries.some(e => e.reason_category && e.submit_status === 'submitted') && (
+          {reasonGroups.length > 0 && (
             <div className="card">
               <div className="card-header">
                 <h3 className="font-semibold text-gray-800">미달성 사유 및 만회대책</h3>
+                <span className="text-xs text-gray-500">설비별 통합 표시</span>
               </div>
               <div className="card-body space-y-4">
-                {entries
-                  .filter(e => e.reason_category && e.submit_status === 'submitted')
-                  .map(entry => (
-                    <div key={entry.id} className="border border-orange-200 bg-orange-50 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <AlertTriangle size={16} className="text-orange-500" />
-                        <span className="font-semibold text-orange-800">
-                          {selectedPeriod !== 'day' && `${format(parseISO(reportDateById.get(entry.report_id) ?? selectedActualDate), 'MM.dd')} · `}
-                          {entry.equipment} / {entry.shift} — {entry.reason_category}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                        {entry.reason_detail && (
-                          <div>
-                            <div className="text-xs text-gray-500 mb-1 font-medium">상세 원인</div>
-                            <div className="text-gray-700">{entry.reason_detail}</div>
-                          </div>
-                        )}
-                        {entry.action_today && (
-                          <div>
-                            <div className="text-xs text-gray-500 mb-1 font-medium">금일 조치사항</div>
-                            <div className="text-gray-700">{entry.action_today}</div>
-                          </div>
-                        )}
-                        {entry.recovery_plan && (
-                          <div>
-                            <div className="text-xs text-gray-500 mb-1 font-medium">금일 만회계획</div>
-                            <div className="text-gray-700">{entry.recovery_plan}</div>
-                          </div>
-                        )}
-                        {entry.support_request && (
-                          <div>
-                            <div className="text-xs text-gray-500 mb-1 font-medium">지원 요청사항</div>
-                            <div className="text-gray-700 text-orange-700">{entry.support_request}</div>
-                          </div>
-                        )}
+                {reasonGroups.map(group => (
+                  <div key={group.key} className="border border-orange-200 bg-orange-50 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertTriangle size={16} className="text-orange-500" />
+                      <div>
+                        <div className="font-semibold text-orange-800">
+                          {selectedPeriod !== 'day' && `${format(parseISO(group.actualDate), 'MM.dd')} · `}
+                          {group.equipment} 미달성 사유 — {group.categories.join(', ')}
+                        </div>
+                        <div className="text-xs text-orange-700 mt-0.5">주간/야간 통합 작성 내용</div>
                       </div>
                     </div>
-                  ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      {group.reasonDetails.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1 font-medium">상세 원인</div>
+                          {group.reasonDetails.map(text => (
+                            <div key={text} className="text-gray-700">{text}</div>
+                          ))}
+                        </div>
+                      )}
+                      {group.actionsToday.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1 font-medium">금일 조치사항</div>
+                          {group.actionsToday.map(text => (
+                            <div key={text} className="text-gray-700">{text}</div>
+                          ))}
+                        </div>
+                      )}
+                      {group.recoveryPlans.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1 font-medium">금일 만회계획</div>
+                          {group.recoveryPlans.map(text => (
+                            <div key={text} className="text-gray-700">{text}</div>
+                          ))}
+                        </div>
+                      )}
+                      {group.supportRequests.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1 font-medium">지원 요청사항</div>
+                          {group.supportRequests.map(text => (
+                            <div key={text} className="text-gray-700 text-orange-700">{text}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
