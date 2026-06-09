@@ -86,22 +86,27 @@ const normalizeReports = (reports: ProductionReport[]) =>
       : report
   );
 
-const OLD_DEFAULT_TARGETS_BY_EQUIPMENT: Record<Equipment, { product: number; billet: number }> = {
-  P15: { product: 72500, billet: 75000 },
-  P5: { product: 35000, billet: 25000 },
-  'R/M': { product: 100000, billet: 0 },
+const PREVIOUS_2026_TARGETS_BY_EQUIPMENT: Record<Equipment, { product: number; billet: number }> = {
+  P15: { product: 17545, billet: 18150 },
+  P5: { product: 8470, billet: 6070 },
+  'R/M': { product: 23985, billet: 0 },
+};
+
+const PREVIOUS_2026_ANNUAL_TARGETS = {
+  product: 24200000,
+  billet: 11722480,
 };
 
 const normalizeTargetDefaults = (targets: EquipmentTarget[]) => {
   let changed = false;
   const value = targets.map(target => {
-    const oldDefault = OLD_DEFAULT_TARGETS_BY_EQUIPMENT[target.equipment];
+    const previousTarget = PREVIOUS_2026_TARGETS_BY_EQUIPMENT[target.equipment];
     const newDefault = SHIFT_TARGETS_2026_BY_EQUIPMENT[target.equipment];
-    const isOldDefault = target.effective_date === '2026-01-01' &&
-      target.product_target === oldDefault.product &&
-      target.billet_target === oldDefault.billet;
+    const isPrevious2026Target = target.effective_date === '2026-01-01' &&
+      target.product_target === previousTarget.product &&
+      target.billet_target === previousTarget.billet;
 
-    if (!isOldDefault) return target;
+    if (!isPrevious2026Target) return target;
 
     changed = true;
     return {
@@ -117,12 +122,17 @@ const normalizeTargetDefaults = (targets: EquipmentTarget[]) => {
 const normalizePeriodTargetDefaults = (periodTargets: ProductionPeriodTarget[]) => {
   let changed = false;
   const value = periodTargets.map(target => {
-    const isOldYearlyDefault = target.period === 'yearly' &&
+    const isPreviousYearlyDefault = target.period === 'yearly' &&
       target.effective_date === '2026-01-01' &&
-      target.product_target === 0 &&
-      target.billet_target === 0;
+      (
+        (target.product_target === 0 && target.billet_target === 0) ||
+        (
+          target.product_target === PREVIOUS_2026_ANNUAL_TARGETS.product &&
+          target.billet_target === PREVIOUS_2026_ANNUAL_TARGETS.billet
+        )
+      );
 
-    if (!isOldYearlyDefault) return target;
+    if (!isPreviousYearlyDefault) return target;
 
     changed = true;
     return {

@@ -8,15 +8,15 @@ export type TargetTotals = {
 type TargetEquipment = 'P15' | 'P5' | 'R/M';
 
 export const DAILY_TARGETS_2026_BY_EQUIPMENT: Record<TargetEquipment, TargetTotals> = {
-  P15: { product: 35090, billet: 36300 },
-  P5: { product: 16940, billet: 12140 },
-  'R/M': { product: 47970, billet: 0 },
+  P15: { product: 145000, billet: 150000 },
+  P5: { product: 70000, billet: 50000 },
+  'R/M': { product: 200000, billet: 0 },
 };
 
 export const SHIFT_TARGETS_2026_BY_EQUIPMENT: Record<TargetEquipment, TargetTotals> = {
-  P15: { product: 17545, billet: 18150 },
-  P5: { product: 8470, billet: 6070 },
-  'R/M': { product: 23985, billet: 0 },
+  P15: { product: 72500, billet: 75000 },
+  P5: { product: 35000, billet: 25000 },
+  'R/M': { product: 100000, billet: 0 },
 };
 
 export const WORKDAYS_2026_BY_MONTH = [
