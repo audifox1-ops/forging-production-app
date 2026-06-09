@@ -122,7 +122,46 @@ export async function saveSupabaseReportState(state: PersistedReportState) {
   if (firstError) throw firstError;
 }
 
-export function getStorageErrorMessage(error: unknown) {
+export function isSupabaseSchemaError(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message?: unknown }).message)
+        : '';
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code)
+      : '';
+
+  return (
+    code === '42P01' ||
+    code === 'PGRST205' ||
+    /schema cache|could not find the table|relation .* does not exist/i.test(message)
+  );
+}
+
+function getSupabaseErrorCode(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : '';
+}
+
+function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
+  return typeof error === 'object' && error !== null && 'message' in error
+    ? String((error as { message?: unknown }).message)
+    : '';
+}
+
+export function getStorageErrorMessage(error: unknown) {
+  const message = getErrorMessage(error);
+  const code = getSupabaseErrorCode(error);
+
+  if (isSupabaseSchemaError(error)) {
+    return `Supabase 테이블을 찾을 수 없습니다${code ? ` (${code})` : ''}. Supabase SQL Editor에서 supabase/fix-42p01.sql을 실행하세요. 현재는 로컬 저장으로 계속 동작합니다.`;
+  }
+
+  if (message) return message;
   return '저장소 동기화 중 알 수 없는 오류가 발생했습니다.';
 }

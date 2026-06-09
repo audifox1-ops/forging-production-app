@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import {
   getInitialStorageMode,
   getStorageErrorMessage,
+  isSupabaseSchemaError,
   loadLocalReportState,
   loadSupabaseReportState,
   PersistedReportState,
@@ -104,7 +105,10 @@ export const useReportStore = create<ReportStore>((set, get) => {
         set({ lastSyncedAt: new Date().toISOString(), syncError: undefined });
       })
       .catch(error => {
-        set({ syncError: getStorageErrorMessage(error) });
+        set({
+          syncError: getStorageErrorMessage(error),
+          ...(isSupabaseSchemaError(error) ? { storageMode: 'local' as const } : {}),
+        });
       });
   };
 
@@ -437,6 +441,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
       set({
         hasHydrated: true,
         isHydrating: false,
+        ...(isSupabaseSchemaError(error) ? { storageMode: 'local' as const } : {}),
         syncError: getStorageErrorMessage(error),
       });
     }

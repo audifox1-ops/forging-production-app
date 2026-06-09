@@ -10,6 +10,8 @@ const CORE_TABLES = [
   'production_entries',
   'equipment_targets',
   'production_period_targets',
+  'report_comments',
+  'report_status_logs',
 ];
 
 function loadEnvFile(fileName) {
@@ -69,17 +71,48 @@ async function verifyTableReads(client) {
       .select('*', { count: 'exact', head: true });
 
     if (error) {
-      throw new Error(`Read check failed for ${table}: ${error.message}`);
+      throwSupabaseError(`Read check failed for ${table}`, error);
     }
 
     console.log(`read:${table}:ok count=${count ?? 'unknown'}`);
   }
 }
 
-async function verifyUserCrud(client) {
+function formatSupabaseError(error) {
+  const details = [
+    error.message,
+    error.code ? `code=${error.code}` : '',
+    error.details ? `details=${error.details}` : '',
+    error.hint ? `hint=${error.hint}` : '',
+  ].filter(Boolean);
+
+  return details.join(' ');
+}
+
+function throwSupabaseError(label, error) {
+  throw new Error(`${label}: ${formatSupabaseError(error)}`);
+}
+
+function assertNoSupabaseError(label, result) {
+  if (result.error) {
+    throwSupabaseError(label, result.error);
+  }
+}
+
+function getFutureDate(offsetDays) {
+  const date = new Date(Date.UTC(2100, 0, 1 + offsetDays));
+  return date.toISOString().slice(0, 10);
+}
+
+async function verifyAppWrites(client) {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const dateOffset = Math.floor(Math.random() * 20000);
+  const reportDate = getFutureDate(dateOffset);
+  const nextPlanDate = getFutureDate(dateOffset + 1);
+  const targetDate = getFutureDate(dateOffset + 2);
+  const now = new Date().toISOString();
   const testUser = {
-    id: `verify-${suffix}`,
+    id: `verify-user-${suffix}`,
     name: 'Supabase Verify',
     email: `verify-${suffix}@example.invalid`,
     employee_no: `verify-${suffix}`,
@@ -89,15 +122,94 @@ async function verifyUserCrud(client) {
     can_write: false,
     can_edit: false,
     can_delete: false,
-    created_at: new Date().toISOString(),
+    created_at: now,
+  };
+  const testReport = {
+    id: `verify-report-${suffix}`,
+    report_date: reportDate,
+    next_plan_date: nextPlanDate,
+    status: 'collecting',
+    created_by: testUser.id,
+    closed_by: null,
+    closed_at: null,
+    created_at: now,
+    updated_at: now,
+  };
+  const testTarget = {
+    id: `verify-target-${suffix}`,
+    equipment: 'P15',
+    shift: '주간',
+    product_target: 1,
+    billet_target: 1,
+    effective_date: targetDate,
+    created_at: now,
+  };
+  const testPeriodTarget = {
+    id: `verify-period-target-${suffix}`,
+    period: 'weekly',
+    product_target: 1,
+    billet_target: 1,
+    effective_date: targetDate,
+    created_at: now,
+  };
+  const testEntry = {
+    id: `verify-entry-${suffix}`,
+    report_id: testReport.id,
+    user_id: testUser.id,
+    user_name: testUser.name,
+    equipment: 'P15',
+    shift: '주간',
+    product_plan: 1,
+    product_actual: 0,
+    billet_plan: 1,
+    billet_actual: 0,
+    next_product_plan: 1,
+    next_billet_plan: 1,
+    product_achievement_rate: null,
+    billet_achievement_rate: null,
+    reason_category: null,
+    reason_detail: null,
+    action_today: null,
+    recovery_plan: null,
+    support_request: null,
+    submit_status: 'not_started',
+    submitted_at: null,
+    created_at: now,
+    updated_at: now,
+  };
+  const testComment = {
+    id: `verify-comment-${suffix}`,
+    report_id: testReport.id,
+    summary: 'Supabase Verify',
+    manager_comment: null,
+    created_at: now,
+    updated_at: now,
+  };
+  const testStatusLog = {
+    id: `verify-status-log-${suffix}`,
+    report_id: testReport.id,
+    user_id: testUser.id,
+    status: 'collecting',
+    memo: 'Supabase Verify',
+    created_at: now,
   };
 
+  const insertedTables = [];
   try {
-    const insertResult = await client.from('users').insert(testUser).select('id').single();
-    if (insertResult.error) {
-      throw new Error(`User insert failed: ${insertResult.error.message}`);
+    for (const [table, record] of [
+      ['users', testUser],
+      ['production_reports', testReport],
+      ['equipment_targets', testTarget],
+      ['production_period_targets', testPeriodTarget],
+      ['production_entries', testEntry],
+      ['report_comments', testComment],
+      ['report_status_logs', testStatusLog],
+    ]) {
+      const result = await client.from(table).upsert(record, { onConflict: 'id' });
+      assertNoSupabaseError(`Write check failed for ${table}`, result);
+      insertedTables.push([table, record.id]);
+      console.log(`write:${table}:upsert:ok id=${record.id}`);
     }
-    console.log(`crud:users:insert:ok id=${insertResult.data.id}`);
 
     const updateResult = await client
       .from('users')
@@ -105,19 +217,17 @@ async function verifyUserCrud(client) {
       .eq('id', testUser.id)
       .select('id, can_write')
       .single();
-    if (updateResult.error) {
-      throw new Error(`User update failed: ${updateResult.error.message}`);
-    }
+    assertNoSupabaseError('User update failed', updateResult);
     if (!updateResult.data.can_write) {
       throw new Error('User update check failed: can_write was not updated');
     }
-    console.log('crud:users:update:ok');
+    console.log('write:users:update:ok');
   } finally {
-    const deleteResult = await client.from('users').delete().eq('id', testUser.id);
-    if (deleteResult.error) {
-      throw new Error(`User cleanup failed: ${deleteResult.error.message}`);
+    for (const [table, id] of insertedTables.reverse()) {
+      const deleteResult = await client.from(table).delete().eq('id', id);
+      assertNoSupabaseError(`Cleanup failed for ${table}`, deleteResult);
+      console.log(`write:${table}:delete:ok id=${id}`);
     }
-    console.log('crud:users:delete:ok');
   }
 }
 
@@ -128,12 +238,15 @@ async function main() {
 
   await ensureAuthenticated(client);
   await verifyTableReads(client);
-  await verifyUserCrud(client);
+  await verifyAppWrites(client);
 
   console.log('supabase:verify:ok');
 }
 
 main().catch(error => {
   console.error(error instanceof Error ? error.message : error);
+  console.error(
+    'If this mentions SQLSTATE 42P01 or schema cache, run supabase/fix-42p01.sql in the Supabase SQL Editor, then rerun this verifier.'
+  );
   process.exit(1);
 });
