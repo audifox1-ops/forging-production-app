@@ -48,6 +48,36 @@ interface ReportStore {
 let nextId = 100;
 const genId = () => `gen-${++nextId}`;
 
+type EntryAssignment = Pick<ProductionEntry, 'equipment' | 'shift'>;
+
+const matchesEntryAssignment = (user: User, entry: EntryAssignment) => (
+  user.role === 'user' &&
+  user.assigned_equipment.includes(entry.equipment) &&
+  (user.assigned_shift === null || user.assigned_shift === entry.shift)
+);
+
+const findAssignedUser = (users: User[], entry: EntryAssignment) => {
+  return users.find(user => matchesEntryAssignment(user, entry));
+};
+
+const syncEntryAssignees = (entries: ProductionEntry[], users: User[]) => {
+  return entries.map(entry => {
+    const assignedUser = findAssignedUser(users, entry);
+    const userId = assignedUser?.id ?? 'unassigned';
+    const userName = assignedUser?.name;
+
+    if (entry.user_id === userId && entry.user_name === userName) {
+      return entry;
+    }
+
+    return {
+      ...entry,
+      user_id: userId,
+      user_name: userName,
+    };
+  });
+};
+
 export const useReportStore = create<ReportStore>((set, get) => ({
   reports: [...DEMO_REPORTS],
   entries: [...DEMO_ENTRIES],
@@ -85,11 +115,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
       shifts.forEach(shift => {
         const target = targets.find(t => t.equipment === equipment && t.shift === shift);
         // 해당 설비/근무조 담당자 찾기
-        const assignedUser = users.find(u =>
-          u.role === 'user' &&
-          u.assigned_equipment.includes(equipment) &&
-          u.assigned_shift === shift
-        );
+        const assignedUser = findAssignedUser(users, { equipment, shift });
 
         newEntries.push({
           id: genId(),
@@ -243,8 +269,8 @@ export const useReportStore = create<ReportStore>((set, get) => ({
   getUsers: () => get().users,
 
   updateUser: (userId, updates) => {
-    set(state => ({
-      users: state.users.map(u => {
+    set(state => {
+      const users = state.users.map((u): User => {
         if (u.id !== userId) return u;
         if (u.role === 'admin') {
           return {
@@ -257,8 +283,13 @@ export const useReportStore = create<ReportStore>((set, get) => ({
           };
         }
         return { ...u, ...updates };
-      }),
-    }));
+      });
+
+      return {
+        users,
+        entries: syncEntryAssignees(state.entries, users),
+      };
+    });
   },
 
   addUser: (userData) => {
@@ -272,21 +303,28 @@ export const useReportStore = create<ReportStore>((set, get) => ({
       can_edit: can_edit ?? false,
       can_delete: can_delete ?? false,
     };
-    set(state => ({ users: [...state.users, newUser] }));
+    set(state => {
+      const users = [...state.users, newUser];
+
+      return {
+        users,
+        entries: syncEntryAssignees(state.entries, users),
+      };
+    });
   },
 
   deleteUser: (userId) => {
     const user = get().users.find(u => u.id === userId);
     if (!user || user.role === 'admin') return;
 
-    set(state => ({
-      users: state.users.filter(u => u.id !== userId),
-      entries: state.entries.map(entry =>
-        entry.user_id === userId
-          ? { ...entry, user_id: 'unassigned', user_name: undefined }
-          : entry
-      ),
-      currentUserId: state.currentUserId === userId ? 'user-admin' : state.currentUserId,
-    }));
+    set(state => {
+      const users = state.users.filter(u => u.id !== userId);
+
+      return {
+        users,
+        entries: syncEntryAssignees(state.entries, users),
+        currentUserId: state.currentUserId === userId ? 'user-admin' : state.currentUserId,
+      };
+    });
   },
 }));
