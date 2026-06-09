@@ -32,6 +32,7 @@ import {
   getReportPlanDate,
   getTodayPlanDate,
 } from '../utils/reportDates';
+import { get2026PeriodTargetForDate } from '../utils/targetConfig';
 
 type SummaryPeriod = 'day' | 'week' | 'month' | 'year';
 
@@ -168,17 +169,24 @@ export default function DashboardPage() {
   const hasPeriodData = selectedPeriod === 'day' ? Boolean(report) : periodReports.length > 0;
   const periodLabel = PERIOD_OPTIONS.find(option => option.value === selectedPeriod)?.label ?? '일간';
   const periodRangeLabel = formatPeriodRange(periodRange, selectedPeriod);
+  const selected2026PeriodTarget = selectedPeriod === 'month' || selectedPeriod === 'year'
+    ? get2026PeriodTargetForDate(selectedPlanDate, selectedPeriod, dailyTargetSummary)
+    : null;
   const selectedPeriodTarget = PERIOD_TARGET_MAP[selectedPeriod]
     ? periodTargets.find(target => target.period === PERIOD_TARGET_MAP[selectedPeriod])
     : undefined;
+  const uses2026PeriodTarget = Boolean(selected2026PeriodTarget);
   const usesConfiguredPeriodTarget = selectedPeriod !== 'day' &&
+    !uses2026PeriodTarget &&
     Boolean(selectedPeriodTarget && (selectedPeriodTarget.product_target > 0 || selectedPeriodTarget.billet_target > 0));
   const summaryProductPlan = selectedPeriod === 'day'
     ? dailyTargetSummary.product
-    : usesConfiguredPeriodTarget ? selectedPeriodTarget!.product_target : summary.total_product_plan;
+    : selected2026PeriodTarget ? selected2026PeriodTarget.product
+      : usesConfiguredPeriodTarget ? selectedPeriodTarget!.product_target : summary.total_product_plan;
   const summaryBilletPlan = selectedPeriod === 'day'
     ? dailyTargetSummary.billet
-    : usesConfiguredPeriodTarget ? selectedPeriodTarget!.billet_target : summary.total_billet_plan;
+    : selected2026PeriodTarget ? selected2026PeriodTarget.billet
+      : usesConfiguredPeriodTarget ? selectedPeriodTarget!.billet_target : summary.total_billet_plan;
   const summaryProductRate = summaryProductPlan > 0
     ? Math.round((summary.total_product_actual / summaryProductPlan) * 1000) / 10
     : 0;
@@ -808,7 +816,7 @@ export default function DashboardPage() {
             <div className="card-header">
               <h3 className="font-semibold text-gray-800">전체 실적 요약</h3>
               <span className="text-sm text-gray-500">
-                {periodLabel} 기준{selectedPeriod === 'day' ? ' · 일일 목표 적용' : usesConfiguredPeriodTarget ? ' · 기간 목표 적용' : ''}
+                {periodLabel} 기준{selectedPeriod === 'day' ? ' · 일일 목표 적용' : uses2026PeriodTarget ? ` · 2026 근무일수 ${selected2026PeriodTarget?.workdays}일 적용` : usesConfiguredPeriodTarget ? ' · 기간 목표 적용' : ''}
               </span>
             </div>
             <div className="card-body">

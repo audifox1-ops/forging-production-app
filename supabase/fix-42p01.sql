@@ -130,19 +130,19 @@ ON CONFLICT (email) DO UPDATE SET
 
 INSERT INTO public.equipment_targets (equipment, shift, product_target, billet_target, effective_date)
 VALUES
-  ('P15', '주간', 72500, 75000, '2026-01-01'),
-  ('P15', '야간', 72500, 75000, '2026-01-01'),
-  ('P5', '주간', 35000, 25000, '2026-01-01'),
-  ('P5', '야간', 35000, 25000, '2026-01-01'),
-  ('R/M', '주간', 100000, 0, '2026-01-01'),
-  ('R/M', '야간', 100000, 0, '2026-01-01')
+  ('P15', '주간', 17545, 18150, '2026-01-01'),
+  ('P15', '야간', 17545, 18150, '2026-01-01'),
+  ('P5', '주간', 8470, 6070, '2026-01-01'),
+  ('P5', '야간', 8470, 6070, '2026-01-01'),
+  ('R/M', '주간', 23985, 0, '2026-01-01'),
+  ('R/M', '야간', 23985, 0, '2026-01-01')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO public.production_period_targets (period, product_target, billet_target, effective_date)
 VALUES
   ('weekly', 0, 0, '2026-01-01'),
   ('monthly', 0, 0, '2026-01-01'),
-  ('yearly', 0, 0, '2026-01-01')
+  ('yearly', 24200000, 11722480, '2026-01-01')
 ON CONFLICT DO NOTHING;
 
 CREATE OR REPLACE FUNCTION public.update_updated_at()

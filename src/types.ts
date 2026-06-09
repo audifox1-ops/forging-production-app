@@ -1,3 +1,5 @@
+import { SHIFT_TARGETS_2026_BY_EQUIPMENT } from './utils/targetConfig';
+
 // 타입 정의
 
 export type UserRole = 'admin' | 'manager' | 'user' | 'viewer';
@@ -163,12 +165,12 @@ export interface ShiftSummary {
 
 // 기본 목표값
 export const DEFAULT_TARGETS: Omit<EquipmentTarget, 'id' | 'created_at'>[] = [
-  { equipment: 'P15', shift: '주간', product_target: 72500, billet_target: 75000, effective_date: '2026-01-01' },
-  { equipment: 'P15', shift: '야간', product_target: 72500, billet_target: 75000, effective_date: '2026-01-01' },
-  { equipment: 'P5', shift: '주간', product_target: 35000, billet_target: 25000, effective_date: '2026-01-01' },
-  { equipment: 'P5', shift: '야간', product_target: 35000, billet_target: 25000, effective_date: '2026-01-01' },
-  { equipment: 'R/M', shift: '주간', product_target: 100000, billet_target: 0, effective_date: '2026-01-01' },
-  { equipment: 'R/M', shift: '야간', product_target: 100000, billet_target: 0, effective_date: '2026-01-01' },
+  { equipment: 'P15', shift: '주간', product_target: SHIFT_TARGETS_2026_BY_EQUIPMENT.P15.product, billet_target: SHIFT_TARGETS_2026_BY_EQUIPMENT.P15.billet, effective_date: '2026-01-01' },
+  { equipment: 'P15', shift: '야간', product_target: SHIFT_TARGETS_2026_BY_EQUIPMENT.P15.product, billet_target: SHIFT_TARGETS_2026_BY_EQUIPMENT.P15.billet, effective_date: '2026-01-01' },
+  { equipment: 'P5', shift: '주간', product_target: SHIFT_TARGETS_2026_BY_EQUIPMENT.P5.product, billet_target: SHIFT_TARGETS_2026_BY_EQUIPMENT.P5.billet, effective_date: '2026-01-01' },
+  { equipment: 'P5', shift: '야간', product_target: SHIFT_TARGETS_2026_BY_EQUIPMENT.P5.product, billet_target: SHIFT_TARGETS_2026_BY_EQUIPMENT.P5.billet, effective_date: '2026-01-01' },
+  { equipment: 'R/M', shift: '주간', product_target: SHIFT_TARGETS_2026_BY_EQUIPMENT['R/M'].product, billet_target: SHIFT_TARGETS_2026_BY_EQUIPMENT['R/M'].billet, effective_date: '2026-01-01' },
+  { equipment: 'R/M', shift: '야간', product_target: SHIFT_TARGETS_2026_BY_EQUIPMENT['R/M'].product, billet_target: SHIFT_TARGETS_2026_BY_EQUIPMENT['R/M'].billet, effective_date: '2026-01-01' },
 ];
 
 export const EQUIPMENT_LIST: Equipment[] = ['P15', 'P5', 'R/M'];

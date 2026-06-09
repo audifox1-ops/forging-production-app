@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useReportStore } from '../store/reportStore';
 import { EQUIPMENT_LIST, SHIFT_LIST, PERIOD_TARGET_LABELS, PeriodTargetType } from '../types';
 import { formatNumber } from '../utils/calculations';
+import { ANNUAL_WORKDAYS_2026, WORKDAYS_2026_BY_MONTH } from '../utils/targetConfig';
 import { Save, Lock } from 'lucide-react';
 
 export default function TargetManagementPage() {
@@ -78,6 +79,8 @@ export default function TargetManagementPage() {
   const periodTotalBillet = (Object.keys(PERIOD_TARGET_LABELS) as PeriodTargetType[]).reduce((sum, period) => {
     return sum + (localPeriodTargets[period]?.billet || 0);
   }, 0);
+  const annualProductTarget2026 = totalProduct * ANNUAL_WORKDAYS_2026;
+  const annualBilletTarget2026 = totalBillet * ANNUAL_WORKDAYS_2026;
 
   return (
     <div className="space-y-5 fade-in max-w-4xl mx-auto">
@@ -258,6 +261,50 @@ export default function TargetManagementPage() {
                 <td className="px-4 py-3 text-right text-blue-700">{formatNumber(periodTotalProduct)}</td>
                 <td className="px-4 py-3 text-right text-amber-700">{formatNumber(periodTotalBillet)}</td>
                 <td className="px-4 py-3 text-right">{formatNumber(periodTotalProduct + periodTotalBillet)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h3 className="font-semibold text-gray-800">2026 월별 근무일수 기준 목표 (KG)</h3>
+        </div>
+        <div className="table-wrapper">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-blue-800 text-white">
+                <th className="px-4 py-3 text-center">월</th>
+                <th className="px-4 py-3 text-right">근무일수</th>
+                <th className="px-4 py-3 text-right">제품 목표 (KG)</th>
+                <th className="px-4 py-3 text-right">황지 목표 (KG)</th>
+                <th className="px-4 py-3 text-right">합계 (KG)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {WORKDAYS_2026_BY_MONTH.map(({ month, workdays }) => {
+                const productTarget = totalProduct * workdays;
+                const billetTarget = totalBillet * workdays;
+
+                return (
+                  <tr key={month} className="border-b border-gray-100">
+                    <td className="px-4 py-3 text-center font-bold text-blue-800 bg-blue-50">{month}월</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{formatNumber(workdays)}일</td>
+                    <td className="px-4 py-3 text-right text-blue-700">{formatNumber(productTarget)}</td>
+                    <td className="px-4 py-3 text-right text-amber-700">{formatNumber(billetTarget)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-gray-700">
+                      {formatNumber(productTarget + billetTarget)}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="bg-blue-50 font-bold border-t-2 border-blue-200">
+                <td className="px-4 py-3 text-center">2026 연간 합계</td>
+                <td className="px-4 py-3 text-right tabular-nums">{formatNumber(ANNUAL_WORKDAYS_2026)}일</td>
+                <td className="px-4 py-3 text-right text-blue-700">{formatNumber(annualProductTarget2026)}</td>
+                <td className="px-4 py-3 text-right text-amber-700">{formatNumber(annualBilletTarget2026)}</td>
+                <td className="px-4 py-3 text-right">{formatNumber(annualProductTarget2026 + annualBilletTarget2026)}</td>
               </tr>
             </tbody>
           </table>

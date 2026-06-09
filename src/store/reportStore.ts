@@ -21,6 +21,10 @@ import {
   upsertSupabaseRows,
 } from './persistence';
 import { getPlanDateFromActualDate } from '../utils/reportDates';
+import {
+  ANNUAL_TARGET_TOTALS_2026,
+  SHIFT_TARGETS_2026_BY_EQUIPMENT,
+} from '../utils/targetConfig';
 
 interface CreateReportOptions {
   sourceReportDate?: string;
@@ -82,6 +86,55 @@ const normalizeReports = (reports: ProductionReport[]) =>
       : report
   );
 
+const OLD_DEFAULT_TARGETS_BY_EQUIPMENT: Record<Equipment, { product: number; billet: number }> = {
+  P15: { product: 72500, billet: 75000 },
+  P5: { product: 35000, billet: 25000 },
+  'R/M': { product: 100000, billet: 0 },
+};
+
+const normalizeTargetDefaults = (targets: EquipmentTarget[]) => {
+  let changed = false;
+  const value = targets.map(target => {
+    const oldDefault = OLD_DEFAULT_TARGETS_BY_EQUIPMENT[target.equipment];
+    const newDefault = SHIFT_TARGETS_2026_BY_EQUIPMENT[target.equipment];
+    const isOldDefault = target.effective_date === '2026-01-01' &&
+      target.product_target === oldDefault.product &&
+      target.billet_target === oldDefault.billet;
+
+    if (!isOldDefault) return target;
+
+    changed = true;
+    return {
+      ...target,
+      product_target: newDefault.product,
+      billet_target: newDefault.billet,
+    };
+  });
+
+  return { value, changed };
+};
+
+const normalizePeriodTargetDefaults = (periodTargets: ProductionPeriodTarget[]) => {
+  let changed = false;
+  const value = periodTargets.map(target => {
+    const isOldYearlyDefault = target.period === 'yearly' &&
+      target.effective_date === '2026-01-01' &&
+      target.product_target === 0 &&
+      target.billet_target === 0;
+
+    if (!isOldYearlyDefault) return target;
+
+    changed = true;
+    return {
+      ...target,
+      product_target: ANNUAL_TARGET_TOTALS_2026.product,
+      billet_target: ANNUAL_TARGET_TOTALS_2026.billet,
+    };
+  });
+
+  return { value, changed };
+};
+
 const INITIAL_ASSIGNEES_BY_EQUIPMENT: Record<Equipment, Pick<ProductionEntry, 'user_id' | 'user_name'>> = {
   P15: { user_id: 'user-kim-hyun', user_name: '김현 차장' },
   P5: { user_id: 'user-koo-byeongjun', user_name: '구병준 차장' },
@@ -131,11 +184,16 @@ export const useReportStore = create<ReportStore>((set, get) => {
     return users.find(user => user.role === 'admin')?.id ?? users[0]?.id ?? currentUserId;
   };
 
+  const initialTargets = normalizeTargetDefaults(getInitialArray(LOCAL_STATE?.targets, DEMO_TARGETS)).value;
+  const initialPeriodTargets = normalizePeriodTargetDefaults(
+    getInitialArray(LOCAL_STATE?.periodTargets, DEMO_PERIOD_TARGETS)
+  ).value;
+
   return ({
   reports: normalizeReports(getInitialArray(LOCAL_STATE?.reports, DEMO_REPORTS)),
   entries: getInitialArray(LOCAL_STATE?.entries, DEMO_ENTRIES),
-  targets: getInitialArray(LOCAL_STATE?.targets, DEMO_TARGETS),
-  periodTargets: getInitialArray(LOCAL_STATE?.periodTargets, DEMO_PERIOD_TARGETS),
+  targets: initialTargets,
+  periodTargets: initialPeriodTargets,
   users: getInitialArray(LOCAL_STATE?.users, DEMO_USERS),
   currentUserId: LOCAL_STATE?.currentUserId || 'user-admin',
   storageMode: getInitialStorageMode(),
@@ -431,11 +489,15 @@ export const useReportStore = create<ReportStore>((set, get) => {
     if (localState) {
       set(state => {
         const users = getInitialArray(localState.users, state.users);
+        const normalizedTargets = normalizeTargetDefaults(getInitialArray(localState.targets, state.targets));
+        const normalizedPeriodTargets = normalizePeriodTargetDefaults(
+          getInitialArray(localState.periodTargets, state.periodTargets)
+        );
         return {
           reports: normalizeReports(getInitialArray(localState.reports, state.reports)),
           entries: getInitialArray(localState.entries, state.entries),
-          targets: getInitialArray(localState.targets, state.targets),
-          periodTargets: getInitialArray(localState.periodTargets, state.periodTargets),
+          targets: normalizedTargets.value,
+          periodTargets: normalizedPeriodTargets.value,
           users,
           currentUserId: resolveCurrentUserId(users, localState.currentUserId || state.currentUserId),
         };
@@ -460,17 +522,27 @@ export const useReportStore = create<ReportStore>((set, get) => {
       );
 
       if (hasRemoteData) {
+        let remoteDefaultsChanged = false;
         set(state => {
           const users = getInitialArray(remoteState.users, state.users);
+          const normalizedTargets = normalizeTargetDefaults(getInitialArray(remoteState.targets, state.targets));
+          const normalizedPeriodTargets = normalizePeriodTargetDefaults(
+            getInitialArray(remoteState.periodTargets, state.periodTargets)
+          );
+          remoteDefaultsChanged = normalizedTargets.changed || normalizedPeriodTargets.changed;
+
           return {
             reports: normalizeReports(getInitialArray(remoteState.reports, state.reports)),
             entries: getInitialArray(remoteState.entries, state.entries),
-            targets: getInitialArray(remoteState.targets, state.targets),
-            periodTargets: getInitialArray(remoteState.periodTargets, state.periodTargets),
+            targets: normalizedTargets.value,
+            periodTargets: normalizedPeriodTargets.value,
             users,
             currentUserId: resolveCurrentUserId(users, state.currentUserId),
           };
         });
+        if (remoteDefaultsChanged) {
+          await saveSupabaseReportState(getPersistedState());
+        }
       } else {
         await saveSupabaseReportState(getPersistedState());
       }
