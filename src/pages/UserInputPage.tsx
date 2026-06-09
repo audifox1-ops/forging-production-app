@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Save, Send, AlertCircle, CheckCircle, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { EquipmentTarget, REASON_CATEGORIES, ReasonCategory } from '../types';
+import { Equipment, EquipmentTarget, EQUIPMENT_LIST, REASON_CATEGORIES, ReasonCategory, SHIFT_LIST } from '../types';
 import { formatNumber } from '../utils/calculations';
 
 export default function UserInputPage() {
@@ -15,6 +15,7 @@ export default function UserInputPage() {
   const canWrite = isAdmin || Boolean(currentUser?.can_write);
   const canEdit = isAdmin || Boolean(currentUser?.can_edit);
   const canCreateReport = canWrite || canEdit;
+  const [selectedEquipment, setSelectedEquipment] = useState<Equipment>('P15');
 
   const today = reportDate || format(new Date(), 'yyyy-MM-dd');
   let report = getReport(today);
@@ -29,6 +30,33 @@ export default function UserInputPage() {
   report = getReport(today);
   const entries = report ? getEntriesByReport(report.id) : [];
   const isClosed = report?.status === 'closed';
+  const equipmentTabs = EQUIPMENT_LIST.map(equipment => {
+    const equipmentEntries = entries.filter(entry => entry.equipment === equipment);
+    const submittedCount = equipmentEntries.filter(entry =>
+      entry.submit_status === 'submitted' || entry.submit_status === 'approved'
+    ).length;
+
+    return {
+      equipment,
+      entries: equipmentEntries,
+      submittedCount,
+    };
+  });
+  const selectedEntries = entries
+    .filter(entry => entry.equipment === selectedEquipment)
+    .sort((a, b) => SHIFT_LIST.indexOf(a.shift) - SHIFT_LIST.indexOf(b.shift));
+
+  useEffect(() => {
+    if (entries.length === 0) return;
+    if (entries.some(entry => entry.equipment === selectedEquipment)) return;
+
+    const firstEquipment = EQUIPMENT_LIST.find(equipment =>
+      entries.some(entry => entry.equipment === equipment)
+    );
+    if (firstEquipment) {
+      setSelectedEquipment(firstEquipment);
+    }
+  }, [entries, selectedEquipment]);
 
   if (!report) {
     return (
@@ -86,6 +114,51 @@ export default function UserInputPage() {
         </div>
       )}
 
+      {entries.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-base font-semibold text-gray-800">부서별 입력</h2>
+            <span className="text-xs text-gray-500">
+              {selectedEquipment} · {selectedEntries.length}개 항목
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {equipmentTabs.map(tab => {
+              const isActive = selectedEquipment === tab.equipment;
+              const totalCount = tab.entries.length;
+              const activeClass = tab.equipment === 'P15'
+                ? 'border-blue-500 bg-blue-50 text-blue-800'
+                : tab.equipment === 'P5'
+                  ? 'border-purple-500 bg-purple-50 text-purple-800'
+                  : 'border-green-500 bg-green-50 text-green-800';
+
+              return (
+                <button
+                  key={tab.equipment}
+                  type="button"
+                  onClick={() => setSelectedEquipment(tab.equipment)}
+                  className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                    isActive
+                      ? activeClass
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-lg font-bold">{tab.equipment}</div>
+                    <div className="text-xs font-medium">
+                      {tab.submittedCount}/{totalCount || 0}
+                    </div>
+                  </div>
+                  <div className="mt-1 text-xs opacity-80">
+                    주간 · 야간 입력
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 입력 카드 목록 */}
       {entries.length === 0 ? (
         <div className="card">
@@ -94,7 +167,13 @@ export default function UserInputPage() {
           </div>
         </div>
       ) : (
-        entries.map(entry => (
+        selectedEntries.length === 0 ? (
+          <div className="card">
+            <div className="card-body text-center py-10 text-gray-400">
+              선택한 부서의 입력 항목이 없습니다.
+            </div>
+          </div>
+        ) : selectedEntries.map(entry => (
           <EntryInputCard
             key={entry.id}
             entry={entry}
