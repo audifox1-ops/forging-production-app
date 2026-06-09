@@ -19,7 +19,7 @@ import {
 } from 'recharts';
 import {
   AlertTriangle, CalendarRange, CheckCircle, Clock,
-  Printer, PlusCircle, RefreshCw, Users,
+  ClipboardCheck, Printer, PlusCircle, RefreshCw, Users,
 } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
@@ -401,6 +401,41 @@ export default function DashboardPage() {
       labelClass: 'text-amber-800',
     },
   ];
+  const submitRate = summary.submit_status_count.total > 0
+    ? Math.round((summary.submit_status_count.submitted / summary.submit_status_count.total) * 100)
+    : 0;
+  const dashboardHighlights = [
+    {
+      label: '제품 달성',
+      value: `${summaryProductRate.toFixed(1)}%`,
+      detail: `${formatNumber(summary.total_product_actual)} / ${formatNumber(summaryProductPlan)} KG`,
+      className: summaryProductRate >= 100
+        ? 'border-green-200 bg-green-50 text-green-800'
+        : summaryProductRate >= 90
+          ? 'border-amber-200 bg-amber-50 text-amber-800'
+          : 'border-red-200 bg-red-50 text-red-800',
+    },
+    {
+      label: '황지 달성',
+      value: `${summaryBilletRate.toFixed(1)}%`,
+      detail: `${formatNumber(summary.total_billet_actual)} / ${formatNumber(summaryBilletPlan)} KG`,
+      className: summaryBilletRate >= 100
+        ? 'border-green-200 bg-green-50 text-green-800'
+        : summaryBilletRate >= 90
+          ? 'border-amber-200 bg-amber-50 text-amber-800'
+          : 'border-red-200 bg-red-50 text-red-800',
+    },
+    {
+      label: '제출 현황',
+      value: `${submitRate}%`,
+      detail: `${summary.submit_status_count.submitted}/${summary.submit_status_count.total}명 제출`,
+      className: submitRate === 100
+        ? 'border-green-200 bg-green-50 text-green-800'
+        : submitRate >= 50
+          ? 'border-blue-200 bg-blue-50 text-blue-800'
+          : 'border-amber-200 bg-amber-50 text-amber-800',
+    },
+  ];
 
   const handleCreateReport = () => {
     if (!canCreateReport) return;
@@ -459,70 +494,87 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 fade-in">
-      {/* 페이지 헤더 */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">생산 대시보드</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {periodLabel} · 금일 계획일 {periodRangeLabel} 기준
-            {selectedPeriod === 'day' && ` · 전일 실적일 ${format(new Date(selectedActualDate), 'yyyy.MM.dd')}`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1">
-            {PERIOD_OPTIONS.map(option => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setSelectedPeriod(option.value)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  selectedPeriod === option.value
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+              <ClipboardCheck size={15} className="text-blue-600" />
+              <span>{periodLabel} 운영 현황</span>
+            </div>
+            <h1 className="mt-1 text-2xl font-bold text-slate-900">생산 대시보드</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              금일 계획일 {periodRangeLabel}
+              {selectedPeriod === 'day' && ` · 전일 실적일 ${format(new Date(selectedActualDate), 'yyyy.MM.dd')}`}
+            </p>
           </div>
-          <input
-            type="date"
-            value={selectedPlanDate}
-            onChange={e => setSelectedPlanDate(e.target.value)}
-            className="form-input w-auto"
-          />
-          {selectedPeriod !== 'day' && (
-            <button onClick={() => navigate('/reports')} className="btn-secondary flex items-center gap-2">
-              <CalendarRange size={16} />
-              보고 이력
-            </button>
-          )}
-          {selectedPeriod === 'day' && !report ? (
-            <button
-              onClick={handleCreateReport}
-              disabled={!canCreateReport}
-              className="btn-primary flex items-center gap-2"
-            >
-              <PlusCircle size={16} />
-              보고서 생성
-            </button>
-          ) : selectedPeriod === 'day' ? (
-            <>
-              <button onClick={handleGoInput} className="btn-secondary flex items-center gap-2">
-                <RefreshCw size={16} />
-                실적 입력
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+              {PERIOD_OPTIONS.map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setSelectedPeriod(option.value)}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    selectedPeriod === option.value
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <input
+              type="date"
+              value={selectedPlanDate}
+              onChange={e => setSelectedPlanDate(e.target.value)}
+              className="form-input w-auto bg-white"
+              aria-label="금일 계획일"
+            />
+            {selectedPeriod !== 'day' && (
+              <button onClick={() => navigate('/reports')} className="btn-secondary flex items-center gap-2">
+                <CalendarRange size={16} />
+                보고 이력
               </button>
-              <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
-                <Printer size={16} />
-                보고서 출력
+            )}
+            {selectedPeriod === 'day' && !report ? (
+              <button
+                onClick={handleCreateReport}
+                disabled={!canCreateReport}
+                className="btn-primary flex items-center gap-2"
+              >
+                <PlusCircle size={16} />
+                보고서 생성
               </button>
-            </>
-          ) : null}
+            ) : selectedPeriod === 'day' ? (
+              <>
+                <button onClick={handleGoInput} className="btn-secondary flex items-center gap-2">
+                  <RefreshCw size={16} />
+                  실적 입력
+                </button>
+                <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
+                  <Printer size={16} />
+                  보고서 출력
+                </button>
+              </>
+            ) : null}
+          </div>
         </div>
-      </div>
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          {dashboardHighlights.map(item => (
+            <div key={item.label} className={`rounded-lg border px-4 py-3 ${item.className}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-sm font-semibold">{item.label}</div>
+                <div className="text-xl font-bold tabular-nums">{item.value}</div>
+              </div>
+              <div className="mt-1 text-xs opacity-80 tabular-nums">{item.detail}</div>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      <div className="card">
-        <div className="card-header">
+      <div className="card border-slate-200">
+        <div className="card-header bg-slate-50/80">
           <div>
             <h3 className="font-semibold text-gray-800">실적 캘린더</h3>
             <p className="text-xs text-gray-500 mt-0.5">
@@ -581,13 +633,13 @@ export default function DashboardPage() {
           ) : (
             <>
               {selectedPeriod !== 'day' && (
-                <div className="grid grid-cols-7 gap-2 mb-2 text-center text-xs font-medium text-gray-500">
+                <div className="hidden xl:grid grid-cols-7 gap-2 mb-2 text-center text-xs font-medium text-gray-500">
                   {['월', '화', '수', '목', '금', '토', '일'].map(dayLabel => (
                     <div key={dayLabel}>{dayLabel}</div>
                   ))}
                 </div>
               )}
-              <div className={`grid gap-2 ${selectedPeriod === 'day' ? 'grid-cols-1' : 'grid-cols-7'}`}>
+              <div className={`grid gap-2 ${selectedPeriod === 'day' ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7'}`}>
                 {calendarDays.map(day => {
                   const planDateKey = format(day, 'yyyy-MM-dd');
                   const actualDateKey = getActualDateFromPlanDate(planDateKey);
@@ -601,9 +653,9 @@ export default function DashboardPage() {
                       key={planDateKey}
                       type="button"
                       onClick={() => setSelectedPlanDate(planDateKey)}
-                      className={`min-h-[108px] rounded-lg border p-3 text-left transition-colors ${
+                      className={`min-h-[116px] rounded-lg border p-3 text-left transition-colors ${
                         isSelected
-                          ? 'border-blue-500 bg-blue-50'
+                          ? 'border-blue-500 bg-blue-50 shadow-sm'
                           : dayReport
                             ? 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/40'
                             : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'

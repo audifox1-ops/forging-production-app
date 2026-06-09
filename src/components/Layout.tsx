@@ -8,6 +8,7 @@ import {
   History,
   ChevronRight,
   Factory,
+  Home,
   Menu,
   X,
 } from 'lucide-react';
@@ -50,7 +51,11 @@ export default function Layout() {
       <aside
         className={`${sidebarOpen ? 'w-56' : 'w-16'} flex-shrink-0 bg-blue-900 text-white flex flex-col transition-all duration-300`}
       >
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-blue-800">
+        <NavLink
+          to="/dashboard"
+          className="flex items-center gap-3 px-4 py-5 border-b border-blue-800 hover:bg-blue-800/70 transition-colors"
+          title="대시보드로 이동"
+        >
           <div className="w-8 h-8 bg-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
             <Factory size={18} />
           </div>
@@ -60,7 +65,7 @@ export default function Layout() {
               <div className="text-xs text-blue-300">보고 시스템</div>
             </div>
           )}
-        </div>
+        </NavLink>
 
         <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
           {navItems.map(item => (
@@ -102,11 +107,21 @@ export default function Layout() {
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title={sidebarOpen ? '사이드바 접기' : '사이드바 펼치기'}
           >
             {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
+          <NavLink
+            to="/dashboard"
+            className="p-1.5 text-gray-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+            title="대시보드로 이동"
+          >
+            <Home size={18} />
+          </NavLink>
           <div className="flex items-center gap-1.5 text-sm text-gray-500">
-            <span>단조 생산 보고 시스템</span>
+            <NavLink to="/dashboard" className="hover:text-blue-700 transition-colors">
+              단조 생산 보고 시스템
+            </NavLink>
             <ChevronRight size={14} />
             <span className="text-gray-800 font-medium">
               {format(new Date(), 'yyyy년 MM월 dd일')}
