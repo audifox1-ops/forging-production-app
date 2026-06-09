@@ -18,7 +18,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
 } from 'recharts';
 import {
-  AlertTriangle, CalendarRange, CheckCircle, Clock,
+  AlertTriangle, CalendarRange, Clock,
   ClipboardCheck, Printer, PlusCircle, RefreshCw, Users,
 } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
@@ -727,18 +727,14 @@ export default function DashboardPage() {
             {selectedPeriod === 'day' && report ? (
               <>
                 <div className="flex items-center gap-2">
-                  {report.status === 'closed' ? (
-                    <CheckCircle size={18} className="text-green-600" />
-                  ) : (
-                    <Clock size={18} className="text-blue-600" />
-                  )}
+                  <Clock size={18} className="text-blue-600" />
                   <span className="font-medium text-blue-800">
                     보고서 상태:{' '}
-                    <span className={report.status === 'closed' ? 'text-green-700' : 'text-blue-700'}>
+                    <span className="text-blue-700">
                       {report.status === 'draft' ? '작성중' :
                         report.status === 'collecting' ? '입력중' :
                           report.status === 'submitted' ? '제출완료' :
-                            report.status === 'reviewed' ? '검토완료' : '마감'}
+                            '검토완료'}
                     </span>
                   </span>
                 </div>
@@ -1036,14 +1032,6 @@ export default function DashboardPage() {
             <div className="card-header">
               <h3 className="font-semibold text-gray-800">설비별 상세 실적</h3>
               <div className="flex gap-2">
-                {selectedPeriod === 'day' && report && report.status !== 'closed' && canEdit && (
-                  <button
-                    onClick={() => useReportStore.getState().updateReportStatus(report.id, 'closed')}
-                    className="btn-danger text-sm px-3 py-1.5"
-                  >
-                    마감 처리
-                  </button>
-                )}
                 {selectedPeriod === 'day' && (
                   <button onClick={handlePrint} className="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5">
                     <Printer size={14} />

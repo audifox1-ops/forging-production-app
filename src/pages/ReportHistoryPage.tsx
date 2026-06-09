@@ -88,10 +88,9 @@ export default function ReportHistoryPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`badge ${
-                        report.status === 'closed' ? 'badge-gray' :
-                          report.status === 'reviewed' ? 'badge-normal' :
-                            report.status === 'submitted' ? 'badge-blue' :
-                              'badge-warning'
+                        report.status === 'reviewed' ? 'badge-normal' :
+                          report.status === 'submitted' ? 'badge-blue' :
+                            'badge-warning'
                       }`}>
                         {STATUS_LABELS[report.status]}
                       </span>

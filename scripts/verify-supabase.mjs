@@ -130,8 +130,6 @@ async function verifyAppWrites(client) {
     next_plan_date: nextPlanDate,
     status: 'collecting',
     created_by: testUser.id,
-    closed_by: null,
-    closed_at: null,
     created_at: now,
     updated_at: now,
   };

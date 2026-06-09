@@ -23,10 +23,8 @@ CREATE TABLE IF NOT EXISTS public.production_reports (
   report_date DATE NOT NULL UNIQUE,
   next_plan_date DATE NOT NULL,
   status TEXT NOT NULL DEFAULT 'collecting'
-    CHECK (status IN ('draft', 'collecting', 'submitted', 'reviewed', 'closed')),
+    CHECK (status IN ('draft', 'collecting', 'submitted', 'reviewed')),
   created_by TEXT REFERENCES public.users(id),
-  closed_by TEXT REFERENCES public.users(id),
-  closed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

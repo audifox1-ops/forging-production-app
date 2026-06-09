@@ -23,13 +23,22 @@ CREATE TABLE IF NOT EXISTS public.production_reports (
   report_date DATE NOT NULL UNIQUE,
   next_plan_date DATE NOT NULL,
   status TEXT NOT NULL DEFAULT 'collecting'
-    CHECK (status IN ('draft', 'collecting', 'submitted', 'reviewed', 'closed')),
+    CHECK (status IN ('draft', 'collecting', 'submitted', 'reviewed')),
   created_by TEXT REFERENCES public.users(id),
-  closed_by TEXT REFERENCES public.users(id),
-  closed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+UPDATE public.production_reports
+SET status = 'reviewed'
+WHERE status = 'closed';
+
+ALTER TABLE public.production_reports
+  DROP CONSTRAINT IF EXISTS production_reports_status_check,
+  ADD CONSTRAINT production_reports_status_check
+    CHECK (status IN ('draft', 'collecting', 'submitted', 'reviewed')),
+  DROP COLUMN IF EXISTS closed_by,
+  DROP COLUMN IF EXISTS closed_at;
 
 CREATE TABLE IF NOT EXISTS public.production_entries (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

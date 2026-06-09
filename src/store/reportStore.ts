@@ -42,7 +42,6 @@ interface ReportStore {
   // 보고서 관련
   getReport: (reportDate: string) => ProductionReport | undefined;
   createReport: (reportDate: string, options?: CreateReportOptions) => ProductionReport;
-  updateReportStatus: (reportId: string, status: ProductionReport['status']) => void;
 
   // 실적 항목 관련
   getEntriesByReport: (reportId: string) => ProductionEntry[];
@@ -75,6 +74,13 @@ const LOCAL_STATE = loadLocalReportState();
 
 const getInitialArray = <T>(localValue: T[] | undefined, fallback: T[]) =>
   Array.isArray(localValue) ? localValue : [...fallback];
+
+const normalizeReports = (reports: ProductionReport[]) =>
+  reports.map(report =>
+    (report as { status: string }).status === 'closed'
+      ? { ...report, status: 'reviewed' as const }
+      : report
+  );
 
 const INITIAL_ASSIGNEES_BY_EQUIPMENT: Record<Equipment, Pick<ProductionEntry, 'user_id' | 'user_name'>> = {
   P15: { user_id: 'user-kim-hyun', user_name: '김현 차장' },
@@ -126,7 +132,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
   };
 
   return ({
-  reports: getInitialArray(LOCAL_STATE?.reports, DEMO_REPORTS),
+  reports: normalizeReports(getInitialArray(LOCAL_STATE?.reports, DEMO_REPORTS)),
   entries: getInitialArray(LOCAL_STATE?.entries, DEMO_ENTRIES),
   targets: getInitialArray(LOCAL_STATE?.targets, DEMO_TARGETS),
   periodTargets: getInitialArray(LOCAL_STATE?.periodTargets, DEMO_PERIOD_TARGETS),
@@ -200,27 +206,6 @@ export const useReportStore = create<ReportStore>((set, get) => {
     });
 
     return newReport;
-  },
-
-  updateReportStatus: (reportId, status) => {
-    let updatedReport: ProductionReport | undefined;
-    set(state => ({
-      reports: state.reports.map(r => {
-        if (r.id !== reportId) return r;
-
-        updatedReport = {
-          ...r,
-          status,
-          updated_at: new Date().toISOString(),
-          ...(status === 'closed' ? { closed_at: new Date().toISOString() } : {}),
-        };
-        return updatedReport;
-      }),
-    }));
-    persistCurrentState(
-      true,
-      updatedReport ? () => upsertSupabaseRows('production_reports', updatedReport) : undefined
-    );
   },
 
   getEntriesByReport: (reportId) => {
@@ -447,7 +432,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
       set(state => {
         const users = getInitialArray(localState.users, state.users);
         return {
-          reports: getInitialArray(localState.reports, state.reports),
+          reports: normalizeReports(getInitialArray(localState.reports, state.reports)),
           entries: getInitialArray(localState.entries, state.entries),
           targets: getInitialArray(localState.targets, state.targets),
           periodTargets: getInitialArray(localState.periodTargets, state.periodTargets),
@@ -478,7 +463,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
         set(state => {
           const users = getInitialArray(remoteState.users, state.users);
           return {
-            reports: getInitialArray(remoteState.reports, state.reports),
+            reports: normalizeReports(getInitialArray(remoteState.reports, state.reports)),
             entries: getInitialArray(remoteState.entries, state.entries),
             targets: getInitialArray(remoteState.targets, state.targets),
             periodTargets: getInitialArray(remoteState.periodTargets, state.periodTargets),

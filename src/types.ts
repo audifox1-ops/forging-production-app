@@ -6,7 +6,7 @@ export type Shift = '주간' | '야간';
 export type ProductionType = '제품' | '황지';
 export type PeriodTargetType = 'weekly' | 'monthly' | 'yearly';
 
-export type ReportStatus = 'draft' | 'collecting' | 'submitted' | 'reviewed' | 'closed';
+export type ReportStatus = 'draft' | 'collecting' | 'submitted' | 'reviewed';
 export type EntryStatus = 'not_started' | 'saved' | 'submitted' | 'returned' | 'approved';
 
 export type ReasonCategory =
@@ -39,8 +39,6 @@ export interface ProductionReport {
   next_plan_date: string;       // YYYY-MM-DD
   status: ReportStatus;
   created_by: string;
-  closed_by?: string;
-  closed_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -198,7 +196,6 @@ export const STATUS_LABELS: Record<ReportStatus, string> = {
   collecting: '입력중',
   submitted: '제출완료',
   reviewed: '검토완료',
-  closed: '마감',
 };
 
 export const ENTRY_STATUS_LABELS: Record<EntryStatus, string> = {

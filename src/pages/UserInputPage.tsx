@@ -36,7 +36,6 @@ export default function UserInputPage() {
 
   report = getReport(actualDate);
   const entries = report ? getEntriesByReport(report.id) : [];
-  const isClosed = report?.status === 'closed';
   const equipmentTabs = EQUIPMENT_LIST.map(equipment => {
     const equipmentEntries = entries.filter(entry => entry.equipment === equipment);
     const submittedCount = equipmentEntries.filter(entry =>
@@ -113,34 +112,26 @@ export default function UserInputPage() {
                 />
               </div>
             </div>
-            {isClosed && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm">
-                <AlertCircle size={14} />
-                마감된 보고서입니다. 수정이 불가합니다.
-              </div>
-            )}
           </div>
         </div>
       </div>
 
       {/* 안내 배너 */}
-      {!isClosed && (
-        <div className={`flex items-start gap-3 p-4 border rounded-xl ${
-          canWrite || canEdit ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
-        }`}>
-          <Info size={18} className={`${canWrite || canEdit ? 'text-blue-500' : 'text-gray-400'} flex-shrink-0 mt-0.5`} />
-          <div className={`text-sm ${canWrite || canEdit ? 'text-blue-700' : 'text-gray-600'}`}>
-            {canWrite || canEdit ? (
-              <>
-                <strong>전일 생산계획과 실적, 금일 생산계획을 입력해 주세요.</strong>{' '}
-                목표값은 기준값으로만 표시되며, 전일 계획 대비 미달 항목은 사유와 만회대책을 작성해야 합니다.
-              </>
-            ) : (
-              <>관리자에게 쓰기 또는 편집 권한을 받아야 실적을 입력하거나 수정할 수 있습니다.</>
-            )}
-          </div>
+      <div className={`flex items-start gap-3 p-4 border rounded-xl ${
+        canWrite || canEdit ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+      }`}>
+        <Info size={18} className={`${canWrite || canEdit ? 'text-blue-500' : 'text-gray-400'} flex-shrink-0 mt-0.5`} />
+        <div className={`text-sm ${canWrite || canEdit ? 'text-blue-700' : 'text-gray-600'}`}>
+          {canWrite || canEdit ? (
+            <>
+              <strong>전일 생산계획과 실적, 금일 생산계획을 언제든지 수정할 수 있습니다.</strong>{' '}
+              목표값은 기준값으로만 표시되며, 전일 계획 대비 미달 항목은 사유와 만회대책을 작성해야 합니다.
+            </>
+          ) : (
+            <>관리자에게 쓰기 또는 편집 권한을 받아야 실적을 입력하거나 수정할 수 있습니다.</>
+          )}
         </div>
-      )}
+      </div>
 
       {entries.length > 0 && (
         <div className="space-y-3">
@@ -207,7 +198,6 @@ export default function UserInputPage() {
             entry={entry}
             reportId={report!.id}
             targets={targets}
-            isClosed={isClosed}
             canWrite={canWrite}
             canEdit={canEdit}
             onSave={saveEntry}
@@ -224,7 +214,6 @@ function EntryInputCard({
   entry,
   reportId,
   targets,
-  isClosed,
   canWrite,
   canEdit,
   onSave,
@@ -233,14 +222,13 @@ function EntryInputCard({
   entry: any;
   reportId: string;
   targets: EquipmentTarget[];
-  isClosed: boolean;
   canWrite: boolean;
   canEdit: boolean;
   onSave: (data: any) => void;
   onSubmit: (id: string) => void;
 }) {
   const isSubmitted = entry.submit_status === 'submitted' || entry.submit_status === 'approved';
-  const canModify = !isClosed && (isSubmitted ? canEdit : (canWrite || canEdit));
+  const canModify = canWrite || canEdit;
   const [formData, setFormData] = useState({
     product_plan: entry.product_plan,
     product_actual: entry.product_actual,
@@ -618,7 +606,7 @@ function EntryInputCard({
         )}
 
         {/* 저장/제출 버튼 */}
-        {!isClosed && canModify && (
+        {canModify && (
           <div className="flex items-center justify-between pt-2">
             <div className="text-xs text-gray-400">
               마지막 저장: {entry.updated_at ? format(new Date(entry.updated_at), 'HH:mm') : '-'}
@@ -642,13 +630,13 @@ function EntryInputCard({
           </div>
         )}
 
-        {isSubmitted && !isClosed && (
+        {isSubmitted && (
           <div className="flex items-center justify-center gap-2 py-2 text-green-600 font-medium text-sm">
             <CheckCircle size={18} />
-            {canEdit ? '제출완료 상태이며, 편집 권한으로 수정할 수 있습니다.' : '제출완료 상태입니다. 수정하려면 관리자에게 편집 권한을 요청하세요.'}
+            제출완료 상태이며, 필요한 경우 계속 수정할 수 있습니다.
           </div>
         )}
-        {!isClosed && !canModify && (
+        {!canModify && (
           <div className="flex items-center justify-center gap-2 py-2 text-gray-500 font-medium text-sm">
             <AlertCircle size={18} />
             관리자에게 필요한 권한을 받아야 이 항목을 수정할 수 있습니다.
