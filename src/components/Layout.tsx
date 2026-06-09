@@ -16,7 +16,15 @@ import { useReportStore } from '../store/reportStore';
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
-  const { users, currentUserId, setCurrentUserId } = useReportStore();
+  const {
+    users,
+    currentUserId,
+    setCurrentUserId,
+    storageMode,
+    isHydrating,
+    syncError,
+    lastSyncedAt,
+  } = useReportStore();
   const currentUser = users.find(user => user.id === currentUserId) ?? users[0];
   const isAdmin = currentUser?.role === 'admin';
   const canWrite = isAdmin || Boolean(currentUser?.can_write);
@@ -105,6 +113,27 @@ export default function Layout() {
             </span>
           </div>
           <div className="ml-auto flex items-center gap-3">
+            <div
+              className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border ${
+                syncError
+                  ? 'bg-red-50 text-red-700 border-red-200'
+                  : storageMode === 'supabase'
+                    ? 'bg-green-50 text-green-700 border-green-200'
+                    : 'bg-slate-50 text-slate-600 border-slate-200'
+              }`}
+              title={syncError || (lastSyncedAt ? `마지막 동기화: ${format(new Date(lastSyncedAt), 'HH:mm')}` : '로컬 저장 사용')}
+            >
+              <span className={`w-2 h-2 rounded-full ${
+                isHydrating
+                  ? 'bg-amber-500'
+                  : syncError
+                    ? 'bg-red-500'
+                    : storageMode === 'supabase'
+                      ? 'bg-green-500'
+                      : 'bg-slate-400'
+              }`} />
+              {isHydrating ? '동기화 중' : syncError ? '동기화 오류' : storageMode === 'supabase' ? 'Supabase 저장' : '로컬 저장'}
+            </div>
             <select
               value={currentUserId}
               onChange={event => setCurrentUserId(event.target.value)}

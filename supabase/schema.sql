@@ -4,7 +4,7 @@
 
 -- 유저 테이블
 CREATE TABLE IF NOT EXISTS public.users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   employee_no TEXT UNIQUE,
@@ -19,13 +19,13 @@ CREATE TABLE IF NOT EXISTS public.users (
 
 -- 생산 보고서 테이블
 CREATE TABLE IF NOT EXISTS public.production_reports (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   report_date DATE NOT NULL UNIQUE,
   next_plan_date DATE NOT NULL,
   status TEXT NOT NULL DEFAULT 'collecting'
     CHECK (status IN ('draft', 'collecting', 'submitted', 'reviewed', 'closed')),
-  created_by UUID REFERENCES public.users(id),
-  closed_by UUID REFERENCES public.users(id),
+  created_by TEXT REFERENCES public.users(id),
+  closed_by TEXT REFERENCES public.users(id),
   closed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -33,9 +33,10 @@ CREATE TABLE IF NOT EXISTS public.production_reports (
 
 -- 생산 실적 입력 테이블
 CREATE TABLE IF NOT EXISTS public.production_entries (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  report_id UUID NOT NULL REFERENCES public.production_reports(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES public.users(id),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  report_id TEXT NOT NULL REFERENCES public.production_reports(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES public.users(id),
+  user_name TEXT,
   equipment TEXT NOT NULL CHECK (equipment IN ('P15', 'P5', 'R/M')),
   shift TEXT NOT NULL CHECK (shift IN ('주간', '야간')),
   product_plan INTEGER NOT NULL DEFAULT 0,
@@ -64,7 +65,7 @@ CREATE TABLE IF NOT EXISTS public.production_entries (
 
 -- 설비별 목표값 테이블
 CREATE TABLE IF NOT EXISTS public.equipment_targets (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   equipment TEXT NOT NULL CHECK (equipment IN ('P15', 'P5', 'R/M')),
   shift TEXT NOT NULL CHECK (shift IN ('주간', '야간')),
   product_target INTEGER NOT NULL DEFAULT 0,
@@ -76,7 +77,7 @@ CREATE TABLE IF NOT EXISTS public.equipment_targets (
 
 -- 기간별 생산 목표값 테이블
 CREATE TABLE IF NOT EXISTS public.production_period_targets (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   period TEXT NOT NULL CHECK (period IN ('weekly', 'monthly', 'yearly')),
   product_target INTEGER NOT NULL DEFAULT 0,
   billet_target INTEGER NOT NULL DEFAULT 0,
@@ -87,8 +88,8 @@ CREATE TABLE IF NOT EXISTS public.production_period_targets (
 
 -- 보고서 코멘트 테이블
 CREATE TABLE IF NOT EXISTS public.report_comments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  report_id UUID NOT NULL REFERENCES public.production_reports(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  report_id TEXT NOT NULL REFERENCES public.production_reports(id) ON DELETE CASCADE,
   summary TEXT,
   manager_comment TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -97,9 +98,9 @@ CREATE TABLE IF NOT EXISTS public.report_comments (
 
 -- 보고서 상태 로그 테이블
 CREATE TABLE IF NOT EXISTS public.report_status_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  report_id UUID NOT NULL REFERENCES public.production_reports(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES public.users(id),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  report_id TEXT NOT NULL REFERENCES public.production_reports(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES public.users(id),
   status TEXT NOT NULL,
   memo TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()

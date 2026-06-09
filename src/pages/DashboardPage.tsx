@@ -279,6 +279,95 @@ export default function DashboardPage() {
       };
     }).filter(group => group.rows.length > 0);
   }, [entries, reportDateById, selectedPeriod, targetByEquipmentShift]);
+  const detailRows = React.useMemo(
+    () => detailGroups.flatMap(group => group.rows),
+    [detailGroups]
+  );
+  const inputAlerts = React.useMemo(() => {
+    const formatRows = (rows: typeof detailRows) =>
+      rows.slice(0, 4).map(row => `${row.entry.equipment}/${row.entry.shift}`).join(', ') +
+      (rows.length > 4 ? ` 외 ${rows.length - 4}건` : '');
+    const notStartedRows = detailRows.filter(row => row.entry.submit_status === 'not_started');
+    const unsubmittedRows = detailRows.filter(row =>
+      row.entry.submit_status !== 'submitted' && row.entry.submit_status !== 'approved'
+    );
+    const missingReasonRows = detailRows.filter(row =>
+      row.hasShortfall &&
+      (!row.entry.reason_category || !row.entry.reason_detail?.trim() || !row.entry.recovery_plan?.trim())
+    );
+    const alerts: { title: string; message: string; tone: 'danger' | 'warning' | 'normal' | 'success' }[] = [];
+
+    if (notStartedRows.length > 0) {
+      alerts.push({
+        title: `미입력 ${notStartedRows.length}건`,
+        message: formatRows(notStartedRows),
+        tone: 'danger',
+      });
+    }
+    if (unsubmittedRows.length > 0) {
+      alerts.push({
+        title: `미제출 ${unsubmittedRows.length}건`,
+        message: formatRows(unsubmittedRows),
+        tone: 'warning',
+      });
+    }
+    if (missingReasonRows.length > 0) {
+      alerts.push({
+        title: `미달 사유 보완 ${missingReasonRows.length}건`,
+        message: formatRows(missingReasonRows),
+        tone: 'danger',
+      });
+    }
+    if (alerts.length === 0 && detailRows.length > 0) {
+      alerts.push({
+        title: '입력 상태 정상',
+        message: '미입력, 미제출, 미달 사유 누락 항목이 없습니다.',
+        tone: 'success',
+      });
+    }
+
+    return alerts;
+  }, [detailRows]);
+  const reasonAnalysis = React.useMemo(() => {
+    const reasonMap = new Map<string, {
+      category: string;
+      count: number;
+      productShortfall: number;
+      billetShortfall: number;
+      equipments: Record<string, number>;
+    }>();
+
+    detailRows.forEach(row => {
+      const totalShortfall = row.productShortfall + row.billetShortfall;
+      if (!row.entry.reason_category && totalShortfall <= 0) return;
+
+      const category = row.entry.reason_category || '사유 미입력';
+      const current = reasonMap.get(category) ?? {
+        category,
+        count: 0,
+        productShortfall: 0,
+        billetShortfall: 0,
+        equipments: {},
+      };
+      current.count += 1;
+      current.productShortfall += row.productShortfall;
+      current.billetShortfall += row.billetShortfall;
+      current.equipments[row.entry.equipment] = (current.equipments[row.entry.equipment] || 0) + 1;
+      reasonMap.set(category, current);
+    });
+
+    return Array.from(reasonMap.values())
+      .map(item => {
+        const mainEquipment = Object.entries(item.equipments)
+          .sort((a, b) => b[1] - a[1])[0]?.[0] ?? '-';
+        const totalShortfall = item.productShortfall + item.billetShortfall;
+        return { ...item, mainEquipment, totalShortfall };
+      })
+      .sort((a, b) => b.totalShortfall - a.totalShortfall || b.count - a.count);
+  }, [detailRows]);
+  const topReason = reasonAnalysis[0];
+  const missingReasonCount = reasonAnalysis.find(item => item.category === '사유 미입력')?.count ?? 0;
+  const totalReasonShortfall = reasonAnalysis.reduce((sum, item) => sum + item.totalShortfall, 0);
   const summaryCards = [
     {
       label: '제품',
@@ -454,6 +543,48 @@ export default function DashboardPage() {
                 </div>
               </>
             )}
+          </div>
+
+          {/* 입력 알림 */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-500" />
+                입력 알림
+              </h3>
+              <span className="text-xs text-gray-500">{periodLabel} 기준</span>
+            </div>
+            <div className="card-body">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {inputAlerts.map(alert => (
+                  <div
+                    key={alert.title}
+                    className={`rounded-lg border p-3 ${
+                      alert.tone === 'danger'
+                        ? 'border-red-200 bg-red-50'
+                        : alert.tone === 'warning'
+                          ? 'border-amber-200 bg-amber-50'
+                          : alert.tone === 'success'
+                            ? 'border-green-200 bg-green-50'
+                            : 'border-blue-200 bg-blue-50'
+                    }`}
+                  >
+                    <div className={`text-sm font-bold ${
+                      alert.tone === 'danger'
+                        ? 'text-red-800'
+                        : alert.tone === 'warning'
+                          ? 'text-amber-800'
+                          : alert.tone === 'success'
+                            ? 'text-green-800'
+                            : 'text-blue-800'
+                    }`}>
+                      {alert.title}
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1 leading-relaxed">{alert.message}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* 전체 실적 요약 */}
@@ -827,6 +958,73 @@ export default function DashboardPage() {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* 미달 원인 분석 */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="font-semibold text-gray-800">미달 원인 분석</h3>
+              <span className="text-xs text-gray-500">
+                {reasonAnalysis.length > 0 ? `${reasonAnalysis.length}개 원인 분류` : '분석 대상 없음'}
+              </span>
+            </div>
+            <div className="card-body">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-xs text-slate-500 mb-1">최다 영향 원인</div>
+                  <div className="font-bold text-slate-800">{topReason?.category || '-'}</div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {topReason ? `${topReason.count}건 · ${formatNumber(topReason.totalShortfall)} KG` : '미달 사유 데이터 없음'}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                  <div className="text-xs text-red-500 mb-1">원인별 미달량 합계</div>
+                  <div className="font-bold text-red-800">{formatNumber(totalReasonShortfall)} KG</div>
+                  <div className="text-xs text-red-600 mt-1">제품/황지 미달량 합산</div>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="text-xs text-amber-600 mb-1">사유 미입력</div>
+                  <div className="font-bold text-amber-800">{missingReasonCount}건</div>
+                  <div className="text-xs text-amber-700 mt-1">미달 발생 후 보완 필요</div>
+                </div>
+              </div>
+
+              <div className="table-wrapper">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      <th className="px-4 py-2.5 text-left text-gray-600 font-medium">원인</th>
+                      <th className="px-4 py-2.5 text-center text-gray-600 font-medium">건수</th>
+                      <th className="px-4 py-2.5 text-right text-gray-600 font-medium">제품 미달</th>
+                      <th className="px-4 py-2.5 text-right text-gray-600 font-medium">황지 미달</th>
+                      <th className="px-4 py-2.5 text-right text-gray-600 font-medium">합계</th>
+                      <th className="px-4 py-2.5 text-center text-gray-600 font-medium">주요 설비</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {reasonAnalysis.map(item => (
+                      <tr key={item.category} className="hover:bg-gray-50">
+                        <td className="px-4 py-2.5 font-medium text-gray-800">{item.category}</td>
+                        <td className="px-4 py-2.5 text-center tabular-nums">{item.count}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums">{formatNumber(item.productShortfall)} KG</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums">{formatNumber(item.billetShortfall)} KG</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-red-700">
+                          {formatNumber(item.totalShortfall)} KG
+                        </td>
+                        <td className="px-4 py-2.5 text-center">{item.mainEquipment}</td>
+                      </tr>
+                    ))}
+                    {reasonAnalysis.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                          미달 사유 분석 데이터가 없습니다.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 

@@ -7,7 +7,21 @@ import {
   DEMO_PERIOD_TARGETS,
   DEMO_USERS,
 } from '../lib/mockData';
-import { format } from 'date-fns';
+import { addDays, format, parseISO } from 'date-fns';
+import {
+  getInitialStorageMode,
+  getStorageErrorMessage,
+  loadLocalReportState,
+  loadSupabaseReportState,
+  PersistedReportState,
+  saveLocalReportState,
+  saveSupabaseReportState,
+  StorageMode,
+} from './persistence';
+
+interface CreateReportOptions {
+  sourceReportDate?: string;
+}
 
 interface ReportStore {
   reports: ProductionReport[];
@@ -16,10 +30,15 @@ interface ReportStore {
   periodTargets: ProductionPeriodTarget[];
   users: User[];
   currentUserId: string;
+  storageMode: StorageMode;
+  hasHydrated: boolean;
+  isHydrating: boolean;
+  syncError?: string;
+  lastSyncedAt?: string;
 
   // 보고서 관련
   getReport: (reportDate: string) => ProductionReport | undefined;
-  createReport: (reportDate: string) => ProductionReport;
+  createReport: (reportDate: string, options?: CreateReportOptions) => ProductionReport;
   updateReportStatus: (reportId: string, status: ProductionReport['status']) => void;
 
   // 실적 항목 관련
@@ -43,10 +62,16 @@ interface ReportStore {
   updateUser: (userId: string, updates: Partial<User>) => void;
   addUser: (user: Omit<User, 'id' | 'created_at'>) => void;
   deleteUser: (userId: string) => void;
+  hydrateStorage: () => Promise<void>;
 }
 
 let nextId = 100;
-const genId = () => `gen-${++nextId}`;
+const genId = () => globalThis.crypto?.randomUUID?.() ?? `gen-${++nextId}`;
+
+const LOCAL_STATE = loadLocalReportState();
+
+const getInitialArray = <T>(localValue: T[] | undefined, fallback: T[]) =>
+  Array.isArray(localValue) ? localValue : [...fallback];
 
 const INITIAL_ASSIGNEES_BY_EQUIPMENT: Record<Equipment, Pick<ProductionEntry, 'user_id' | 'user_name'>> = {
   P15: { user_id: 'user-kim-hyun', user_name: '김현 차장' },
@@ -54,28 +79,78 @@ const INITIAL_ASSIGNEES_BY_EQUIPMENT: Record<Equipment, Pick<ProductionEntry, 'u
   'R/M': { user_id: 'user-woo-jaehan', user_name: '우재한 과장' },
 };
 
-export const useReportStore = create<ReportStore>((set, get) => ({
-  reports: [...DEMO_REPORTS],
-  entries: [...DEMO_ENTRIES],
-  targets: [...DEMO_TARGETS],
-  periodTargets: [...DEMO_PERIOD_TARGETS],
-  users: [...DEMO_USERS],
-  currentUserId: 'user-admin',
+export const useReportStore = create<ReportStore>((set, get) => {
+  const getPersistedState = (): PersistedReportState => {
+    const state = get();
+    return {
+      reports: state.reports,
+      entries: state.entries,
+      targets: state.targets,
+      periodTargets: state.periodTargets,
+      users: state.users,
+      currentUserId: state.currentUserId,
+    };
+  };
+
+  const persistCurrentState = (syncRemote = true) => {
+    const snapshot = getPersistedState();
+    saveLocalReportState(snapshot);
+
+    if (!syncRemote || get().storageMode !== 'supabase') return;
+
+    void saveSupabaseReportState(snapshot)
+      .then(() => {
+        set({ lastSyncedAt: new Date().toISOString(), syncError: undefined });
+      })
+      .catch(error => {
+        set({ syncError: getStorageErrorMessage(error) });
+      });
+  };
+
+  const getSourceReport = (reportDate: string, options?: CreateReportOptions) => {
+    if (options?.sourceReportDate) {
+      return get().getReport(options.sourceReportDate);
+    }
+
+    return [...get().reports]
+      .filter(report => report.report_date < reportDate)
+      .sort((a, b) => new Date(b.report_date).getTime() - new Date(a.report_date).getTime())[0];
+  };
+
+  const resolveCurrentUserId = (users: User[], currentUserId: string) => {
+    if (users.some(user => user.id === currentUserId)) return currentUserId;
+    return users.find(user => user.role === 'admin')?.id ?? users[0]?.id ?? currentUserId;
+  };
+
+  return ({
+  reports: getInitialArray(LOCAL_STATE?.reports, DEMO_REPORTS),
+  entries: getInitialArray(LOCAL_STATE?.entries, DEMO_ENTRIES),
+  targets: getInitialArray(LOCAL_STATE?.targets, DEMO_TARGETS),
+  periodTargets: getInitialArray(LOCAL_STATE?.periodTargets, DEMO_PERIOD_TARGETS),
+  users: getInitialArray(LOCAL_STATE?.users, DEMO_USERS),
+  currentUserId: LOCAL_STATE?.currentUserId || 'user-admin',
+  storageMode: getInitialStorageMode(),
+  hasHydrated: false,
+  isHydrating: false,
+  syncError: undefined,
+  lastSyncedAt: undefined,
 
   getReport: (reportDate) => {
     return get().reports.find(r => r.report_date === reportDate);
   },
 
-  createReport: (reportDate) => {
+  createReport: (reportDate, options) => {
     const existing = get().getReport(reportDate);
     if (existing) return existing;
+    const sourceReport = getSourceReport(reportDate, options);
+    const sourceEntries = sourceReport ? get().getEntriesByReport(sourceReport.id) : [];
 
     const newReport: ProductionReport = {
       id: genId(),
       report_date: reportDate,
-      next_plan_date: format(new Date(new Date(reportDate).getTime() + 86400000), 'yyyy-MM-dd'),
+      next_plan_date: format(addDays(parseISO(reportDate), 1), 'yyyy-MM-dd'),
       status: 'collecting',
-      created_by: 'user-admin',
+      created_by: get().currentUserId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -89,6 +164,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
     equipments.forEach(equipment => {
       shifts.forEach(shift => {
         const target = targets.find(t => t.equipment === equipment && t.shift === shift);
+        const sourceEntry = sourceEntries.find(entry => entry.equipment === equipment && entry.shift === shift);
         const initialAssignee = INITIAL_ASSIGNEES_BY_EQUIPMENT[equipment];
 
         newEntries.push({
@@ -98,9 +174,9 @@ export const useReportStore = create<ReportStore>((set, get) => ({
           user_name: initialAssignee.user_name,
           equipment,
           shift,
-          product_plan: target?.product_target || 0,
+          product_plan: sourceEntry?.next_product_plan ?? target?.product_target ?? 0,
           product_actual: 0,
-          billet_plan: target?.billet_target || 0,
+          billet_plan: sourceEntry?.next_billet_plan ?? target?.billet_target ?? 0,
           billet_actual: 0,
           next_product_plan: 0,
           next_billet_plan: 0,
@@ -115,6 +191,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
       reports: [...state.reports, newReport],
       entries: [...state.entries, ...newEntries],
     }));
+    persistCurrentState();
 
     return newReport;
   },
@@ -127,6 +204,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
           : r
       ),
     }));
+    persistCurrentState();
   },
 
   getEntriesByReport: (reportId) => {
@@ -179,6 +257,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
       };
       set(state => ({ entries: [...state.entries, newEntry] }));
     }
+    persistCurrentState();
   },
 
   submitEntry: (entryId) => {
@@ -189,6 +268,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
           : e
       ),
     }));
+    persistCurrentState();
   },
 
   returnEntry: (entryId) => {
@@ -197,6 +277,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
         e.id === entryId ? { ...e, submit_status: 'returned', updated_at: new Date().toISOString() } : e
       ),
     }));
+    persistCurrentState();
   },
 
   approveEntry: (entryId) => {
@@ -205,6 +286,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
         e.id === entryId ? { ...e, submit_status: 'approved', updated_at: new Date().toISOString() } : e
       ),
     }));
+    persistCurrentState();
   },
 
   getTargets: () => get().targets,
@@ -217,6 +299,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
           : t
       ),
     }));
+    persistCurrentState();
   },
 
   getPeriodTargets: () => get().periodTargets,
@@ -229,10 +312,12 @@ export const useReportStore = create<ReportStore>((set, get) => ({
           : target
       ),
     }));
+    persistCurrentState();
   },
 
   setCurrentUserId: (userId) => {
     set({ currentUserId: userId });
+    persistCurrentState(false);
   },
 
   getCurrentUser: () => {
@@ -259,6 +344,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
         return { ...u, ...updates };
       }),
     }));
+    persistCurrentState();
   },
 
   addUser: (userData) => {
@@ -273,6 +359,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
       can_delete: can_delete ?? false,
     };
     set(state => ({ users: [...state.users, newUser] }));
+    persistCurrentState();
   },
 
   deleteUser: (userId) => {
@@ -283,5 +370,75 @@ export const useReportStore = create<ReportStore>((set, get) => ({
       users: state.users.filter(u => u.id !== userId),
       currentUserId: state.currentUserId === userId ? 'user-admin' : state.currentUserId,
     }));
+    persistCurrentState();
   },
-}));
+
+  hydrateStorage: async () => {
+    if (get().isHydrating) return;
+
+    const localState = loadLocalReportState();
+    if (localState) {
+      set(state => {
+        const users = getInitialArray(localState.users, state.users);
+        return {
+          reports: getInitialArray(localState.reports, state.reports),
+          entries: getInitialArray(localState.entries, state.entries),
+          targets: getInitialArray(localState.targets, state.targets),
+          periodTargets: getInitialArray(localState.periodTargets, state.periodTargets),
+          users,
+          currentUserId: resolveCurrentUserId(users, localState.currentUserId || state.currentUserId),
+        };
+      });
+    }
+
+    if (get().storageMode !== 'supabase') {
+      set({ hasHydrated: true, isHydrating: false });
+      saveLocalReportState(getPersistedState());
+      return;
+    }
+
+    set({ isHydrating: true, syncError: undefined });
+    try {
+      const remoteState = await loadSupabaseReportState();
+      const hasRemoteData = Boolean(
+        remoteState.users?.length ||
+        remoteState.reports?.length ||
+        remoteState.entries?.length ||
+        remoteState.targets?.length ||
+        remoteState.periodTargets?.length
+      );
+
+      if (hasRemoteData) {
+        set(state => {
+          const users = getInitialArray(remoteState.users, state.users);
+          return {
+            reports: getInitialArray(remoteState.reports, state.reports),
+            entries: getInitialArray(remoteState.entries, state.entries),
+            targets: getInitialArray(remoteState.targets, state.targets),
+            periodTargets: getInitialArray(remoteState.periodTargets, state.periodTargets),
+            users,
+            currentUserId: resolveCurrentUserId(users, state.currentUserId),
+          };
+        });
+      } else {
+        await saveSupabaseReportState(getPersistedState());
+      }
+
+      saveLocalReportState(getPersistedState());
+      set({
+        hasHydrated: true,
+        isHydrating: false,
+        lastSyncedAt: new Date().toISOString(),
+        syncError: undefined,
+      });
+    } catch (error) {
+      saveLocalReportState(getPersistedState());
+      set({
+        hasHydrated: true,
+        isHydrating: false,
+        syncError: getStorageErrorMessage(error),
+      });
+    }
+  },
+});
+});

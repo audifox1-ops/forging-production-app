@@ -8,8 +8,13 @@ import ReportHistoryPage from './pages/ReportHistoryPage';
 import UserManagementPage from './pages/UserManagementPage';
 import TargetManagementPage from './pages/TargetManagementPage';
 import Layout from './components/Layout';
+import { useReportStore } from './store/reportStore';
 
 function App() {
+  React.useEffect(() => {
+    void useReportStore.getState().hydrateStorage();
+  }, []);
+
   return (
     <HashRouter>
       <Routes>

@@ -24,15 +24,15 @@ export default function ReportHistoryPage() {
   const handleCreate = () => {
     if (!canCreateReport) return;
     const today = format(new Date(), 'yyyy-MM-dd');
-    createReport(today);
-    navigate(`/reports/${today}/input`);
+    const report = createReport(today);
+    navigate(`/reports/${report.report_date}/input`);
   };
 
   const handleCopy = (reportDate: string) => {
     if (!canCreateReport) return;
     const newDate = format(new Date(), 'yyyy-MM-dd');
-    createReport(newDate);
-    navigate(`/reports/${newDate}/input`);
+    const report = createReport(newDate, { sourceReportDate: reportDate });
+    navigate(`/reports/${report.report_date}/input`);
   };
 
   return (
