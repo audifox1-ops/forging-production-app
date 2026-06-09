@@ -158,10 +158,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_production_reports_updated_at ON public.production_reports;
 CREATE TRIGGER trigger_production_reports_updated_at
   BEFORE UPDATE ON public.production_reports
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS trigger_production_entries_updated_at ON public.production_entries;
 CREATE TRIGGER trigger_production_entries_updated_at
   BEFORE UPDATE ON public.production_entries
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
@@ -177,37 +179,72 @@ ALTER TABLE public.production_period_targets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.report_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.report_status_logs ENABLE ROW LEVEL SECURITY;
 
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+
 -- 모든 인증된 사용자: 조회 가능
+DROP POLICY IF EXISTS "Users can view all data" ON public.production_reports;
 CREATE POLICY "Users can view all data" ON public.production_reports
   FOR SELECT USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Users can view entries" ON public.production_entries;
 CREATE POLICY "Users can view entries" ON public.production_entries
   FOR SELECT USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Users can view targets" ON public.equipment_targets;
 CREATE POLICY "Users can view targets" ON public.equipment_targets
   FOR SELECT USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Users can view period targets" ON public.production_period_targets;
 CREATE POLICY "Users can view period targets" ON public.production_period_targets
   FOR SELECT USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Users can view users" ON public.users;
 CREATE POLICY "Users can view users" ON public.users
   FOR SELECT USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Authenticated users can manage users" ON public.users;
 CREATE POLICY "Authenticated users can manage users" ON public.users
   FOR ALL USING (auth.role() = 'authenticated')
   WITH CHECK (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Authenticated users can manage targets" ON public.equipment_targets;
 CREATE POLICY "Authenticated users can manage targets" ON public.equipment_targets
   FOR ALL USING (auth.role() = 'authenticated')
   WITH CHECK (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Authenticated users can manage period targets" ON public.production_period_targets;
 CREATE POLICY "Authenticated users can manage period targets" ON public.production_period_targets
   FOR ALL USING (auth.role() = 'authenticated')
   WITH CHECK (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Authenticated users can manage reports" ON public.production_reports;
+CREATE POLICY "Authenticated users can manage reports" ON public.production_reports
+  FOR ALL USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
 -- 인증된 사용자: 본인 항목 수정 가능 (자세한 권한은 앱 레벨에서 처리)
+DROP POLICY IF EXISTS "Authenticated users can insert entries" ON public.production_entries;
 CREATE POLICY "Authenticated users can insert entries" ON public.production_entries
   FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Authenticated users can update entries" ON public.production_entries;
 CREATE POLICY "Authenticated users can update entries" ON public.production_entries
   FOR UPDATE USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated users can delete entries" ON public.production_entries;
+CREATE POLICY "Authenticated users can delete entries" ON public.production_entries
+  FOR DELETE USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated users can manage comments" ON public.report_comments;
+CREATE POLICY "Authenticated users can manage comments" ON public.report_comments
+  FOR ALL USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated users can manage status logs" ON public.report_status_logs;
+CREATE POLICY "Authenticated users can manage status logs" ON public.report_status_logs
+  FOR ALL USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+NOTIFY pgrst, 'reload schema';
