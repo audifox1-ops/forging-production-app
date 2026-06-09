@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ProductionReport, ProductionEntry, EquipmentTarget, User, ProductionPeriodTarget, PeriodTargetType } from '../types';
+import { ProductionReport, ProductionEntry, EquipmentTarget, User, ProductionPeriodTarget, PeriodTargetType, Equipment } from '../types';
 import {
   DEMO_REPORTS,
   DEMO_ENTRIES,
@@ -48,34 +48,10 @@ interface ReportStore {
 let nextId = 100;
 const genId = () => `gen-${++nextId}`;
 
-type EntryAssignment = Pick<ProductionEntry, 'equipment' | 'shift'>;
-
-const matchesEntryAssignment = (user: User, entry: EntryAssignment) => (
-  user.role === 'user' &&
-  user.assigned_equipment.includes(entry.equipment) &&
-  (user.assigned_shift === null || user.assigned_shift === entry.shift)
-);
-
-const findAssignedUser = (users: User[], entry: EntryAssignment) => {
-  return users.find(user => matchesEntryAssignment(user, entry));
-};
-
-const syncEntryAssignees = (entries: ProductionEntry[], users: User[]) => {
-  return entries.map(entry => {
-    const assignedUser = findAssignedUser(users, entry);
-    const userId = assignedUser?.id ?? 'unassigned';
-    const userName = assignedUser?.name;
-
-    if (entry.user_id === userId && entry.user_name === userName) {
-      return entry;
-    }
-
-    return {
-      ...entry,
-      user_id: userId,
-      user_name: userName,
-    };
-  });
+const INITIAL_ASSIGNEES_BY_EQUIPMENT: Record<Equipment, Pick<ProductionEntry, 'user_id' | 'user_name'>> = {
+  P15: { user_id: 'user-kim-hyun', user_name: '김현 차장' },
+  P5: { user_id: 'user-koo-byeongjun', user_name: '구병준 차장' },
+  'R/M': { user_id: 'user-woo-jaehan', user_name: '우재한 과장' },
 };
 
 export const useReportStore = create<ReportStore>((set, get) => ({
@@ -108,25 +84,23 @@ export const useReportStore = create<ReportStore>((set, get) => ({
     const equipments = ['P15', 'P5', 'R/M'] as const;
     const shifts = ['주간', '야간'] as const;
     const targets = get().targets;
-    const users = get().users;
 
     const newEntries: ProductionEntry[] = [];
     equipments.forEach(equipment => {
       shifts.forEach(shift => {
         const target = targets.find(t => t.equipment === equipment && t.shift === shift);
-        // 해당 설비/근무조 담당자 찾기
-        const assignedUser = findAssignedUser(users, { equipment, shift });
+        const initialAssignee = INITIAL_ASSIGNEES_BY_EQUIPMENT[equipment];
 
         newEntries.push({
           id: genId(),
           report_id: newReport.id,
-          user_id: assignedUser?.id || 'unassigned',
-          user_name: assignedUser?.name,
+          user_id: initialAssignee.user_id,
+          user_name: initialAssignee.user_name,
           equipment,
           shift,
-          product_plan: 0,
+          product_plan: target?.product_target || 0,
           product_actual: 0,
-          billet_plan: 0,
+          billet_plan: target?.billet_target || 0,
           billet_actual: 0,
           next_product_plan: 0,
           next_billet_plan: 0,
@@ -269,8 +243,8 @@ export const useReportStore = create<ReportStore>((set, get) => ({
   getUsers: () => get().users,
 
   updateUser: (userId, updates) => {
-    set(state => {
-      const users = state.users.map((u): User => {
+    set(state => ({
+      users: state.users.map((u): User => {
         if (u.id !== userId) return u;
         if (u.role === 'admin') {
           return {
@@ -283,13 +257,8 @@ export const useReportStore = create<ReportStore>((set, get) => ({
           };
         }
         return { ...u, ...updates };
-      });
-
-      return {
-        users,
-        entries: syncEntryAssignees(state.entries, users),
-      };
-    });
+      }),
+    }));
   },
 
   addUser: (userData) => {
@@ -303,28 +272,16 @@ export const useReportStore = create<ReportStore>((set, get) => ({
       can_edit: can_edit ?? false,
       can_delete: can_delete ?? false,
     };
-    set(state => {
-      const users = [...state.users, newUser];
-
-      return {
-        users,
-        entries: syncEntryAssignees(state.entries, users),
-      };
-    });
+    set(state => ({ users: [...state.users, newUser] }));
   },
 
   deleteUser: (userId) => {
     const user = get().users.find(u => u.id === userId);
     if (!user || user.role === 'admin') return;
 
-    set(state => {
-      const users = state.users.filter(u => u.id !== userId);
-
-      return {
-        users,
-        entries: syncEntryAssignees(state.entries, users),
-        currentUserId: state.currentUserId === userId ? 'user-admin' : state.currentUserId,
-      };
-    });
+    set(state => ({
+      users: state.users.filter(u => u.id !== userId),
+      currentUserId: state.currentUserId === userId ? 'user-admin' : state.currentUserId,
+    }));
   },
 }));

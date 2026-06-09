@@ -111,11 +111,11 @@ CREATE TABLE IF NOT EXISTS public.report_status_logs (
 INSERT INTO public.users (id, name, email, employee_no, role, assigned_equipment, assigned_shift, can_write, can_edit, can_delete)
 VALUES
   ('11111111-1111-1111-1111-111111111111', '관리자', 'admin@forging.com', '10001', 'admin', ARRAY['P15', 'P5', 'R/M'], NULL, TRUE, TRUE, TRUE),
-  ('22222222-2222-2222-2222-222222222222', '김회근 부장', 'hoegeun.kim@forging.com', '10002', 'user', ARRAY['P15'], '주간', FALSE, FALSE, FALSE),
-  ('33333333-3333-3333-3333-333333333333', '김현 차장', 'hyun.kim@forging.com', '10003', 'user', ARRAY['P5'], '주간', FALSE, FALSE, FALSE),
-  ('44444444-4444-4444-4444-444444444444', '구병준 차장', 'byeongjun.koo@forging.com', '10004', 'user', ARRAY['R/M'], '주간', FALSE, FALSE, FALSE),
-  ('55555555-5555-5555-5555-555555555555', '우재한 과장', 'jaehan.woo@forging.com', '10005', 'user', ARRAY['P15', 'P5'], '야간', FALSE, FALSE, FALSE),
-  ('66666666-6666-6666-6666-666666666666', '이은서 대리', 'eunseo.lee@forging.com', '10006', 'user', ARRAY['R/M'], '야간', FALSE, FALSE, FALSE)
+  ('22222222-2222-2222-2222-222222222222', '김회근 부장', 'hoegeun.kim@forging.com', '10002', 'manager', ARRAY['P15', 'P5', 'R/M'], NULL, TRUE, TRUE, FALSE),
+  ('33333333-3333-3333-3333-333333333333', '김현 차장', 'hyun.kim@forging.com', '10003', 'user', ARRAY['P15'], NULL, TRUE, FALSE, FALSE),
+  ('44444444-4444-4444-4444-444444444444', '구병준 차장', 'byeongjun.koo@forging.com', '10004', 'user', ARRAY['P5'], NULL, TRUE, FALSE, FALSE),
+  ('55555555-5555-5555-5555-555555555555', '우재한 과장', 'jaehan.woo@forging.com', '10005', 'user', ARRAY['R/M'], NULL, TRUE, FALSE, FALSE),
+  ('66666666-6666-6666-6666-666666666666', '이은서 대리', 'eunseo.lee@forging.com', '10006', 'manager', ARRAY['P15', 'P5', 'R/M'], NULL, TRUE, TRUE, FALSE)
 ON CONFLICT (email) DO UPDATE SET
   name = EXCLUDED.name,
   employee_no = EXCLUDED.employee_no,

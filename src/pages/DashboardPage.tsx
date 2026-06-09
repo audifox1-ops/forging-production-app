@@ -23,7 +23,7 @@ import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import KPIStatusCard from '../components/KPIStatusCard';
 import SubmitStatusBadge from '../components/SubmitStatusBadge';
-import { PeriodTargetType } from '../types';
+import { EQUIPMENT_LIST, PeriodTargetType, SHIFT_LIST } from '../types';
 
 type SummaryPeriod = 'day' | 'week' | 'month' | 'year';
 
@@ -83,9 +83,13 @@ function getRateColor(rate: number) {
   return 'text-red-700';
 }
 
+function calcRate(actual: number, plan: number) {
+  return plan > 0 ? Math.round((actual / plan) * 1000) / 10 : 0;
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { reports, periodTargets, getEntriesByReport, createReport, getCurrentUser } = useReportStore();
+  const { reports, targets, periodTargets, getEntriesByReport, createReport, getCurrentUser } = useReportStore();
   const currentUser = getCurrentUser();
   const isAdmin = currentUser?.role === 'admin';
   const canWrite = isAdmin || Boolean(currentUser?.can_write);
@@ -117,18 +121,40 @@ export default function DashboardPage() {
     return periodReports.flatMap(periodReport => getEntriesByReport(periodReport.id));
   }, [selectedPeriod, report, periodReports, getEntriesByReport]);
   const summary = calcDashboardSummary(entries);
+  const dailyTargetSummary = React.useMemo(() => {
+    return targets.reduce(
+      (acc, target) => ({
+        product: acc.product + (target.product_target || 0),
+        billet: acc.billet + (target.billet_target || 0),
+      }),
+      { product: 0, billet: 0 }
+    );
+  }, [targets]);
+  const targetByEquipmentShift = React.useMemo(() => {
+    return new Map(
+      targets.map(target => [
+        `${target.equipment}-${target.shift}`,
+        {
+          product: target.product_target || 0,
+          billet: target.billet_target || 0,
+        },
+      ])
+    );
+  }, [targets]);
   const hasPeriodData = selectedPeriod === 'day' ? Boolean(report) : periodReports.length > 0;
   const periodLabel = PERIOD_OPTIONS.find(option => option.value === selectedPeriod)?.label ?? '일간';
   const periodRangeLabel = formatPeriodRange(periodRange, selectedPeriod);
-  const entryProductShortfall = Math.max(0, summary.total_product_plan - summary.total_product_actual);
-  const entryBilletShortfall = Math.max(0, summary.total_billet_plan - summary.total_billet_actual);
   const selectedPeriodTarget = PERIOD_TARGET_MAP[selectedPeriod]
     ? periodTargets.find(target => target.period === PERIOD_TARGET_MAP[selectedPeriod])
     : undefined;
   const usesConfiguredPeriodTarget = selectedPeriod !== 'day' &&
     Boolean(selectedPeriodTarget && (selectedPeriodTarget.product_target > 0 || selectedPeriodTarget.billet_target > 0));
-  const summaryProductPlan = usesConfiguredPeriodTarget ? selectedPeriodTarget!.product_target : summary.total_product_plan;
-  const summaryBilletPlan = usesConfiguredPeriodTarget ? selectedPeriodTarget!.billet_target : summary.total_billet_plan;
+  const summaryProductPlan = selectedPeriod === 'day'
+    ? dailyTargetSummary.product
+    : usesConfiguredPeriodTarget ? selectedPeriodTarget!.product_target : summary.total_product_plan;
+  const summaryBilletPlan = selectedPeriod === 'day'
+    ? dailyTargetSummary.billet
+    : usesConfiguredPeriodTarget ? selectedPeriodTarget!.billet_target : summary.total_billet_plan;
   const summaryProductRate = summaryProductPlan > 0
     ? Math.round((summary.total_product_actual / summaryProductPlan) * 1000) / 10
     : 0;
@@ -137,6 +163,58 @@ export default function DashboardPage() {
     : 0;
   const productShortfall = Math.max(0, summaryProductPlan - summary.total_product_actual);
   const billetShortfall = Math.max(0, summaryBilletPlan - summary.total_billet_actual);
+  const detailProductPlan = selectedPeriod === 'day' ? summaryProductPlan : summary.total_product_plan;
+  const detailBilletPlan = selectedPeriod === 'day' ? summaryBilletPlan : summary.total_billet_plan;
+  const detailProductRate = selectedPeriod === 'day' ? summaryProductRate : summary.product_achievement_rate;
+  const detailBilletRate = selectedPeriod === 'day' ? summaryBilletRate : summary.billet_achievement_rate;
+  const detailProductShortfall = Math.max(0, detailProductPlan - summary.total_product_actual);
+  const detailBilletShortfall = Math.max(0, detailBilletPlan - summary.total_billet_actual);
+  const productPlanLabel = selectedPeriod === 'day' ? '제품 목표' : '제품 계획';
+  const billetPlanLabel = selectedPeriod === 'day' ? '황지 목표' : '황지 계획';
+  const equipmentSummaries = React.useMemo(() => {
+    if (selectedPeriod !== 'day') return summary.by_equipment;
+
+    return EQUIPMENT_LIST.map(equipment => {
+      const base = summary.by_equipment.find(item => item.equipment === equipment);
+      const equipmentTargets = targets.filter(target => target.equipment === equipment);
+      const productPlan = equipmentTargets.reduce((sum, target) => sum + (target.product_target || 0), 0);
+      const billetPlan = equipmentTargets.reduce((sum, target) => sum + (target.billet_target || 0), 0);
+      const productActual = base?.product_actual || 0;
+      const billetActual = base?.billet_actual || 0;
+
+      return {
+        equipment,
+        product_plan: productPlan,
+        product_actual: productActual,
+        billet_plan: billetPlan,
+        billet_actual: billetActual,
+        product_achievement_rate: calcRate(productActual, productPlan),
+        billet_achievement_rate: calcRate(billetActual, billetPlan),
+      };
+    });
+  }, [selectedPeriod, summary.by_equipment, targets]);
+  const shiftSummaries = React.useMemo(() => {
+    if (selectedPeriod !== 'day') return summary.by_shift;
+
+    return SHIFT_LIST.map(shift => {
+      const base = summary.by_shift.find(item => item.shift === shift);
+      const shiftTargets = targets.filter(target => target.shift === shift);
+      const productPlan = shiftTargets.reduce((sum, target) => sum + (target.product_target || 0), 0);
+      const billetPlan = shiftTargets.reduce((sum, target) => sum + (target.billet_target || 0), 0);
+      const productActual = base?.product_actual || 0;
+      const billetActual = base?.billet_actual || 0;
+
+      return {
+        shift,
+        product_plan: productPlan,
+        product_actual: productActual,
+        billet_plan: billetPlan,
+        billet_actual: billetActual,
+        product_achievement_rate: calcRate(productActual, productPlan),
+        billet_achievement_rate: calcRate(billetActual, billetPlan),
+      };
+    });
+  }, [selectedPeriod, summary.by_shift, targets]);
   const summaryCards = [
     {
       label: '제품',
@@ -172,25 +250,25 @@ export default function DashboardPage() {
   };
 
   // 차트용 데이터
-  const equipmentChartData = summary.by_equipment.map(eq => ({
+  const equipmentChartData = equipmentSummaries.map(eq => ({
     name: eq.equipment,
-    '제품 계획': eq.product_plan,
+    [productPlanLabel]: eq.product_plan,
     '제품 실적': eq.product_actual,
-    '황지 계획': eq.billet_plan,
+    [billetPlanLabel]: eq.billet_plan,
     '황지 실적': eq.billet_actual,
   }));
 
-  const achievementChartData = summary.by_equipment.map(eq => ({
+  const achievementChartData = equipmentSummaries.map(eq => ({
     name: eq.equipment,
     '제품 달성율': eq.product_achievement_rate,
     '황지 달성율': eq.billet_achievement_rate,
   }));
 
-  const shiftChartData = summary.by_shift.map(s => ({
+  const shiftChartData = shiftSummaries.map(s => ({
     name: s.shift,
-    '제품 계획': s.product_plan,
+    [productPlanLabel]: s.product_plan,
     '제품 실적': s.product_actual,
-    '황지 계획': s.billet_plan,
+    [billetPlanLabel]: s.billet_plan,
     '황지 실적': s.billet_actual,
   }));
 
@@ -319,7 +397,7 @@ export default function DashboardPage() {
             <div className="card-header">
               <h3 className="font-semibold text-gray-800">전체 실적 요약</h3>
               <span className="text-sm text-gray-500">
-                {periodLabel} 기준{usesConfiguredPeriodTarget ? ' · 기간 목표 적용' : ''}
+                {periodLabel} 기준{selectedPeriod === 'day' ? ' · 일일 목표 적용' : usesConfiguredPeriodTarget ? ' · 기간 목표 적용' : ''}
               </span>
             </div>
             <div className="card-body">
@@ -337,7 +415,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
                       <div>
-                        <div className="text-xs text-gray-500">계획</div>
+                        <div className="text-xs text-gray-500">{selectedPeriod === 'day' ? '일일목표' : '계획'}</div>
                         <div className="font-semibold text-gray-800 tabular-nums">{formatNumber(item.plan)} KG</div>
                       </div>
                       <div>
@@ -405,7 +483,9 @@ export default function DashboardPage() {
             {/* 설비별 목표/실적 */}
             <div className="card">
               <div className="card-header">
-                <h3 className="font-semibold text-gray-800">설비별 전일 계획 대비 실적</h3>
+                <h3 className="font-semibold text-gray-800">
+                  {selectedPeriod === 'day' ? '설비별 일일 목표 대비 실적' : '설비별 전일 계획 대비 실적'}
+                </h3>
               </div>
               <div className="card-body">
                 <ResponsiveContainer width="100%" height={240}>
@@ -415,9 +495,9 @@ export default function DashboardPage() {
                     <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v: number) => `${v.toLocaleString()} KG`} />
                     <Legend />
-                    <Bar dataKey="제품 계획" fill="#93c5fd" />
+                    <Bar dataKey={productPlanLabel} fill="#93c5fd" />
                     <Bar dataKey="제품 실적" fill="#2563eb" />
-                    <Bar dataKey="황지 계획" fill="#fcd34d" />
+                    <Bar dataKey={billetPlanLabel} fill="#fcd34d" />
                     <Bar dataKey="황지 실적" fill="#d97706" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -477,9 +557,9 @@ export default function DashboardPage() {
                     <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v: number) => `${v.toLocaleString()} KG`} />
                     <Legend />
-                    <Bar dataKey="제품 계획" fill="#93c5fd" />
+                    <Bar dataKey={productPlanLabel} fill="#93c5fd" />
                     <Bar dataKey="제품 실적" fill="#2563eb" />
-                    <Bar dataKey="황지 계획" fill="#fcd34d" />
+                    <Bar dataKey={billetPlanLabel} fill="#fcd34d" />
                     <Bar dataKey="황지 실적" fill="#d97706" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -572,11 +652,11 @@ export default function DashboardPage() {
                     <th className="px-3 py-2.5" rowSpan={2}>상태</th>
                   </tr>
                   <tr>
-                    <th className="px-3 py-2">계획</th>
+                    <th className="px-3 py-2">{selectedPeriod === 'day' ? '목표' : '계획'}</th>
                     <th className="px-3 py-2">실적</th>
                     <th className="px-3 py-2">달성율</th>
                     <th className="px-3 py-2">미달량</th>
-                    <th className="px-3 py-2">계획</th>
+                    <th className="px-3 py-2">{selectedPeriod === 'day' ? '목표' : '계획'}</th>
                     <th className="px-3 py-2">실적</th>
                     <th className="px-3 py-2">달성율</th>
                     <th className="px-3 py-2">미달량</th>
@@ -584,10 +664,13 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {entries.map(entry => {
-                    const pRate = entry.product_plan > 0 ? (entry.product_actual / entry.product_plan * 100) : null;
-                    const bRate = entry.billet_plan > 0 ? (entry.billet_actual / entry.billet_plan * 100) : null;
-                    const pShortfall = Math.max(0, (entry.product_plan || 0) - (entry.product_actual || 0));
-                    const bShortfall = Math.max(0, (entry.billet_plan || 0) - (entry.billet_actual || 0));
+                    const target = targetByEquipmentShift.get(`${entry.equipment}-${entry.shift}`);
+                    const productPlan = selectedPeriod === 'day' ? target?.product ?? 0 : entry.product_plan;
+                    const billetPlan = selectedPeriod === 'day' ? target?.billet ?? 0 : entry.billet_plan;
+                    const pRate = productPlan > 0 ? (entry.product_actual / productPlan * 100) : null;
+                    const bRate = billetPlan > 0 ? (entry.billet_actual / billetPlan * 100) : null;
+                    const pShortfall = Math.max(0, (productPlan || 0) - (entry.product_actual || 0));
+                    const bShortfall = Math.max(0, (billetPlan || 0) - (entry.billet_actual || 0));
                     const hasShortfall = pShortfall > 0 || bShortfall > 0;
 
                     return (
@@ -599,7 +682,7 @@ export default function DashboardPage() {
                         )}
                         <td className="text-center-cell font-bold">{entry.equipment}</td>
                         <td className="text-center-cell">{entry.shift}</td>
-                        <td>{formatNumber(entry.product_plan)}</td>
+                        <td>{formatNumber(productPlan)}</td>
                         <td className={`font-medium ${pRate !== null && pRate < 90 ? 'text-red-600' : ''}`}>
                           {formatNumber(entry.product_actual)}
                         </td>
@@ -613,7 +696,7 @@ export default function DashboardPage() {
                         <td className={pShortfall > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>
                           {pShortfall > 0 ? `▼ ${formatNumber(pShortfall)}` : '-'}
                         </td>
-                        <td>{formatNumber(entry.billet_plan)}</td>
+                        <td>{formatNumber(billetPlan)}</td>
                         <td className={`font-medium ${bRate !== null && bRate < 90 ? 'text-red-600' : ''}`}>
                           {formatNumber(entry.billet_actual)}
                         </td>
@@ -640,30 +723,30 @@ export default function DashboardPage() {
                   {/* 합계 행 */}
                   <tr className="bg-blue-50 font-bold border-t-2 border-blue-200">
                     <td colSpan={selectedPeriod !== 'day' ? 3 : 2} className="text-center-cell">합 계</td>
-                    <td>{formatNumber(summary.total_product_plan)}</td>
+                    <td>{formatNumber(detailProductPlan)}</td>
                     <td>{formatNumber(summary.total_product_actual)}</td>
                     <td className={`text-center-cell ${
-                      summary.product_achievement_rate >= 100 ? 'text-green-600' :
-                        summary.product_achievement_rate >= 90 ? 'text-yellow-600' : 'text-red-600'
+                      detailProductRate >= 100 ? 'text-green-600' :
+                        detailProductRate >= 90 ? 'text-yellow-600' : 'text-red-600'
                     }`}>
-                      {summary.product_achievement_rate.toFixed(1)}%
+                      {detailProductRate.toFixed(1)}%
                     </td>
                     <td className="text-red-600">
-                      {entryProductShortfall > 0
-                        ? `▼ ${formatNumber(entryProductShortfall)}`
+                      {detailProductShortfall > 0
+                        ? `▼ ${formatNumber(detailProductShortfall)}`
                         : '-'}
                     </td>
-                    <td>{formatNumber(summary.total_billet_plan)}</td>
+                    <td>{formatNumber(detailBilletPlan)}</td>
                     <td>{formatNumber(summary.total_billet_actual)}</td>
                     <td className={`text-center-cell ${
-                      summary.billet_achievement_rate >= 100 ? 'text-green-600' :
-                        summary.billet_achievement_rate >= 90 ? 'text-yellow-600' : 'text-red-600'
+                      detailBilletRate >= 100 ? 'text-green-600' :
+                        detailBilletRate >= 90 ? 'text-yellow-600' : 'text-red-600'
                     }`}>
-                      {summary.billet_achievement_rate.toFixed(1)}%
+                      {detailBilletRate.toFixed(1)}%
                     </td>
                     <td className="text-red-600">
-                      {entryBilletShortfall > 0
-                        ? `▼ ${formatNumber(entryBilletShortfall)}`
+                      {detailBilletShortfall > 0
+                        ? `▼ ${formatNumber(detailBilletShortfall)}`
                         : '-'}
                     </td>
                     <td colSpan={2}></td>

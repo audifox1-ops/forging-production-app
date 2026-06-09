@@ -29,9 +29,19 @@ export default function UserManagementPage() {
     can_delete: false,
   });
 
+  const roleRank: Record<User['role'], number> = {
+    admin: 0,
+    manager: 1,
+    user: 2,
+    viewer: 3,
+  };
+  const getRoleLabel = (user: User) => {
+    if (user.role === 'admin') return '관리자';
+    if (user.role === 'manager') return '총괄';
+    return '담당자';
+  };
   const sortedUsers = [...users].sort((a, b) => {
-    if (a.role === 'admin' && b.role !== 'admin') return -1;
-    if (a.role !== 'admin' && b.role === 'admin') return 1;
+    if (roleRank[a.role] !== roleRank[b.role]) return roleRank[a.role] - roleRank[b.role];
     return a.name.localeCompare(b.name, 'ko-KR');
   });
 
@@ -98,7 +108,7 @@ export default function UserManagementPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">담당자 관리</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            관리자 1명과 담당자 권한을 관리합니다. 쓰기/편집 권한은 관리자 부여 후 활성화됩니다.
+            관리자, 총괄, 담당자 권한을 관리합니다. 쓰기/편집 권한은 관리자 부여 후 활성화됩니다.
           </p>
         </div>
         <button
@@ -284,8 +294,11 @@ export default function UserManagementPage() {
                       ) : user.employee_no}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`badge ${isProtectedAdmin ? 'badge-blue' : 'badge-gray'}`}>
-                        {isProtectedAdmin ? '관리자' : '담당자'}
+                      <span className={`badge ${
+                        isProtectedAdmin ? 'badge-blue' :
+                          user.role === 'manager' ? 'badge-normal' : 'badge-gray'
+                      }`}>
+                        {getRoleLabel(user)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">

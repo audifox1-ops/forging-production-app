@@ -22,6 +22,12 @@ export default function Layout() {
   const canWrite = isAdmin || Boolean(currentUser?.can_write);
   const canEdit = isAdmin || Boolean(currentUser?.can_edit);
   const canDelete = isAdmin || Boolean(currentUser?.can_delete);
+  const roleLabel = isAdmin ? '관리자' : currentUser?.role === 'manager' ? '총괄' : '사용자';
+  const permissionLabel = isAdmin
+    ? '관리자 전체 권한'
+    : currentUser?.role === 'manager'
+      ? '총괄 권한'
+      : canWrite || canEdit ? '권한 부여됨' : '읽기 전용';
 
   const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: '대시보드' },
@@ -72,7 +78,7 @@ export default function Layout() {
             <div className="overflow-hidden">
               <div className="text-sm font-medium truncate">{currentUser?.name || '계정 선택'}</div>
               <div className="text-xs text-blue-300 truncate">
-                {isAdmin ? '관리자 전체 권한' : canWrite || canEdit ? '권한 부여됨' : '읽기 전용'}
+                {permissionLabel}
               </div>
             </div>
           ) : (
@@ -112,7 +118,7 @@ export default function Layout() {
             </select>
             <div className="hidden md:flex items-center gap-1.5 text-xs">
               <span className={`px-2 py-0.5 rounded-full ${isAdmin ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                {isAdmin ? '관리자' : '사용자'}
+                {roleLabel}
               </span>
               {canWrite && <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">쓰기</span>}
               {canEdit && <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">편집</span>}
