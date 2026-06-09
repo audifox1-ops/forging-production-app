@@ -179,8 +179,10 @@ ALTER TABLE public.production_period_targets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.report_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.report_status_logs ENABLE ROW LEVEL SECURITY;
 
-GRANT USAGE ON SCHEMA public TO anon, authenticated;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+REVOKE ALL ON SCHEMA public FROM anon;
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon;
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
 GRANT INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
 
 -- 모든 인증된 사용자: 조회 가능

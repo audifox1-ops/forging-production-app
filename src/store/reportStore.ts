@@ -9,6 +9,7 @@ import {
 } from '../lib/mockData';
 import { format } from 'date-fns';
 import {
+  deleteSupabaseRows,
   getInitialStorageMode,
   getStorageErrorMessage,
   loadLocalReportState,
@@ -17,6 +18,7 @@ import {
   saveLocalReportState,
   saveSupabaseReportState,
   StorageMode,
+  upsertSupabaseRows,
 } from './persistence';
 import { getPlanDateFromActualDate } from '../utils/reportDates';
 
@@ -93,13 +95,13 @@ export const useReportStore = create<ReportStore>((set, get) => {
     };
   };
 
-  const persistCurrentState = (syncRemote = true) => {
+  const persistCurrentState = (syncRemote = true, remoteOperation?: () => Promise<void>) => {
     const snapshot = getPersistedState();
     saveLocalReportState(snapshot);
 
-    if (!syncRemote || get().storageMode !== 'supabase') return;
+    if (!syncRemote || !remoteOperation || get().storageMode !== 'supabase') return;
 
-    void saveSupabaseReportState(snapshot)
+    void remoteOperation()
       .then(() => {
         set({ lastSyncedAt: new Date().toISOString(), syncError: undefined });
       })
@@ -192,20 +194,33 @@ export const useReportStore = create<ReportStore>((set, get) => {
       reports: [...state.reports, newReport],
       entries: [...state.entries, ...newEntries],
     }));
-    persistCurrentState();
+    persistCurrentState(true, async () => {
+      await upsertSupabaseRows('production_reports', newReport);
+      await upsertSupabaseRows('production_entries', newEntries);
+    });
 
     return newReport;
   },
 
   updateReportStatus: (reportId, status) => {
+    let updatedReport: ProductionReport | undefined;
     set(state => ({
-      reports: state.reports.map(r =>
-        r.id === reportId
-          ? { ...r, status, updated_at: new Date().toISOString(), ...(status === 'closed' ? { closed_at: new Date().toISOString() } : {}) }
-          : r
-      ),
+      reports: state.reports.map(r => {
+        if (r.id !== reportId) return r;
+
+        updatedReport = {
+          ...r,
+          status,
+          updated_at: new Date().toISOString(),
+          ...(status === 'closed' ? { closed_at: new Date().toISOString() } : {}),
+        };
+        return updatedReport;
+      }),
     }));
-    persistCurrentState();
+    persistCurrentState(
+      true,
+      updatedReport ? () => upsertSupabaseRows('production_reports', updatedReport) : undefined
+    );
   },
 
   getEntriesByReport: (reportId) => {
@@ -227,19 +242,19 @@ export const useReportStore = create<ReportStore>((set, get) => {
 
     const now = new Date().toISOString();
 
+    let savedEntry: ProductionEntry;
     if (existing) {
+      savedEntry = {
+        ...existing,
+        ...entryData,
+        submit_status: existing.submit_status === 'submitted' || existing.submit_status === 'approved'
+          ? existing.submit_status
+          : 'saved',
+        updated_at: now,
+      };
       set(state => ({
         entries: state.entries.map(e =>
-          e.id === existing.id
-            ? {
-                ...e,
-                ...entryData,
-                submit_status: e.submit_status === 'submitted' || e.submit_status === 'approved'
-                  ? e.submit_status
-                  : 'saved',
-                updated_at: now,
-              }
-            : e
+          e.id === existing.id ? savedEntry : e
         ),
       }));
     } else {
@@ -256,64 +271,107 @@ export const useReportStore = create<ReportStore>((set, get) => {
         next_billet_plan: 0,
         ...entryData,
       };
+      savedEntry = newEntry;
       set(state => ({ entries: [...state.entries, newEntry] }));
     }
-    persistCurrentState();
+    persistCurrentState(true, () => upsertSupabaseRows('production_entries', savedEntry));
   },
 
   submitEntry: (entryId) => {
+    let updatedEntry: ProductionEntry | undefined;
     set(state => ({
-      entries: state.entries.map(e =>
-        e.id === entryId
-          ? { ...e, submit_status: 'submitted', submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-          : e
-      ),
+      entries: state.entries.map(e => {
+        if (e.id !== entryId) return e;
+
+        updatedEntry = {
+          ...e,
+          submit_status: 'submitted',
+          submitted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        return updatedEntry;
+      }),
     }));
-    persistCurrentState();
+    persistCurrentState(
+      true,
+      updatedEntry ? () => upsertSupabaseRows('production_entries', updatedEntry) : undefined
+    );
   },
 
   returnEntry: (entryId) => {
+    let updatedEntry: ProductionEntry | undefined;
     set(state => ({
-      entries: state.entries.map(e =>
-        e.id === entryId ? { ...e, submit_status: 'returned', updated_at: new Date().toISOString() } : e
-      ),
+      entries: state.entries.map(e => {
+        if (e.id !== entryId) return e;
+
+        updatedEntry = {
+          ...e,
+          submit_status: 'returned',
+          updated_at: new Date().toISOString(),
+        };
+        return updatedEntry;
+      }),
     }));
-    persistCurrentState();
+    persistCurrentState(
+      true,
+      updatedEntry ? () => upsertSupabaseRows('production_entries', updatedEntry) : undefined
+    );
   },
 
   approveEntry: (entryId) => {
+    let updatedEntry: ProductionEntry | undefined;
     set(state => ({
-      entries: state.entries.map(e =>
-        e.id === entryId ? { ...e, submit_status: 'approved', updated_at: new Date().toISOString() } : e
-      ),
+      entries: state.entries.map(e => {
+        if (e.id !== entryId) return e;
+
+        updatedEntry = {
+          ...e,
+          submit_status: 'approved',
+          updated_at: new Date().toISOString(),
+        };
+        return updatedEntry;
+      }),
     }));
-    persistCurrentState();
+    persistCurrentState(
+      true,
+      updatedEntry ? () => upsertSupabaseRows('production_entries', updatedEntry) : undefined
+    );
   },
 
   getTargets: () => get().targets,
 
   updateTarget: (equipment, shift, productTarget, billetTarget) => {
+    let updatedTarget: EquipmentTarget | undefined;
     set(state => ({
-      targets: state.targets.map(t =>
-        t.equipment === equipment && t.shift === shift
-          ? { ...t, product_target: productTarget, billet_target: billetTarget }
-          : t
-      ),
+      targets: state.targets.map(t => {
+        if (t.equipment !== equipment || t.shift !== shift) return t;
+
+        updatedTarget = { ...t, product_target: productTarget, billet_target: billetTarget };
+        return updatedTarget;
+      }),
     }));
-    persistCurrentState();
+    persistCurrentState(
+      true,
+      updatedTarget ? () => upsertSupabaseRows('equipment_targets', updatedTarget) : undefined
+    );
   },
 
   getPeriodTargets: () => get().periodTargets,
 
   updatePeriodTarget: (period, productTarget, billetTarget) => {
+    let updatedTarget: ProductionPeriodTarget | undefined;
     set(state => ({
-      periodTargets: state.periodTargets.map(target =>
-        target.period === period
-          ? { ...target, product_target: productTarget, billet_target: billetTarget }
-          : target
-      ),
+      periodTargets: state.periodTargets.map(target => {
+        if (target.period !== period) return target;
+
+        updatedTarget = { ...target, product_target: productTarget, billet_target: billetTarget };
+        return updatedTarget;
+      }),
     }));
-    persistCurrentState();
+    persistCurrentState(
+      true,
+      updatedTarget ? () => upsertSupabaseRows('production_period_targets', updatedTarget) : undefined
+    );
   },
 
   setCurrentUserId: (userId) => {
@@ -329,11 +387,12 @@ export const useReportStore = create<ReportStore>((set, get) => {
   getUsers: () => get().users,
 
   updateUser: (userId, updates) => {
+    let updatedUser: User | undefined;
     set(state => ({
       users: state.users.map((u): User => {
         if (u.id !== userId) return u;
         if (u.role === 'admin') {
-          return {
+          updatedUser = {
             ...u,
             ...updates,
             role: 'admin',
@@ -341,11 +400,16 @@ export const useReportStore = create<ReportStore>((set, get) => {
             can_edit: true,
             can_delete: true,
           };
+          return updatedUser;
         }
-        return { ...u, ...updates };
+        updatedUser = { ...u, ...updates };
+        return updatedUser;
       }),
     }));
-    persistCurrentState();
+    persistCurrentState(
+      true,
+      updatedUser ? () => upsertSupabaseRows('users', updatedUser) : undefined
+    );
   },
 
   addUser: (userData) => {
@@ -360,7 +424,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
       can_delete: can_delete ?? false,
     };
     set(state => ({ users: [...state.users, newUser] }));
-    persistCurrentState();
+    persistCurrentState(true, () => upsertSupabaseRows('users', newUser));
   },
 
   deleteUser: (userId) => {
@@ -371,7 +435,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
       users: state.users.filter(u => u.id !== userId),
       currentUserId: state.currentUserId === userId ? 'user-admin' : state.currentUserId,
     }));
-    persistCurrentState();
+    persistCurrentState(true, () => deleteSupabaseRows('users', userId));
   },
 
   hydrateStorage: async () => {

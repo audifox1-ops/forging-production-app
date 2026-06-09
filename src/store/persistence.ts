@@ -18,6 +18,20 @@ export interface PersistedReportState {
   currentUserId: string;
 }
 
+export type SupabaseTableName =
+  | 'users'
+  | 'production_reports'
+  | 'production_entries'
+  | 'equipment_targets'
+  | 'production_period_targets';
+
+type SupabaseRow =
+  | User
+  | ProductionReport
+  | ProductionEntry
+  | EquipmentTarget
+  | ProductionPeriodTarget;
+
 const STORAGE_KEY = 'forging-production-app:report-state:v1';
 
 function getLocalStorage() {
@@ -120,6 +134,34 @@ export async function saveSupabaseReportState(state: PersistedReportState) {
   const results = await Promise.all(operations);
   const firstError = results.find(result => result.error)?.error;
   if (firstError) throw firstError;
+}
+
+async function runSupabaseMutation(
+  operation: (client: NonNullable<typeof supabase>) => PromiseLike<{ error: unknown }>
+) {
+  if (isDemoMode || !supabase) return;
+
+  const client = assertSupabase();
+  await ensureSupabaseSession(client);
+
+  const { error } = await operation(client);
+  if (error) throw error;
+}
+
+export async function upsertSupabaseRows(table: SupabaseTableName, rows: SupabaseRow | SupabaseRow[] | undefined) {
+  if (!rows) return;
+
+  const records = Array.isArray(rows) ? rows : [rows];
+  if (records.length === 0) return;
+
+  await runSupabaseMutation(client => client.from(table).upsert(records, { onConflict: 'id' }));
+}
+
+export async function deleteSupabaseRows(table: SupabaseTableName, ids: string | string[]) {
+  const targetIds = Array.isArray(ids) ? ids : [ids];
+  if (targetIds.length === 0) return;
+
+  await runSupabaseMutation(client => client.from(table).delete().in('id', targetIds));
 }
 
 export function isSupabaseSchemaError(error: unknown) {

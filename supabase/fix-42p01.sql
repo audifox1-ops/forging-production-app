@@ -159,7 +159,8 @@ CREATE TRIGGER trigger_report_comments_updated_at
   BEFORE UPDATE ON public.report_comments
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
-GRANT USAGE ON SCHEMA public TO anon, authenticated;
+REVOKE ALL ON SCHEMA public FROM anon;
+GRANT USAGE ON SCHEMA public TO authenticated;
 
 DO $$
 DECLARE
@@ -176,7 +177,8 @@ BEGIN
   ]
   LOOP
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_name);
-    EXECUTE format('GRANT SELECT ON public.%I TO anon, authenticated', table_name);
+    EXECUTE format('REVOKE ALL ON public.%I FROM anon', table_name);
+    EXECUTE format('GRANT SELECT ON public.%I TO authenticated', table_name);
     EXECUTE format('GRANT INSERT, UPDATE, DELETE ON public.%I TO authenticated', table_name);
   END LOOP;
 END $$;

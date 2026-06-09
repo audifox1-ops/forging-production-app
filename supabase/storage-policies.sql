@@ -5,7 +5,8 @@
 -- SQLSTATE 42P01. It also refreshes the REST schema cache for PGRST205 write
 -- errors. If a required table is skipped, run supabase/schema.sql first.
 
-GRANT USAGE ON SCHEMA public TO anon, authenticated;
+REVOKE ALL ON SCHEMA public FROM anon;
+GRANT USAGE ON SCHEMA public TO authenticated;
 
 DO $$
 DECLARE
@@ -27,7 +28,8 @@ BEGIN
     END IF;
 
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_name);
-    EXECUTE format('GRANT SELECT ON public.%I TO anon, authenticated', table_name);
+    EXECUTE format('REVOKE ALL ON public.%I FROM anon', table_name);
+    EXECUTE format('GRANT SELECT ON public.%I TO authenticated', table_name);
     EXECUTE format('GRANT INSERT, UPDATE, DELETE ON public.%I TO authenticated', table_name);
   END LOOP;
 END $$;
