@@ -13,6 +13,20 @@ import { useReportStore } from './store/reportStore';
 function App() {
   React.useEffect(() => {
     void useReportStore.getState().hydrateStorage();
+
+    const syncFromServer = () => {
+      const store = useReportStore.getState();
+      if (store.storageMode === 'supabase') {
+        void store.hydrateStorage();
+      }
+    };
+    const intervalId = window.setInterval(syncFromServer, 30000);
+    window.addEventListener('focus', syncFromServer);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', syncFromServer);
+    };
   }, []);
 
   return (

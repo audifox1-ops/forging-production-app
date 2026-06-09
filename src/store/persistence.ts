@@ -56,7 +56,7 @@ export function saveLocalReportState(state: PersistedReportState) {
 
 function assertSupabase() {
   if (!supabase) {
-    throw new Error('Supabase 환경변수가 없어 로컬 저장 모드로 동작합니다.');
+    throw new Error('Supabase 환경변수가 없어 서버 공유 저장을 사용할 수 없습니다.');
   }
   return supabase;
 }
@@ -159,7 +159,7 @@ export function getStorageErrorMessage(error: unknown) {
   const code = getSupabaseErrorCode(error);
 
   if (isSupabaseSchemaError(error)) {
-    return `Supabase 테이블을 찾을 수 없습니다${code ? ` (${code})` : ''}. Supabase SQL Editor에서 supabase/fix-42p01.sql을 실행하세요. 현재는 로컬 저장으로 계속 동작합니다.`;
+    return `Supabase 테이블을 찾을 수 없습니다${code ? ` (${code})` : ''}. Supabase SQL Editor에서 supabase/fix-42p01.sql을 실행하세요. 서버 공유 저장이 복구될 때까지 다른 자리와 데이터가 공유되지 않을 수 있습니다.`;
   }
 
   if (message) return message;

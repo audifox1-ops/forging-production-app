@@ -136,7 +136,14 @@ export default function Layout() {
                     ? 'bg-green-50 text-green-700 border-green-200'
                     : 'bg-slate-50 text-slate-600 border-slate-200'
               }`}
-              title={syncError || (lastSyncedAt ? `마지막 동기화: ${format(new Date(lastSyncedAt), 'HH:mm')}` : '로컬 저장 사용')}
+              title={
+                syncError ||
+                (storageMode === 'supabase'
+                  ? lastSyncedAt
+                    ? `마지막 서버 동기화: ${format(new Date(lastSyncedAt), 'HH:mm')}`
+                    : 'Supabase 서버에 저장되어 부서원이 공유합니다'
+                  : '이 브라우저에만 저장되어 다른 자리와 공유되지 않습니다')
+              }
             >
               <span className={`w-2 h-2 rounded-full ${
                 isHydrating
@@ -147,7 +154,7 @@ export default function Layout() {
                       ? 'bg-green-500'
                       : 'bg-slate-400'
               }`} />
-              {isHydrating ? '동기화 중' : syncError ? '동기화 오류' : storageMode === 'supabase' ? 'Supabase 저장' : '로컬 저장'}
+              {isHydrating ? '동기화 중' : syncError ? '공유 저장 오류' : storageMode === 'supabase' ? '서버 공유 저장' : '로컬 전용'}
             </div>
             <select
               value={currentUserId}
