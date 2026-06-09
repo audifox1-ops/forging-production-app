@@ -406,6 +406,7 @@ function EntryInputCard({
   const productShortfall = Math.max(0, (formData.product_plan || 0) - (formData.product_actual || 0));
   const billetShortfall = Math.max(0, (formData.billet_plan || 0) - (formData.billet_actual || 0));
   const hasShortfall = productShortfall > 0 || billetShortfall > 0;
+  const todayPlanTotal = (formData.next_product_plan || 0) + (formData.next_billet_plan || 0);
   const shiftTarget = targets.find(target => target.equipment === entry.equipment && target.shift === entry.shift);
   const equipmentTargets = targets.filter(target => target.equipment === entry.equipment);
   const equipmentProductTarget = equipmentTargets.reduce((sum, target) => sum + (target.product_target || 0), 0);
@@ -496,7 +497,7 @@ function EntryInputCard({
 
       {/* 입력 테이블 */}
       <div className="card-body space-y-5">
-        {/* 실적 입력 섹션 */}
+        {/* 실적/계획 입력 섹션 */}
         <div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 text-sm">
             <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
@@ -514,17 +515,49 @@ function EntryInputCard({
               </div>
             </div>
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+              <div className="text-sm font-bold text-blue-900">전일 실적 입력</div>
+              <div className="text-xs text-blue-700 mt-0.5">
+                전일 계획과 전일 실적을 입력하고 달성율·미달량을 확인합니다.
+              </div>
+            </div>
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-bold text-green-900">금일 계획 입력</div>
+                  <div className="text-xs text-green-700 mt-0.5">
+                    금일 계획일에 생산할 계획 수량만 입력합니다.
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="text-xs text-green-700">합계</div>
+                  <div className="text-sm font-bold text-green-900 tabular-nums">
+                    {formatNumber(todayPlanTotal)} KG
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr>
-                  <th className="px-3 py-2 bg-gray-700 text-white text-center rounded-tl-lg">구분</th>
+                  <th colSpan={6} className="px-3 py-2 bg-blue-800 text-white text-left rounded-tl-lg">
+                    전일 실적 입력
+                  </th>
+                  <th className="px-3 py-2 bg-green-800 text-white text-left rounded-tr-lg border-l-4 border-green-300">
+                    금일 계획 입력
+                  </th>
+                </tr>
+                <tr>
+                  <th className="px-3 py-2 bg-gray-700 text-white text-center">구분</th>
                   <th className="px-3 py-2 bg-gray-700 text-white text-right">기준 목표 (KG)</th>
                   <th className="px-3 py-2 bg-gray-700 text-white text-right">전일 계획 (KG)</th>
                   <th className="px-3 py-2 bg-blue-600 text-white text-right">전일 실적 (KG)</th>
                   <th className="px-3 py-2 bg-gray-700 text-white text-center">달성율</th>
                   <th className="px-3 py-2 bg-gray-700 text-white text-right">미달량 (KG)</th>
-                  <th className="px-3 py-2 bg-green-700 text-white text-right rounded-tr-lg">금일 계획 (KG)</th>
+                  <th className="px-3 py-2 bg-green-700 text-white text-right border-l-4 border-green-300">금일 계획 (KG)</th>
                 </tr>
               </thead>
               <tbody>
@@ -559,7 +592,7 @@ function EntryInputCard({
                   <td className={`px-3 py-3 text-right font-medium ${productShortfall > 0 ? 'text-red-600' : 'text-gray-300'}`}>
                     {productShortfall > 0 ? `▼ ${formatNumber(productShortfall)}` : '-'}
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td className="px-3 py-3 text-right border-l-4 border-green-100 bg-green-50/40">
                     <input
                       type="number"
                       value={formData.next_product_plan}
@@ -601,7 +634,7 @@ function EntryInputCard({
                   <td className={`px-3 py-3 text-right font-medium ${billetShortfall > 0 ? 'text-red-600' : 'text-gray-300'}`}>
                     {billetShortfall > 0 ? `▼ ${formatNumber(billetShortfall)}` : '-'}
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td className="px-3 py-3 text-right border-l-4 border-green-100 bg-green-50/40">
                     <input
                       type="number"
                       value={formData.next_billet_plan}
