@@ -264,32 +264,6 @@ export default function TargetManagementPage() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-body">
-          <h3 className="font-semibold text-gray-700 mb-3">기준 목표값 (주간 기준)</h3>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            {EQUIPMENT_LIST.map(eq => {
-              const dayKey = `${eq}-주간`;
-              const val = localTargets[dayKey] || { product: 0, billet: 0 };
-              return (
-                <div key={eq} className="bg-gray-50 rounded-lg p-3">
-                  <div className="font-bold text-gray-700 mb-2">{eq} / 주간</div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">제품:</span>
-                      <span className="font-medium">{formatNumber(val.product)} KG</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">황지:</span>
-                      <span className="font-medium">{formatNumber(val.billet)} KG</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

@@ -389,15 +389,6 @@ export default function PrintReportPage() {
             </div>
           </div>
 
-          {/* 서명란 */}
-          <div className="flex justify-end gap-4 mt-6">
-            {['작 성', '검 토', '승 인'].map(label => (
-              <div key={label} className="text-center border border-gray-400 rounded w-24">
-                <div className="text-xs font-medium bg-gray-100 py-1 border-b border-gray-300">{label}</div>
-                <div className="h-10"></div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </>
