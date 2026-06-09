@@ -5,6 +5,7 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build-and-verify:
@@ -32,8 +33,9 @@ jobs:
         shell: bash
         run: |
           if [[ -z "$VITE_SUPABASE_URL" || -z "$VITE_SUPABASE_ANON_KEY" ]]; then
-            echo "Supabase verification skipped: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY secret is missing."
-            exit 0
+            echo "Supabase verification failed: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY secret is missing."
+            echo "Add both repository secrets, then rerun this workflow."
+            exit 1
           fi
 
           npm run verify:supabase
