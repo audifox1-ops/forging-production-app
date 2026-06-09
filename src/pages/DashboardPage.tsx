@@ -1,6 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  eachDayOfInterval,
+  eachMonthOfInterval,
   endOfMonth,
   endOfWeek,
   endOfYear,
@@ -23,7 +25,13 @@ import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import KPIStatusCard from '../components/KPIStatusCard';
 import SubmitStatusBadge from '../components/SubmitStatusBadge';
-import { EQUIPMENT_LIST, PeriodTargetType, SHIFT_LIST } from '../types';
+import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
+import type { PeriodTargetType, ProductionReport } from '../types';
+import {
+  getActualDateFromPlanDate,
+  getReportPlanDate,
+  getTodayPlanDate,
+} from '../utils/reportDates';
 
 type SummaryPeriod = 'day' | 'week' | 'month' | 'year';
 
@@ -106,18 +114,23 @@ export default function DashboardPage() {
   const canWrite = isAdmin || Boolean(currentUser?.can_write);
   const canEdit = isAdmin || Boolean(currentUser?.can_edit);
   const canCreateReport = canWrite || canEdit;
-  const [selectedDate, setSelectedDate] = React.useState(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedPlanDate, setSelectedPlanDate] = React.useState(getTodayPlanDate());
   const [selectedPeriod, setSelectedPeriod] = React.useState<SummaryPeriod>('day');
 
-  const report = reports.find(r => r.report_date === selectedDate);
+  const selectedActualDate = getActualDateFromPlanDate(selectedPlanDate);
+  const reportsByPlanDate = React.useMemo(
+    () => new Map(reports.map(report => [getReportPlanDate(report), report])),
+    [reports]
+  );
+  const report = reportsByPlanDate.get(selectedPlanDate);
   const periodRange = React.useMemo(
-    () => getPeriodRange(selectedDate, selectedPeriod),
-    [selectedDate, selectedPeriod]
+    () => getPeriodRange(selectedPlanDate, selectedPeriod),
+    [selectedPlanDate, selectedPeriod]
   );
   const periodReports = React.useMemo(
     () => reports
-      .filter(r => isWithinInterval(parseISO(r.report_date), periodRange))
-      .sort((a, b) => new Date(a.report_date).getTime() - new Date(b.report_date).getTime()),
+      .filter(r => isWithinInterval(parseISO(getReportPlanDate(r)), periodRange))
+      .sort((a, b) => new Date(getReportPlanDate(a)).getTime() - new Date(getReportPlanDate(b)).getTime()),
     [reports, periodRange]
   );
   const reportDateById = React.useMemo(
@@ -391,15 +404,15 @@ export default function DashboardPage() {
 
   const handleCreateReport = () => {
     if (!canCreateReport) return;
-    createReport(selectedDate);
+    createReport(selectedActualDate);
   };
 
   const handleGoInput = () => {
-    navigate(`/reports/${selectedDate}/input`);
+    navigate(`/reports/${selectedActualDate}/input`);
   };
 
   const handlePrint = () => {
-    navigate(`/reports/${selectedDate}/print`);
+    navigate(`/reports/${selectedActualDate}/print`);
   };
 
   // 차트용 데이터
@@ -424,6 +437,25 @@ export default function DashboardPage() {
     [billetPlanLabel]: s.billet_plan,
     '황지 실적': s.billet_actual,
   }));
+  const calendarDays = React.useMemo(() => {
+    if (selectedPeriod === 'year') return [];
+    const visibleRange = selectedPeriod === 'month'
+      ? {
+          start: startOfWeek(periodRange.start, { weekStartsOn: 1 }),
+          end: endOfWeek(periodRange.end, { weekStartsOn: 1 }),
+        }
+      : periodRange;
+
+    return eachDayOfInterval(visibleRange);
+  }, [periodRange, selectedPeriod]);
+  const calendarMonths = React.useMemo(() => {
+    if (selectedPeriod !== 'year') return [];
+    return eachMonthOfInterval(periodRange);
+  }, [periodRange, selectedPeriod]);
+  const getReportSummary = (targetReport: ProductionReport) =>
+    calcDashboardSummary(getEntriesByReport(targetReport.id));
+  const getReportsInPlanRange = (range: { start: Date; end: Date }) =>
+    reports.filter(targetReport => isWithinInterval(parseISO(getReportPlanDate(targetReport)), range));
 
   return (
     <div className="space-y-6 fade-in">
@@ -432,7 +464,8 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">생산 대시보드</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {periodLabel} · {periodRangeLabel} 기준
+            {periodLabel} · 금일 계획일 {periodRangeLabel} 기준
+            {selectedPeriod === 'day' && ` · 전일 실적일 ${format(new Date(selectedActualDate), 'yyyy.MM.dd')}`}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -454,8 +487,8 @@ export default function DashboardPage() {
           </div>
           <input
             type="date"
-            value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
+            value={selectedPlanDate}
+            onChange={e => setSelectedPlanDate(e.target.value)}
             className="form-input w-auto"
           />
           {selectedPeriod !== 'day' && (
@@ -485,6 +518,139 @@ export default function DashboardPage() {
               </button>
             </>
           ) : null}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <h3 className="font-semibold text-gray-800">실적 캘린더</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              금일 계획일 기준 · 전일 실적일 표시
+            </p>
+          </div>
+          <span className="text-xs text-gray-500">{periodLabel} 보기</span>
+        </div>
+        <div className="card-body">
+          {selectedPeriod === 'year' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {calendarMonths.map(month => {
+                const monthRange = { start: startOfMonth(month), end: endOfMonth(month) };
+                const monthReports = getReportsInPlanRange(monthRange);
+                const monthEntries = monthReports.flatMap(monthReport => getEntriesByReport(monthReport.id));
+                const monthSummary = calcDashboardSummary(monthEntries);
+                const monthPlanDate = format(month, 'yyyy-MM-dd');
+                const isSelectedMonth = format(month, 'yyyy-MM') === format(parseISO(selectedPlanDate), 'yyyy-MM');
+
+                return (
+                  <button
+                    key={monthPlanDate}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPlanDate(monthPlanDate);
+                      setSelectedPeriod('month');
+                    }}
+                    className={`rounded-lg border p-4 text-left transition-colors ${
+                      isSelectedMonth
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/40'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-bold text-gray-800">{format(month, 'M월')}</div>
+                      <div className="text-xs text-gray-500">{monthReports.length}건</div>
+                    </div>
+                    <div className={`mt-3 text-2xl font-bold ${
+                      monthSummary.total_plan === 0
+                        ? 'text-gray-400'
+                        : monthSummary.total_achievement_rate >= 100
+                          ? 'text-green-700'
+                          : monthSummary.total_achievement_rate >= 90
+                            ? 'text-yellow-700'
+                            : 'text-red-700'
+                    }`}>
+                      {monthSummary.total_plan > 0 ? `${monthSummary.total_achievement_rate.toFixed(1)}%` : '-'}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500">
+                      실적 {formatNumber(monthSummary.total_actual)} KG
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <>
+              {selectedPeriod !== 'day' && (
+                <div className="grid grid-cols-7 gap-2 mb-2 text-center text-xs font-medium text-gray-500">
+                  {['월', '화', '수', '목', '금', '토', '일'].map(dayLabel => (
+                    <div key={dayLabel}>{dayLabel}</div>
+                  ))}
+                </div>
+              )}
+              <div className={`grid gap-2 ${selectedPeriod === 'day' ? 'grid-cols-1' : 'grid-cols-7'}`}>
+                {calendarDays.map(day => {
+                  const planDateKey = format(day, 'yyyy-MM-dd');
+                  const actualDateKey = getActualDateFromPlanDate(planDateKey);
+                  const dayReport = reportsByPlanDate.get(planDateKey);
+                  const daySummary = dayReport ? getReportSummary(dayReport) : undefined;
+                  const isSelected = planDateKey === selectedPlanDate;
+                  const isCurrentPeriodDay = isWithinInterval(day, periodRange);
+
+                  return (
+                    <button
+                      key={planDateKey}
+                      type="button"
+                      onClick={() => setSelectedPlanDate(planDateKey)}
+                      className={`min-h-[108px] rounded-lg border p-3 text-left transition-colors ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50'
+                          : dayReport
+                            ? 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/40'
+                            : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'
+                      } ${isCurrentPeriodDay ? '' : 'opacity-50'}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-bold text-gray-800">{format(day, 'M.d')}</div>
+                          <div className="text-[11px] text-gray-500">계획일</div>
+                        </div>
+                        <div className={`text-lg font-bold ${
+                          !daySummary || daySummary.total_plan === 0
+                            ? 'text-gray-300'
+                            : daySummary.total_achievement_rate >= 100
+                              ? 'text-green-700'
+                              : daySummary.total_achievement_rate >= 90
+                                ? 'text-yellow-700'
+                                : 'text-red-700'
+                        }`}>
+                          {daySummary && daySummary.total_plan > 0 ? `${daySummary.total_achievement_rate.toFixed(0)}%` : '-'}
+                        </div>
+                      </div>
+                      <div className="mt-3 text-xs text-gray-500">
+                        전일 실적 {format(new Date(actualDateKey), 'M.d')}
+                      </div>
+                      {daySummary ? (
+                        <div className="mt-2 space-y-1 text-xs">
+                          <div className="flex justify-between gap-2">
+                            <span className="text-gray-500">실적</span>
+                            <span className="font-medium text-gray-700">{formatNumber(daySummary.total_actual)} KG</span>
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <span className="text-gray-500">제출</span>
+                            <span className="font-medium text-gray-700">
+                              {daySummary.submit_status_count.submitted}/{daySummary.submit_status_count.total}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-xs text-gray-400">보고서 없음</div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -525,6 +691,8 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <div className="ml-auto text-sm text-blue-600">
+                  전일 실적 {format(new Date(selectedActualDate), 'yyyy.MM.dd')} ·
+                  금일 계획 {format(new Date(selectedPlanDate), 'yyyy.MM.dd')} ·
                   제출: {summary.submit_status_count.submitted}/{summary.submit_status_count.total}명 ·
                   미입력: {summary.submit_status_count.not_started}명
                 </div>
@@ -774,7 +942,7 @@ export default function DashboardPage() {
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
                       {selectedPeriod !== 'day' && (
-                        <th className="px-4 py-2.5 text-left text-gray-600 font-medium">보고일자</th>
+                        <th className="px-4 py-2.5 text-left text-gray-600 font-medium">전일 실적일</th>
                       )}
                       <th className="px-4 py-2.5 text-left text-gray-600 font-medium">담당자</th>
                       <th className="px-4 py-2.5 text-center text-gray-600 font-medium">설비</th>
@@ -787,7 +955,7 @@ export default function DashboardPage() {
                       <tr key={entry.id} className="hover:bg-gray-50">
                         {selectedPeriod !== 'day' && (
                           <td className="px-4 py-2.5 text-gray-500">
-                            {format(parseISO(reportDateById.get(entry.report_id) ?? selectedDate), 'MM.dd')}
+                            {format(parseISO(reportDateById.get(entry.report_id) ?? selectedActualDate), 'MM.dd')}
                           </td>
                         )}
                         <td className="px-4 py-2.5 text-gray-700">{entry.user_name || '-'}</td>
@@ -837,7 +1005,7 @@ export default function DashboardPage() {
                 <thead>
                   <tr>
                     {selectedPeriod !== 'day' && (
-                      <th className="px-3 py-2.5" rowSpan={2}>보고일자</th>
+                      <th className="px-3 py-2.5" rowSpan={2}>전일 실적일</th>
                     )}
                     <th className="px-3 py-2.5" rowSpan={2}>설비</th>
                     <th className="px-3 py-2.5" rowSpan={2}>근무조</th>
@@ -867,7 +1035,7 @@ export default function DashboardPage() {
                         >
                           {selectedPeriod !== 'day' && (
                             <td className="text-center-cell">
-                              {format(parseISO(reportDateById.get(row.entry.report_id) ?? selectedDate), 'MM.dd')}
+                              {format(parseISO(reportDateById.get(row.entry.report_id) ?? selectedActualDate), 'MM.dd')}
                             </td>
                           )}
                           <td className="text-center-cell font-bold">{row.entry.equipment}</td>
@@ -1042,7 +1210,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 mb-3">
                         <AlertTriangle size={16} className="text-orange-500" />
                         <span className="font-semibold text-orange-800">
-                          {selectedPeriod !== 'day' && `${format(parseISO(reportDateById.get(entry.report_id) ?? selectedDate), 'MM.dd')} · `}
+                          {selectedPeriod !== 'day' && `${format(parseISO(reportDateById.get(entry.report_id) ?? selectedActualDate), 'MM.dd')} · `}
                           {entry.equipment} / {entry.shift} — {entry.reason_category}
                         </span>
                       </div>

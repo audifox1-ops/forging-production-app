@@ -7,6 +7,11 @@ import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import { generateOverallSummary, generateReasonSentence } from '../utils/reportTextGenerator';
 import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
+import {
+  getActualDateFromPlanDate,
+  getPlanDateFromActualDate,
+  getTodayPlanDate,
+} from '../utils/reportDates';
 
 function calcNullableRate(actual: number, plan: number) {
   return plan > 0 ? (actual / plan) * 100 : null;
@@ -24,8 +29,10 @@ export default function PrintReportPage() {
   const navigate = useNavigate();
   const { reports, getEntriesByReport } = useReportStore();
 
-  const today = reportDate || format(new Date(), 'yyyy-MM-dd');
-  const report = reports.find(r => r.report_date === today);
+  const actualDate = reportDate || getActualDateFromPlanDate(getTodayPlanDate());
+  const planDate = getPlanDateFromActualDate(actualDate);
+  const report = reports.find(r => r.report_date === actualDate);
+  const reportPlanDate = report?.next_plan_date || planDate;
   const entries = report ? getEntriesByReport(report.id) : [];
   const summary = calcDashboardSummary(entries);
   const equipmentGroups = EQUIPMENT_LIST.map(equipment => {
@@ -76,7 +83,8 @@ export default function PrintReportPage() {
     );
   }
 
-  const formattedDate = format(new Date(today), 'yyyy년 MM월 dd일 (eee)', { locale: ko });
+  const formattedActualDate = format(new Date(actualDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko });
+  const formattedPlanDate = format(new Date(reportPlanDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko });
   const overallSummary = generateOverallSummary(summary);
 
   return (
@@ -88,7 +96,7 @@ export default function PrintReportPage() {
           뒤로가기
         </button>
         <div className="text-sm font-medium text-gray-700">
-          인쇄 미리보기 — {formattedDate}
+          인쇄 미리보기 — 전일 실적 {formattedActualDate} / 금일 계획 {formattedPlanDate}
         </div>
         <div className="ml-auto flex gap-2">
           <button
@@ -108,8 +116,8 @@ export default function PrintReportPage() {
           <div className="print-header text-center mb-6 pb-4 border-b-2 border-blue-800">
             <h1 className="text-2xl font-bold text-blue-900">단조 생산 일일 보고서</h1>
             <div className="flex justify-between items-center mt-2 text-sm text-gray-600">
-              <span>전일 실적일: {formattedDate}</span>
-              <span>금일 계획일: {format(new Date(report.next_plan_date), 'yyyy년 MM월 dd일', { locale: ko })}</span>
+              <span>전일 실적일: {formattedActualDate}</span>
+              <span>금일 계획일: {formattedPlanDate}</span>
               <span>출력일시: {format(new Date(), 'yyyy.MM.dd HH:mm')}</span>
             </div>
           </div>
@@ -325,7 +333,7 @@ export default function PrintReportPage() {
           {/* 4. 금일 생산계획 */}
           <div className="mb-5">
             <div className="print-section-title bg-blue-100 px-3 py-2 font-bold text-blue-900 text-sm mb-2 border-l-4 border-blue-700">
-              4. 금일 생산계획 보고 (계획일: {format(new Date(report.next_plan_date), 'yyyy년 MM월 dd일', { locale: ko })})
+              4. 금일 생산계획 보고 (계획일: {formattedPlanDate})
             </div>
             <table className="print-table w-full text-xs">
               <thead>

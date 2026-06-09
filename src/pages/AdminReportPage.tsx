@@ -7,6 +7,11 @@ import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import { generateReportText } from '../utils/reportTextGenerator';
 import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
+import {
+  getActualDateFromPlanDate,
+  getPlanDateFromActualDate,
+  getTodayPlanDate,
+} from '../utils/reportDates';
 
 function calcNullableRate(actual: number, plan: number) {
   return plan > 0 ? (actual / plan) * 100 : null;
@@ -24,11 +29,13 @@ export default function AdminReportPage() {
   const navigate = useNavigate();
   const { reports, getEntriesByReport } = useReportStore();
 
-  const today = reportDate || format(new Date(), 'yyyy-MM-dd');
-  const report = reports.find(r => r.report_date === today);
+  const actualDate = reportDate || getActualDateFromPlanDate(getTodayPlanDate());
+  const planDate = getPlanDateFromActualDate(actualDate);
+  const report = reports.find(r => r.report_date === actualDate);
+  const reportPlanDate = report?.next_plan_date || planDate;
   const entries = report ? getEntriesByReport(report.id) : [];
   const summary = calcDashboardSummary(entries);
-  const reportText = report ? generateReportText(summary, entries, today) : '';
+  const reportText = report ? generateReportText(summary, entries, actualDate) : '';
   const productShortfall = Math.max(0, summary.total_product_plan - summary.total_product_actual);
   const billetShortfall = Math.max(0, summary.total_billet_plan - summary.total_billet_actual);
   const equipmentGroups = EQUIPMENT_LIST.map(equipment => {
@@ -88,7 +95,7 @@ export default function AdminReportPage() {
     },
   ];
 
-  const handlePrint = () => navigate(`/reports/${today}/print`);
+  const handlePrint = () => navigate(`/reports/${actualDate}/print`);
 
   if (!report) {
     return (
@@ -108,7 +115,8 @@ export default function AdminReportPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">보고서 미리보기</h1>
             <p className="text-sm text-gray-500">
-              {format(new Date(today), 'yyyy년 MM월 dd일 (eee)', { locale: ko })}
+              전일 실적일 {format(new Date(actualDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko })} ·
+              금일 계획일 {format(new Date(reportPlanDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko })}
             </p>
           </div>
         </div>

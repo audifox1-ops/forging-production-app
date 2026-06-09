@@ -7,6 +7,11 @@ import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary } from '../utils/calculations';
 import { STATUS_LABELS } from '../types';
 import SubmitStatusBadge from '../components/SubmitStatusBadge';
+import {
+  getActualDateFromPlanDate,
+  getReportPlanDate,
+  getTodayPlanDate,
+} from '../utils/reportDates';
 
 export default function ReportHistoryPage() {
   const navigate = useNavigate();
@@ -18,19 +23,18 @@ export default function ReportHistoryPage() {
   const canCreateReport = canWrite || canEdit;
 
   const sortedReports = [...reports].sort(
-    (a, b) => new Date(b.report_date).getTime() - new Date(a.report_date).getTime()
+    (a, b) => new Date(getReportPlanDate(b)).getTime() - new Date(getReportPlanDate(a)).getTime()
   );
 
   const handleCreate = () => {
     if (!canCreateReport) return;
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const report = createReport(today);
+    const report = createReport(getActualDateFromPlanDate(getTodayPlanDate()));
     navigate(`/reports/${report.report_date}/input`);
   };
 
   const handleCopy = (reportDate: string) => {
     if (!canCreateReport) return;
-    const newDate = format(new Date(), 'yyyy-MM-dd');
+    const newDate = getActualDateFromPlanDate(getTodayPlanDate());
     const report = createReport(newDate, { sourceReportDate: reportDate });
     navigate(`/reports/${report.report_date}/input`);
   };
@@ -55,7 +59,7 @@ export default function ReportHistoryPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-gray-600 font-semibold">보고일자</th>
+                <th className="px-4 py-3 text-left text-gray-600 font-semibold">전일 실적일</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-semibold">금일 계획일</th>
                 <th className="px-4 py-3 text-center text-gray-600 font-semibold">상태</th>
                 <th className="px-4 py-3 text-right text-gray-600 font-semibold">전체 계획</th>
@@ -80,7 +84,7 @@ export default function ReportHistoryPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-500">
-                      {format(new Date(report.next_plan_date), 'yyyy.MM.dd', { locale: ko })}
+                      {format(new Date(getReportPlanDate(report)), 'yyyy.MM.dd (eee)', { locale: ko })}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`badge ${

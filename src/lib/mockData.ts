@@ -1,8 +1,9 @@
 import { User, ProductionReport, ProductionEntry, EquipmentTarget, ProductionPeriodTarget } from '../types';
 import { format } from 'date-fns';
 
-const today = format(new Date(), 'yyyy-MM-dd');
-const yesterday = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
+const planDate = format(new Date(), 'yyyy-MM-dd');
+const actualDate = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
+const previousActualDate = format(new Date(Date.now() - 86400000 * 2), 'yyyy-MM-dd');
 
 // 데모 유저 목록
 export const DEMO_USERS: User[] = [
@@ -90,23 +91,23 @@ export const DEMO_USERS: User[] = [
 export const DEMO_REPORTS: ProductionReport[] = [
   {
     id: 'report-today',
-    report_date: today,
-    next_plan_date: format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'),
+    report_date: actualDate,
+    next_plan_date: planDate,
     status: 'collecting',
     created_by: 'user-admin',
-    created_at: today + 'T08:00:00Z',
-    updated_at: today + 'T08:00:00Z',
+    created_at: planDate + 'T08:00:00Z',
+    updated_at: planDate + 'T08:00:00Z',
   },
   {
     id: 'report-yesterday',
-    report_date: yesterday,
-    next_plan_date: today,
+    report_date: previousActualDate,
+    next_plan_date: actualDate,
     status: 'closed',
     created_by: 'user-admin',
     closed_by: 'user-admin',
-    closed_at: yesterday + 'T18:00:00Z',
-    created_at: yesterday + 'T08:00:00Z',
-    updated_at: yesterday + 'T18:00:00Z',
+    closed_at: actualDate + 'T18:00:00Z',
+    created_at: actualDate + 'T08:00:00Z',
+    updated_at: actualDate + 'T18:00:00Z',
   },
 ];
 
@@ -132,9 +133,9 @@ export const DEMO_ENTRIES: ProductionEntry[] = [
     recovery_plan: '금일 주간에 P15 추가 4,000KG 생산 계획. 잔업 1시간 적용.',
     support_request: '보전팀 예방 점검 주기 단축 요청',
     submit_status: 'submitted',
-    submitted_at: today + 'T17:30:00Z',
-    created_at: today + 'T09:00:00Z',
-    updated_at: today + 'T17:30:00Z',
+    submitted_at: planDate + 'T17:30:00Z',
+    created_at: planDate + 'T09:00:00Z',
+    updated_at: planDate + 'T17:30:00Z',
   },
   // 오늘 - P5 주간 (임시저장)
   {
@@ -156,8 +157,8 @@ export const DEMO_ENTRIES: ProductionEntry[] = [
     recovery_plan: '',
     support_request: '',
     submit_status: 'saved',
-    created_at: today + 'T09:00:00Z',
-    updated_at: today + 'T14:00:00Z',
+    created_at: planDate + 'T09:00:00Z',
+    updated_at: planDate + 'T14:00:00Z',
   },
   // 오늘 - R/M 주간 (미입력)
   {
@@ -174,8 +175,8 @@ export const DEMO_ENTRIES: ProductionEntry[] = [
     next_product_plan: 100000,
     next_billet_plan: 0,
     submit_status: 'not_started',
-    created_at: today + 'T09:00:00Z',
-    updated_at: today + 'T09:00:00Z',
+    created_at: planDate + 'T09:00:00Z',
+    updated_at: planDate + 'T09:00:00Z',
   },
   // 오늘 - P15 야간
   {
@@ -192,8 +193,8 @@ export const DEMO_ENTRIES: ProductionEntry[] = [
     next_product_plan: 50000,
     next_billet_plan: 100000,
     submit_status: 'not_started',
-    created_at: today + 'T09:00:00Z',
-    updated_at: today + 'T09:00:00Z',
+    created_at: planDate + 'T09:00:00Z',
+    updated_at: planDate + 'T09:00:00Z',
   },
   // 오늘 - P5 야간
   {
@@ -210,8 +211,8 @@ export const DEMO_ENTRIES: ProductionEntry[] = [
     next_product_plan: 35000,
     next_billet_plan: 25000,
     submit_status: 'not_started',
-    created_at: today + 'T09:00:00Z',
-    updated_at: today + 'T09:00:00Z',
+    created_at: planDate + 'T09:00:00Z',
+    updated_at: planDate + 'T09:00:00Z',
   },
   // 오늘 - R/M 야간
   {
@@ -228,8 +229,8 @@ export const DEMO_ENTRIES: ProductionEntry[] = [
     next_product_plan: 100000,
     next_billet_plan: 0,
     submit_status: 'not_started',
-    created_at: today + 'T09:00:00Z',
-    updated_at: today + 'T09:00:00Z',
+    created_at: planDate + 'T09:00:00Z',
+    updated_at: planDate + 'T09:00:00Z',
   },
 ];
 

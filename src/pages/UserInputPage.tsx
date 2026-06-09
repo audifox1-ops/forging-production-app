@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Save, Send, AlertCircle, CheckCircle, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { Save, Send, AlertCircle, CheckCircle, Info, ChevronDown, ChevronUp, CalendarDays } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { Equipment, EquipmentTarget, EQUIPMENT_LIST, REASON_CATEGORIES, ReasonCategory, SHIFT_LIST } from '../types';
 import { formatNumber } from '../utils/calculations';
+import {
+  getActualDateFromPlanDate,
+  getPlanDateFromActualDate,
+  getTodayPlanDate,
+} from '../utils/reportDates';
 
 export default function UserInputPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
+  const navigate = useNavigate();
   const { targets, getReport, getEntriesByReport, saveEntry, submitEntry, createReport, getCurrentUser } = useReportStore();
   const currentUser = getCurrentUser();
   const isAdmin = currentUser?.role === 'admin';
@@ -17,17 +23,18 @@ export default function UserInputPage() {
   const canCreateReport = canWrite || canEdit;
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment>('P15');
 
-  const today = reportDate || format(new Date(), 'yyyy-MM-dd');
-  let report = getReport(today);
+  const actualDate = reportDate || getActualDateFromPlanDate(getTodayPlanDate());
+  const planDate = getPlanDateFromActualDate(actualDate);
+  let report = getReport(actualDate);
 
   // 보고서가 없으면 자동 생성
   useEffect(() => {
     if (!report && canCreateReport) {
-      createReport(today);
+      createReport(actualDate);
     }
-  }, [today, canCreateReport]);
+  }, [actualDate, canCreateReport]);
 
-  report = getReport(today);
+  report = getReport(actualDate);
   const entries = report ? getEntriesByReport(report.id) : [];
   const isClosed = report?.status === 'closed';
   const equipmentTabs = EQUIPMENT_LIST.map(equipment => {
@@ -58,6 +65,11 @@ export default function UserInputPage() {
     }
   }, [entries, selectedEquipment]);
 
+  const handlePlanDateChange = (value: string) => {
+    if (!value) return;
+    navigate(`/reports/${getActualDateFromPlanDate(value)}/input`);
+  };
+
   if (!report) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -77,13 +89,29 @@ export default function UserInputPage() {
             <div>
               <h1 className="text-xl font-bold text-gray-900">생산실적 입력</h1>
               <p className="text-sm text-gray-500 mt-0.5">
-                보고일: <span className="font-medium text-gray-700">
-                  {format(new Date(today), 'yyyy년 MM월 dd일 (eee)', { locale: ko })}
+                전일 실적일: <span className="font-medium text-gray-700">
+                  {format(new Date(actualDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko })}
+                </span>
+                <span className="mx-1 text-gray-300">·</span>
+                금일 계획일: <span className="font-medium text-gray-700">
+                  {format(new Date(planDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko })}
                 </span>
               </p>
               <p className="text-sm text-gray-500">
                 현재 계정: {currentUser?.name || '-'} · {isAdmin ? '관리자 전체 권한' : canWrite || canEdit ? '권한 부여됨' : '읽기 전용'}
               </p>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <CalendarDays size={16} className="text-gray-500" />
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">금일 계획일 선택</label>
+                <input
+                  type="date"
+                  value={planDate}
+                  onChange={event => handlePlanDateChange(event.target.value)}
+                  className="form-input py-1.5 w-auto bg-white"
+                />
+              </div>
             </div>
             {isClosed && (
               <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm">

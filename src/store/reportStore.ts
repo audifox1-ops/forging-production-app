@@ -7,7 +7,7 @@ import {
   DEMO_PERIOD_TARGETS,
   DEMO_USERS,
 } from '../lib/mockData';
-import { addDays, format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import {
   getInitialStorageMode,
   getStorageErrorMessage,
@@ -18,6 +18,7 @@ import {
   saveSupabaseReportState,
   StorageMode,
 } from './persistence';
+import { getPlanDateFromActualDate } from '../utils/reportDates';
 
 interface CreateReportOptions {
   sourceReportDate?: string;
@@ -148,7 +149,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
     const newReport: ProductionReport = {
       id: genId(),
       report_date: reportDate,
-      next_plan_date: format(addDays(parseISO(reportDate), 1), 'yyyy-MM-dd'),
+      next_plan_date: getPlanDateFromActualDate(reportDate),
       status: 'collecting',
       created_by: get().currentUserId,
       created_at: new Date().toISOString(),
