@@ -6,6 +6,18 @@ import { ArrowLeft, Printer } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import { generateReportText } from '../utils/reportTextGenerator';
+import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
+
+function calcNullableRate(actual: number, plan: number) {
+  return plan > 0 ? (actual / plan) * 100 : null;
+}
+
+function getRateClass(rate: number | null) {
+  if (rate === null) return 'text-gray-400';
+  if (rate >= 100) return 'text-green-600';
+  if (rate >= 90) return 'text-yellow-600';
+  return 'text-red-600';
+}
 
 export default function AdminReportPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
@@ -19,6 +31,42 @@ export default function AdminReportPage() {
   const reportText = report ? generateReportText(summary, entries, today) : '';
   const productShortfall = Math.max(0, summary.total_product_plan - summary.total_product_actual);
   const billetShortfall = Math.max(0, summary.total_billet_plan - summary.total_billet_actual);
+  const equipmentGroups = EQUIPMENT_LIST.map(equipment => {
+    const rows = entries
+      .filter(entry => entry.equipment === equipment)
+      .sort((a, b) => SHIFT_LIST.indexOf(a.shift) - SHIFT_LIST.indexOf(b.shift))
+      .map(entry => {
+        const productShortfall = Math.max(0, (entry.product_plan || 0) - (entry.product_actual || 0));
+        const billetShortfall = Math.max(0, (entry.billet_plan || 0) - (entry.billet_actual || 0));
+
+        return {
+          entry,
+          productRate: calcNullableRate(entry.product_actual, entry.product_plan),
+          billetRate: calcNullableRate(entry.billet_actual, entry.billet_plan),
+          productShortfall,
+          billetShortfall,
+        };
+      });
+    const productPlan = rows.reduce((sum, row) => sum + (row.entry.product_plan || 0), 0);
+    const productActual = rows.reduce((sum, row) => sum + (row.entry.product_actual || 0), 0);
+    const billetPlan = rows.reduce((sum, row) => sum + (row.entry.billet_plan || 0), 0);
+    const billetActual = rows.reduce((sum, row) => sum + (row.entry.billet_actual || 0), 0);
+
+    return {
+      equipment,
+      rows,
+      total: {
+        productPlan,
+        productActual,
+        productRate: calcNullableRate(productActual, productPlan),
+        productShortfall: Math.max(0, productPlan - productActual),
+        billetPlan,
+        billetActual,
+        billetRate: calcNullableRate(billetActual, billetPlan),
+        billetShortfall: Math.max(0, billetPlan - billetActual),
+      },
+    };
+  }).filter(group => group.rows.length > 0);
   const summaryItems = [
     {
       label: '제품',
@@ -148,44 +196,55 @@ export default function AdminReportPage() {
               </tr>
             </thead>
             <tbody>
-              {entries.map(entry => {
-                const pRate = entry.product_plan > 0 ? (entry.product_actual / entry.product_plan * 100) : null;
-                const bRate = entry.billet_plan > 0 ? (entry.billet_actual / entry.billet_plan * 100) : null;
-                const pShortfall = Math.max(0, (entry.product_plan || 0) - (entry.product_actual || 0));
-                const bShortfall = Math.max(0, (entry.billet_plan || 0) - (entry.billet_actual || 0));
-
-                return (
-                  <tr key={entry.id}>
-                    <td className="text-center-cell font-bold">{entry.equipment}</td>
-                    <td className="text-center-cell">{entry.shift}</td>
-                    <td>{formatNumber(entry.product_plan)}</td>
-                    <td className="font-medium">{formatNumber(entry.product_actual)}</td>
-                    <td className={`text-center-cell font-semibold ${
-                      pRate === null ? 'text-gray-400' :
-                        pRate >= 100 ? 'text-green-600' : pRate >= 90 ? 'text-yellow-600' : 'text-red-600'
-                    }`}>
-                      {pRate !== null ? `${pRate.toFixed(1)}%` : '-'}
+              {equipmentGroups.map(group => (
+                <React.Fragment key={group.equipment}>
+                  {group.rows.map(row => (
+                    <tr key={row.entry.id}>
+                      <td className="text-center-cell font-bold">{row.entry.equipment}</td>
+                      <td className="text-center-cell">{row.entry.shift}</td>
+                      <td>{formatNumber(row.entry.product_plan)}</td>
+                      <td className="font-medium">{formatNumber(row.entry.product_actual)}</td>
+                      <td className={`text-center-cell font-semibold ${getRateClass(row.productRate)}`}>
+                        {row.productRate !== null ? `${row.productRate.toFixed(1)}%` : '-'}
+                      </td>
+                      <td className={row.productShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
+                        {row.productShortfall > 0 ? formatNumber(row.productShortfall) : '-'}
+                      </td>
+                      <td>{formatNumber(row.entry.billet_plan)}</td>
+                      <td className="font-medium">{formatNumber(row.entry.billet_actual)}</td>
+                      <td className={`text-center-cell font-semibold ${getRateClass(row.billetRate)}`}>
+                        {row.billetRate !== null ? `${row.billetRate.toFixed(1)}%` : '-'}
+                      </td>
+                      <td className={row.billetShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
+                        {row.billetShortfall > 0 ? formatNumber(row.billetShortfall) : '-'}
+                      </td>
+                      <td className="text-center-cell text-xs">
+                        {row.entry.reason_category || <span className="text-gray-300">-</span>}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-slate-50 font-semibold border-t border-slate-200">
+                    <td colSpan={2} className="text-center-cell">{group.equipment} 합계</td>
+                    <td>{formatNumber(group.total.productPlan)}</td>
+                    <td>{formatNumber(group.total.productActual)}</td>
+                    <td className={`text-center-cell ${getRateClass(group.total.productRate)}`}>
+                      {group.total.productRate !== null ? `${group.total.productRate.toFixed(1)}%` : '-'}
                     </td>
-                    <td className={pShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
-                      {pShortfall > 0 ? formatNumber(pShortfall) : '-'}
+                    <td className={group.total.productShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
+                      {group.total.productShortfall > 0 ? formatNumber(group.total.productShortfall) : '-'}
                     </td>
-                    <td>{formatNumber(entry.billet_plan)}</td>
-                    <td className="font-medium">{formatNumber(entry.billet_actual)}</td>
-                    <td className={`text-center-cell font-semibold ${
-                      bRate === null ? 'text-gray-400' :
-                        bRate >= 100 ? 'text-green-600' : bRate >= 90 ? 'text-yellow-600' : 'text-red-600'
-                    }`}>
-                      {bRate !== null ? `${bRate.toFixed(1)}%` : '-'}
+                    <td>{formatNumber(group.total.billetPlan)}</td>
+                    <td>{formatNumber(group.total.billetActual)}</td>
+                    <td className={`text-center-cell ${getRateClass(group.total.billetRate)}`}>
+                      {group.total.billetRate !== null ? `${group.total.billetRate.toFixed(1)}%` : '-'}
                     </td>
-                    <td className={bShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
-                      {bShortfall > 0 ? formatNumber(bShortfall) : '-'}
+                    <td className={group.total.billetShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
+                      {group.total.billetShortfall > 0 ? formatNumber(group.total.billetShortfall) : '-'}
                     </td>
-                    <td className="text-center-cell text-xs">
-                      {entry.reason_category || <span className="text-gray-300">-</span>}
-                    </td>
+                    <td></td>
                   </tr>
-                );
-              })}
+                </React.Fragment>
+              ))}
               {/* 합계 행 */}
               <tr className="bg-blue-50 font-bold border-t-2 border-blue-200">
                 <td colSpan={2} className="text-center-cell">합 계</td>

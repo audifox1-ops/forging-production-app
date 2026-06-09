@@ -6,6 +6,18 @@ import { Printer, ArrowLeft } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import { generateOverallSummary, generateReasonSentence } from '../utils/reportTextGenerator';
+import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
+
+function calcNullableRate(actual: number, plan: number) {
+  return plan > 0 ? (actual / plan) * 100 : null;
+}
+
+function getPrintRateClass(rate: number | null) {
+  if (rate === null) return 'text-gray-400';
+  if (rate >= 100) return 'text-green-700';
+  if (rate >= 90) return 'text-yellow-700';
+  return 'text-red-700';
+}
 
 export default function PrintReportPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
@@ -16,6 +28,43 @@ export default function PrintReportPage() {
   const report = reports.find(r => r.report_date === today);
   const entries = report ? getEntriesByReport(report.id) : [];
   const summary = calcDashboardSummary(entries);
+  const equipmentGroups = EQUIPMENT_LIST.map(equipment => {
+    const rows = entries
+      .filter(entry => entry.equipment === equipment)
+      .sort((a, b) => SHIFT_LIST.indexOf(a.shift) - SHIFT_LIST.indexOf(b.shift))
+      .map(entry => {
+        const productShortfall = Math.max(0, (entry.product_plan || 0) - (entry.product_actual || 0));
+        const billetShortfall = Math.max(0, (entry.billet_plan || 0) - (entry.billet_actual || 0));
+
+        return {
+          entry,
+          productRate: calcNullableRate(entry.product_actual, entry.product_plan),
+          billetRate: calcNullableRate(entry.billet_actual, entry.billet_plan),
+          productShortfall,
+          billetShortfall,
+          hasShortfall: productShortfall > 0 || billetShortfall > 0,
+        };
+      });
+    const productPlan = rows.reduce((sum, row) => sum + (row.entry.product_plan || 0), 0);
+    const productActual = rows.reduce((sum, row) => sum + (row.entry.product_actual || 0), 0);
+    const billetPlan = rows.reduce((sum, row) => sum + (row.entry.billet_plan || 0), 0);
+    const billetActual = rows.reduce((sum, row) => sum + (row.entry.billet_actual || 0), 0);
+
+    return {
+      equipment,
+      rows,
+      total: {
+        productPlan,
+        productActual,
+        productRate: calcNullableRate(productActual, productPlan),
+        productShortfall: Math.max(0, productPlan - productActual),
+        billetPlan,
+        billetActual,
+        billetRate: calcNullableRate(billetActual, billetPlan),
+        billetShortfall: Math.max(0, billetPlan - billetActual),
+      },
+    };
+  }).filter(group => group.rows.length > 0);
 
   const handlePrint = () => window.print();
 
@@ -145,45 +194,58 @@ export default function PrintReportPage() {
                 </tr>
               </thead>
               <tbody>
-                {entries.map(entry => {
-                  const pRate = entry.product_plan > 0 ? (entry.product_actual / entry.product_plan * 100) : null;
-                  const bRate = entry.billet_plan > 0 ? (entry.billet_actual / entry.billet_plan * 100) : null;
-                  const pShortfall = Math.max(0, (entry.product_plan || 0) - (entry.product_actual || 0));
-                  const bShortfall = Math.max(0, (entry.billet_plan || 0) - (entry.billet_actual || 0));
-                  const hasShortfall = pShortfall > 0 || bShortfall > 0;
-
-                  return (
-                    <tr key={entry.id} style={hasShortfall && entry.product_actual > 0 ? { backgroundColor: '#fff7ed' } : {}}>
-                      <td className="px-2 py-1.5 text-center font-bold border border-gray-300">{entry.equipment}</td>
-                      <td className="px-2 py-1.5 text-center border border-gray-300">{entry.shift}</td>
-                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(entry.product_plan)}</td>
-                      <td className="px-2 py-1.5 text-right font-medium border border-gray-300">{formatNumber(entry.product_actual)}</td>
-                      <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${
-                        pRate === null ? 'text-gray-400' :
-                          pRate >= 100 ? 'text-green-700' : pRate >= 90 ? 'text-yellow-700' : 'text-red-700'
-                      }`}>
-                        {pRate !== null ? `${pRate.toFixed(1)}%` : '-'}
+                {equipmentGroups.map(group => (
+                  <React.Fragment key={group.equipment}>
+                    {group.rows.map(row => (
+                      <tr
+                        key={row.entry.id}
+                        style={row.hasShortfall && row.entry.product_actual > 0 ? { backgroundColor: '#fff7ed' } : {}}
+                      >
+                        <td className="px-2 py-1.5 text-center font-bold border border-gray-300">{row.entry.equipment}</td>
+                        <td className="px-2 py-1.5 text-center border border-gray-300">{row.entry.shift}</td>
+                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(row.entry.product_plan)}</td>
+                        <td className="px-2 py-1.5 text-right font-medium border border-gray-300">{formatNumber(row.entry.product_actual)}</td>
+                        <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getPrintRateClass(row.productRate)}`}>
+                          {row.productRate !== null ? `${row.productRate.toFixed(1)}%` : '-'}
+                        </td>
+                        <td className={`px-2 py-1.5 text-right border border-gray-300 ${row.productShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
+                          {row.productShortfall > 0 ? formatNumber(row.productShortfall) : '-'}
+                        </td>
+                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(row.entry.billet_plan)}</td>
+                        <td className="px-2 py-1.5 text-right font-medium border border-gray-300">{formatNumber(row.entry.billet_actual)}</td>
+                        <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getPrintRateClass(row.billetRate)}`}>
+                          {row.billetRate !== null ? `${row.billetRate.toFixed(1)}%` : '-'}
+                        </td>
+                        <td className={`px-2 py-1.5 text-right border border-gray-300 ${row.billetShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
+                          {row.billetShortfall > 0 ? formatNumber(row.billetShortfall) : '-'}
+                        </td>
+                        <td className="px-2 py-1.5 text-center text-xs border border-gray-300">
+                          {row.entry.reason_category || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr style={{ backgroundColor: '#f8fafc', fontWeight: 'bold' }}>
+                      <td colSpan={2} className="px-2 py-1.5 text-center border border-gray-300">{group.equipment} 합계</td>
+                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.productPlan)}</td>
+                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.productActual)}</td>
+                      <td className={`px-2 py-1.5 text-center border border-gray-300 ${getPrintRateClass(group.total.productRate)}`}>
+                        {group.total.productRate !== null ? `${group.total.productRate.toFixed(1)}%` : '-'}
                       </td>
-                      <td className={`px-2 py-1.5 text-right border border-gray-300 ${pShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
-                        {pShortfall > 0 ? formatNumber(pShortfall) : '-'}
+                      <td className={`px-2 py-1.5 text-right border border-gray-300 ${group.total.productShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
+                        {group.total.productShortfall > 0 ? formatNumber(group.total.productShortfall) : '-'}
                       </td>
-                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(entry.billet_plan)}</td>
-                      <td className="px-2 py-1.5 text-right font-medium border border-gray-300">{formatNumber(entry.billet_actual)}</td>
-                      <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${
-                        bRate === null ? 'text-gray-400' :
-                          bRate >= 100 ? 'text-green-700' : bRate >= 90 ? 'text-yellow-700' : 'text-red-700'
-                      }`}>
-                        {bRate !== null ? `${bRate.toFixed(1)}%` : '-'}
+                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.billetPlan)}</td>
+                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.billetActual)}</td>
+                      <td className={`px-2 py-1.5 text-center border border-gray-300 ${getPrintRateClass(group.total.billetRate)}`}>
+                        {group.total.billetRate !== null ? `${group.total.billetRate.toFixed(1)}%` : '-'}
                       </td>
-                      <td className={`px-2 py-1.5 text-right border border-gray-300 ${bShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
-                        {bShortfall > 0 ? formatNumber(bShortfall) : '-'}
+                      <td className={`px-2 py-1.5 text-right border border-gray-300 ${group.total.billetShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
+                        {group.total.billetShortfall > 0 ? formatNumber(group.total.billetShortfall) : '-'}
                       </td>
-                      <td className="px-2 py-1.5 text-center text-xs border border-gray-300">
-                        {entry.reason_category || '-'}
-                      </td>
+                      <td className="border border-gray-300"></td>
                     </tr>
-                  );
-                })}
+                  </React.Fragment>
+                ))}
                 {/* 합계 행 */}
                 <tr style={{ backgroundColor: '#dbeafe', fontWeight: 'bold', borderTop: '2px solid #1d4ed8' }}>
                   <td colSpan={2} className="px-2 py-1.5 text-center border border-gray-400">합 계</td>

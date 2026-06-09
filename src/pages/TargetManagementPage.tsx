@@ -119,55 +119,76 @@ export default function TargetManagementPage() {
               </tr>
             </thead>
             <tbody>
-              {EQUIPMENT_LIST.map(equipment => (
-                SHIFT_LIST.map((shift, sIdx) => {
-                  const key = `${equipment}-${shift}`;
-                  const val = localTargets[key] || { product: 0, billet: 0 };
-                  const rowTotal = (val.product || 0) + (val.billet || 0);
+              {EQUIPMENT_LIST.map(equipment => {
+                const equipmentProduct = SHIFT_LIST.reduce((sum, shift) => {
+                  return sum + (localTargets[`${equipment}-${shift}`]?.product || 0);
+                }, 0);
+                const equipmentBillet = SHIFT_LIST.reduce((sum, shift) => {
+                  return sum + (localTargets[`${equipment}-${shift}`]?.billet || 0);
+                }, 0);
 
-                  return (
-                    <tr
-                      key={key}
-                      className={`border-b border-gray-100 ${sIdx === 0 ? 'border-t border-gray-200' : ''}`}
-                    >
-                      {sIdx === 0 && (
-                        <td
-                          className="px-4 py-3 text-center font-bold text-blue-800 bg-blue-50"
-                          rowSpan={2}
+                return (
+                  <React.Fragment key={equipment}>
+                    {SHIFT_LIST.map((shift, sIdx) => {
+                      const key = `${equipment}-${shift}`;
+                      const val = localTargets[key] || { product: 0, billet: 0 };
+                      const rowTotal = (val.product || 0) + (val.billet || 0);
+
+                      return (
+                        <tr
+                          key={key}
+                          className={`border-b border-gray-100 ${sIdx === 0 ? 'border-t border-gray-200' : ''}`}
                         >
-                          {equipment}
-                        </td>
-                      )}
-                      <td className="px-4 py-3 text-center text-gray-600">{shift}</td>
-                      <td className="px-4 py-3 text-right">
-                        <input
-                          type="number"
-                          value={val.product}
-                          onChange={e => handleChange(equipment, shift, 'product', Number(e.target.value))}
-                          min={0}
-                          step={1000}
-                          disabled={!canManageTargets}
-                          className="w-32 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50"
-                        />
+                          {sIdx === 0 && (
+                            <td
+                              className="px-4 py-3 text-center font-bold text-blue-800 bg-blue-50"
+                              rowSpan={2}
+                            >
+                              {equipment}
+                            </td>
+                          )}
+                          <td className="px-4 py-3 text-center text-gray-600">{shift}</td>
+                          <td className="px-4 py-3 text-right">
+                            <input
+                              type="number"
+                              value={val.product}
+                              onChange={e => handleChange(equipment, shift, 'product', Number(e.target.value))}
+                              min={0}
+                              step={1000}
+                              disabled={!canManageTargets}
+                              className="w-32 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <input
+                              type="number"
+                              value={val.billet}
+                              onChange={e => handleChange(equipment, shift, 'billet', Number(e.target.value))}
+                              min={0}
+                              step={1000}
+                              disabled={!canManageTargets}
+                              className="w-32 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-amber-50"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-right font-medium text-gray-700">
+                            {formatNumber(rowTotal)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="bg-slate-50 font-semibold border-b border-gray-200">
+                      <td colSpan={2} className="px-4 py-2.5 text-center text-slate-700">
+                        {equipment} 합계
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <input
-                          type="number"
-                          value={val.billet}
-                          onChange={e => handleChange(equipment, shift, 'billet', Number(e.target.value))}
-                          min={0}
-                          step={1000}
-                          disabled={!canManageTargets}
-                          className="w-32 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-amber-50"
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium text-gray-700">
-                        {formatNumber(rowTotal)}
+                      <td className="px-4 py-2.5 text-right text-blue-700">{formatNumber(equipmentProduct)}</td>
+                      <td className="px-4 py-2.5 text-right text-amber-700">{formatNumber(equipmentBillet)}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-700">
+                        {formatNumber(equipmentProduct + equipmentBillet)}
                       </td>
                     </tr>
-                  );
-                })
-              ))}
+                  </React.Fragment>
+                );
+              })}
               {/* 합계 행 */}
               <tr className="bg-blue-50 font-bold border-t-2 border-blue-200">
                 <td colSpan={2} className="px-4 py-3 text-center">전체 합계</td>

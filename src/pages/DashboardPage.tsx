@@ -87,6 +87,17 @@ function calcRate(actual: number, plan: number) {
   return plan > 0 ? Math.round((actual / plan) * 1000) / 10 : 0;
 }
 
+function calcNullableRate(actual: number, plan: number) {
+  return plan > 0 ? (actual / plan) * 100 : null;
+}
+
+function getTableRateClass(rate: number | null) {
+  if (rate === null) return 'text-gray-400';
+  if (rate >= 100) return 'text-green-600';
+  if (rate >= 90) return 'text-yellow-600';
+  return 'text-red-600';
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { reports, targets, periodTargets, getEntriesByReport, createReport, getCurrentUser } = useReportStore();
@@ -215,6 +226,59 @@ export default function DashboardPage() {
       };
     });
   }, [selectedPeriod, summary.by_shift, targets]);
+  const detailGroups = React.useMemo(() => {
+    const sortedEntries = [...entries].sort((a, b) => {
+      const equipmentOrder = EQUIPMENT_LIST.indexOf(a.equipment) - EQUIPMENT_LIST.indexOf(b.equipment);
+      if (equipmentOrder !== 0) return equipmentOrder;
+
+      const shiftOrder = SHIFT_LIST.indexOf(a.shift) - SHIFT_LIST.indexOf(b.shift);
+      if (shiftOrder !== 0) return shiftOrder;
+
+      return (reportDateById.get(a.report_id) ?? '').localeCompare(reportDateById.get(b.report_id) ?? '');
+    });
+
+    return EQUIPMENT_LIST.map(equipment => {
+      const rows = sortedEntries
+        .filter(entry => entry.equipment === equipment)
+        .map(entry => {
+          const target = targetByEquipmentShift.get(`${entry.equipment}-${entry.shift}`);
+          const productPlan = selectedPeriod === 'day' ? target?.product ?? 0 : entry.product_plan;
+          const billetPlan = selectedPeriod === 'day' ? target?.billet ?? 0 : entry.billet_plan;
+          const productShortfall = Math.max(0, productPlan - (entry.product_actual || 0));
+          const billetShortfall = Math.max(0, billetPlan - (entry.billet_actual || 0));
+
+          return {
+            entry,
+            productPlan,
+            billetPlan,
+            productRate: calcNullableRate(entry.product_actual, productPlan),
+            billetRate: calcNullableRate(entry.billet_actual, billetPlan),
+            productShortfall,
+            billetShortfall,
+            hasShortfall: productShortfall > 0 || billetShortfall > 0,
+          };
+        });
+      const productPlan = rows.reduce((sum, row) => sum + row.productPlan, 0);
+      const productActual = rows.reduce((sum, row) => sum + (row.entry.product_actual || 0), 0);
+      const billetPlan = rows.reduce((sum, row) => sum + row.billetPlan, 0);
+      const billetActual = rows.reduce((sum, row) => sum + (row.entry.billet_actual || 0), 0);
+
+      return {
+        equipment,
+        rows,
+        total: {
+          productPlan,
+          productActual,
+          productRate: calcNullableRate(productActual, productPlan),
+          productShortfall: Math.max(0, productPlan - productActual),
+          billetPlan,
+          billetActual,
+          billetRate: calcNullableRate(billetActual, billetPlan),
+          billetShortfall: Math.max(0, billetPlan - billetActual),
+        },
+      };
+    }).filter(group => group.rows.length > 0);
+  }, [entries, reportDateById, selectedPeriod, targetByEquipmentShift]);
   const summaryCards = [
     {
       label: '제품',
@@ -663,62 +727,72 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map(entry => {
-                    const target = targetByEquipmentShift.get(`${entry.equipment}-${entry.shift}`);
-                    const productPlan = selectedPeriod === 'day' ? target?.product ?? 0 : entry.product_plan;
-                    const billetPlan = selectedPeriod === 'day' ? target?.billet ?? 0 : entry.billet_plan;
-                    const pRate = productPlan > 0 ? (entry.product_actual / productPlan * 100) : null;
-                    const bRate = billetPlan > 0 ? (entry.billet_actual / billetPlan * 100) : null;
-                    const pShortfall = Math.max(0, (productPlan || 0) - (entry.product_actual || 0));
-                    const bShortfall = Math.max(0, (billetPlan || 0) - (entry.billet_actual || 0));
-                    const hasShortfall = pShortfall > 0 || bShortfall > 0;
-
-                    return (
-                      <tr key={entry.id} className={hasShortfall && entry.submit_status !== 'not_started' ? 'shortfall-row' : ''}>
-                        {selectedPeriod !== 'day' && (
-                          <td className="text-center-cell">
-                            {format(parseISO(reportDateById.get(entry.report_id) ?? selectedDate), 'MM.dd')}
+                  {detailGroups.map(group => (
+                    <React.Fragment key={group.equipment}>
+                      {group.rows.map(row => (
+                        <tr
+                          key={row.entry.id}
+                          className={row.hasShortfall && row.entry.submit_status !== 'not_started' ? 'shortfall-row' : ''}
+                        >
+                          {selectedPeriod !== 'day' && (
+                            <td className="text-center-cell">
+                              {format(parseISO(reportDateById.get(row.entry.report_id) ?? selectedDate), 'MM.dd')}
+                            </td>
+                          )}
+                          <td className="text-center-cell font-bold">{row.entry.equipment}</td>
+                          <td className="text-center-cell">{row.entry.shift}</td>
+                          <td>{formatNumber(row.productPlan)}</td>
+                          <td className={`font-medium ${row.productRate !== null && row.productRate < 90 ? 'text-red-600' : ''}`}>
+                            {formatNumber(row.entry.product_actual)}
                           </td>
-                        )}
-                        <td className="text-center-cell font-bold">{entry.equipment}</td>
-                        <td className="text-center-cell">{entry.shift}</td>
-                        <td>{formatNumber(productPlan)}</td>
-                        <td className={`font-medium ${pRate !== null && pRate < 90 ? 'text-red-600' : ''}`}>
-                          {formatNumber(entry.product_actual)}
+                          <td className={`text-center-cell font-semibold ${getTableRateClass(row.productRate)}`}>
+                            {row.productRate !== null ? `${row.productRate.toFixed(1)}%` : '-'}
+                          </td>
+                          <td className={row.productShortfall > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>
+                            {row.productShortfall > 0 ? `▼ ${formatNumber(row.productShortfall)}` : '-'}
+                          </td>
+                          <td>{formatNumber(row.billetPlan)}</td>
+                          <td className={`font-medium ${row.billetRate !== null && row.billetRate < 90 ? 'text-red-600' : ''}`}>
+                            {formatNumber(row.entry.billet_actual)}
+                          </td>
+                          <td className={`text-center-cell font-semibold ${getTableRateClass(row.billetRate)}`}>
+                            {row.billetRate !== null ? `${row.billetRate.toFixed(1)}%` : '-'}
+                          </td>
+                          <td className={row.billetShortfall > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>
+                            {row.billetShortfall > 0 ? `▼ ${formatNumber(row.billetShortfall)}` : '-'}
+                          </td>
+                          <td className="text-center-cell text-xs">
+                            {row.entry.reason_category || <span className="text-gray-300">-</span>}
+                          </td>
+                          <td className="text-center-cell">
+                            <SubmitStatusBadge status={row.entry.submit_status} />
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-slate-50 font-semibold border-t border-slate-200">
+                        <td colSpan={selectedPeriod !== 'day' ? 3 : 2} className="text-center-cell">
+                          {group.equipment} 합계
                         </td>
-                        <td className={`text-center-cell font-semibold ${
-                          pRate === null ? 'text-gray-400' :
-                            pRate >= 100 ? 'text-green-600' :
-                              pRate >= 90 ? 'text-yellow-600' : 'text-red-600'
-                        }`}>
-                          {pRate !== null ? `${pRate.toFixed(1)}%` : '-'}
+                        <td>{formatNumber(group.total.productPlan)}</td>
+                        <td>{formatNumber(group.total.productActual)}</td>
+                        <td className={`text-center-cell ${getTableRateClass(group.total.productRate)}`}>
+                          {group.total.productRate !== null ? `${group.total.productRate.toFixed(1)}%` : '-'}
                         </td>
-                        <td className={pShortfall > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>
-                          {pShortfall > 0 ? `▼ ${formatNumber(pShortfall)}` : '-'}
+                        <td className={group.total.productShortfall > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>
+                          {group.total.productShortfall > 0 ? `▼ ${formatNumber(group.total.productShortfall)}` : '-'}
                         </td>
-                        <td>{formatNumber(billetPlan)}</td>
-                        <td className={`font-medium ${bRate !== null && bRate < 90 ? 'text-red-600' : ''}`}>
-                          {formatNumber(entry.billet_actual)}
+                        <td>{formatNumber(group.total.billetPlan)}</td>
+                        <td>{formatNumber(group.total.billetActual)}</td>
+                        <td className={`text-center-cell ${getTableRateClass(group.total.billetRate)}`}>
+                          {group.total.billetRate !== null ? `${group.total.billetRate.toFixed(1)}%` : '-'}
                         </td>
-                        <td className={`text-center-cell font-semibold ${
-                          bRate === null ? 'text-gray-400' :
-                            bRate >= 100 ? 'text-green-600' :
-                              bRate >= 90 ? 'text-yellow-600' : 'text-red-600'
-                        }`}>
-                          {bRate !== null ? `${bRate.toFixed(1)}%` : '-'}
+                        <td className={group.total.billetShortfall > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>
+                          {group.total.billetShortfall > 0 ? `▼ ${formatNumber(group.total.billetShortfall)}` : '-'}
                         </td>
-                        <td className={bShortfall > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>
-                          {bShortfall > 0 ? `▼ ${formatNumber(bShortfall)}` : '-'}
-                        </td>
-                        <td className="text-center-cell text-xs">
-                          {entry.reason_category || <span className="text-gray-300">-</span>}
-                        </td>
-                        <td className="text-center-cell">
-                          <SubmitStatusBadge status={entry.submit_status} />
-                        </td>
+                        <td colSpan={2}></td>
                       </tr>
-                    );
-                  })}
+                    </React.Fragment>
+                  ))}
 
                   {/* 합계 행 */}
                   <tr className="bg-blue-50 font-bold border-t-2 border-blue-200">
