@@ -7,6 +7,7 @@ import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import { generateOverallSummary, generateReasonSentence } from '../utils/reportTextGenerator';
 import { getEquipmentReasonGroups } from '../utils/reasonGroups';
+import ReasonContent, { ReasonTextList } from '../components/ReasonContent';
 import type { Equipment, Shift } from '../types';
 import {
   getActualDateFromPlanDate,
@@ -328,22 +329,7 @@ export default function PrintReportPage() {
                           {group.categories.join(', ') || '-'}
                         </td>
                         <td className="px-2 py-2 border border-gray-300 leading-relaxed">
-                          {group.reasonDetails.length > 0 && (
-                            <div><strong>상세 원인:</strong> {group.reasonDetails.join(' / ')}</div>
-                          )}
-                          {group.actionsToday.length > 0 && (
-                            <div><strong>금일 조치:</strong> {group.actionsToday.join(' / ')}</div>
-                          )}
-                          {group.recoveryPlans.length > 0 && (
-                            <div><strong>만회계획:</strong> {group.recoveryPlans.join(' / ')}</div>
-                          )}
-                          {group.supportRequests.length > 0 && (
-                            <div><strong>지원 요청:</strong> {group.supportRequests.join(' / ')}</div>
-                          )}
-                          {group.reasonDetails.length === 0 &&
-                            group.actionsToday.length === 0 &&
-                            group.recoveryPlans.length === 0 &&
-                            group.supportRequests.length === 0 && '-'}
+                          <ReasonContent group={group} labelClassName="font-bold" />
                         </td>
                       </tr>
                   ))}
@@ -370,7 +356,7 @@ export default function PrintReportPage() {
               </thead>
               <tbody>
                 {equipmentGroups.map(group => {
-                  const recoveryLabel = reasonGroupsByEquipment.get(group.equipment)?.recoveryPlans.join(' / ');
+                  const recoveryPlans = reasonGroupsByEquipment.get(group.equipment)?.recoveryPlans ?? [];
 
                   return group.rows.map((row, rowIndex) => {
                     const entry = row.entry;
@@ -385,8 +371,8 @@ export default function PrintReportPage() {
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(nextBilletPlan)}</td>
                         <td className="px-2 py-1.5 text-right border border-gray-300 font-medium">{formatNumber(nextProductPlan + nextBilletPlan)}</td>
                         {rowIndex === 0 && (
-                          <td rowSpan={group.rows.length} className="px-2 py-1.5 text-center border border-gray-300 text-gray-500 align-middle">
-                            {recoveryLabel || '-'}
+                          <td rowSpan={group.rows.length} className="px-2 py-1.5 text-left border border-gray-300 text-gray-500 align-middle">
+                            <ReasonTextList values={recoveryPlans} fallback="-" />
                           </td>
                         )}
                       </tr>

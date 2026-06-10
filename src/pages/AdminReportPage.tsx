@@ -7,6 +7,7 @@ import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import { generateReportText } from '../utils/reportTextGenerator';
 import { getEquipmentReasonGroups } from '../utils/reasonGroups';
+import ReasonContent, { ReasonTextList } from '../components/ReasonContent';
 import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
 import {
   getActualDateFromPlanDate,
@@ -315,7 +316,7 @@ export default function AdminReportPage() {
             </thead>
             <tbody>
               {equipmentGroups.map(group => {
-                const recoveryLabel = reasonGroupsByEquipment.get(group.equipment)?.recoveryPlans.join(' / ');
+                const recoveryPlans = reasonGroupsByEquipment.get(group.equipment)?.recoveryPlans ?? [];
 
                 return group.rows.map((row, rowIndex) => {
                   const entry = row.entry;
@@ -330,8 +331,8 @@ export default function AdminReportPage() {
                       <td>{formatNumber(nextBilletPlan)}</td>
                       <td className="font-medium">{formatNumber(nextProductPlan + nextBilletPlan)}</td>
                       {rowIndex === 0 && (
-                        <td rowSpan={group.rows.length} className="text-center-cell text-xs align-middle">
-                          {recoveryLabel || <span className="text-gray-300">-</span>}
+                        <td rowSpan={group.rows.length} className="text-left text-xs align-middle">
+                          <ReasonTextList values={recoveryPlans} fallback="-" />
                         </td>
                       )}
                     </tr>
@@ -375,22 +376,7 @@ export default function AdminReportPage() {
                       {group.categories.join(', ') || '-'}
                     </td>
                     <td className="px-3 py-2 text-gray-600 leading-relaxed">
-                      {group.reasonDetails.length > 0 && (
-                        <div><span className="font-medium text-gray-700">상세 원인:</span> {group.reasonDetails.join(' / ')}</div>
-                      )}
-                      {group.actionsToday.length > 0 && (
-                        <div><span className="font-medium text-gray-700">금일 조치:</span> {group.actionsToday.join(' / ')}</div>
-                      )}
-                      {group.recoveryPlans.length > 0 && (
-                        <div><span className="font-medium text-gray-700">만회계획:</span> {group.recoveryPlans.join(' / ')}</div>
-                      )}
-                      {group.supportRequests.length > 0 && (
-                        <div><span className="font-medium text-gray-700">지원 요청:</span> {group.supportRequests.join(' / ')}</div>
-                      )}
-                      {group.reasonDetails.length === 0 &&
-                        group.actionsToday.length === 0 &&
-                        group.recoveryPlans.length === 0 &&
-                        group.supportRequests.length === 0 && '-'}
+                      <ReasonContent group={group} />
                     </td>
                   </tr>
                 ))}

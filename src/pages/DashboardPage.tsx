@@ -29,6 +29,7 @@ import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import { getEquipmentReasonGroups } from '../utils/reasonGroups';
 import KPIStatusCard from '../components/KPIStatusCard';
+import ReasonContent from '../components/ReasonContent';
 import SubmitStatusBadge from '../components/SubmitStatusBadge';
 import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
 import type { PeriodTargetType, ProductionReport } from '../types';
@@ -1335,22 +1336,7 @@ export default function DashboardPage() {
                           <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">{group.equipment}</td>
                           <td className="px-4 py-3 text-orange-700 whitespace-nowrap">{group.categories.join(', ') || '-'}</td>
                           <td className="px-4 py-3 text-gray-700 leading-relaxed">
-                            {group.reasonDetails.length > 0 && (
-                              <div><span className="font-medium text-gray-800">상세 원인:</span> {group.reasonDetails.join(' / ')}</div>
-                            )}
-                            {group.actionsToday.length > 0 && (
-                              <div><span className="font-medium text-gray-800">금일 조치:</span> {group.actionsToday.join(' / ')}</div>
-                            )}
-                            {group.recoveryPlans.length > 0 && (
-                              <div><span className="font-medium text-gray-800">만회계획:</span> {group.recoveryPlans.join(' / ')}</div>
-                            )}
-                            {group.supportRequests.length > 0 && (
-                              <div><span className="font-medium text-gray-800">지원 요청:</span> {group.supportRequests.join(' / ')}</div>
-                            )}
-                            {group.reasonDetails.length === 0 &&
-                              group.actionsToday.length === 0 &&
-                              group.recoveryPlans.length === 0 &&
-                              group.supportRequests.length === 0 && '-'}
+                            <ReasonContent group={group} labelClassName="font-medium text-gray-800" />
                           </td>
                         </tr>
                       ))}

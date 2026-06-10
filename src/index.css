@@ -189,8 +189,8 @@ body {
 
   .print-section {
     margin-bottom: 1.4mm !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-inside: auto;
+    page-break-inside: auto;
   }
 
   .print-kpi-grid {
@@ -240,6 +240,23 @@ body {
     color: white !important;
     text-align: center;
     font-weight: bold;
+  }
+
+  .print-table thead {
+    display: table-header-group;
+  }
+
+  .print-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-header,
+  .print-kpi-grid,
+  .print-summary-box,
+  .print-opinion {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .print-header {
@@ -294,6 +311,19 @@ body {
     width: 18mm;
   }
 
+  .print-table-reasons td {
+    vertical-align: top;
+  }
+
+  .reason-content {
+    gap: 0.5mm !important;
+  }
+
+  .reason-content-row {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .print-opinion {
     margin-bottom: 0 !important;
   }
@@ -321,6 +351,24 @@ body {
 /* 입력 숫자 우측 정렬 */
 input[type="number"] {
   text-align: right;
+}
+
+.reason-content {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.reason-content-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 0.25rem;
+  align-items: start;
+}
+
+.reason-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
 }
 
 /* 애니메이션 */
