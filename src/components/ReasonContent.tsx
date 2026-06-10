@@ -28,9 +28,6 @@ export default function ReasonContent({
 }: ReasonContentProps) {
   const rows = [
     { label: '상세 원인', values: group.reasonDetails },
-    { label: '금일 조치', values: group.actionsToday },
-    { label: '만회계획', values: group.recoveryPlans },
-    { label: '지원 요청', values: group.supportRequests },
   ].filter(row => row.values.length > 0);
 
   if (rows.length === 0) return <>-</>;
