@@ -223,6 +223,24 @@ function excelSerialToIsoDate(value) {
   return date.toISOString().slice(0, 10);
 }
 
+function parseHiddenColumnRanges(worksheetXml) {
+  const ranges = [];
+  const columnRegex = /<col\b([^>]*)\/?>/g;
+  let columnMatch;
+
+  while ((columnMatch = columnRegex.exec(worksheetXml))) {
+    if (getAttr(columnMatch[1], 'hidden') !== '1') continue;
+
+    const min = Number(getAttr(columnMatch[1], 'min'));
+    const max = Number(getAttr(columnMatch[1], 'max'));
+    if (Number.isFinite(min) && Number.isFinite(max)) {
+      ranges.push({ min, max });
+    }
+  }
+
+  return ranges;
+}
+
 function buildSheetMeta(sheetName) {
   const monthlyMatch = /^(\d{2})(\d{2})월$/.exec(sheetName);
   if (monthlyMatch) {
@@ -252,12 +270,17 @@ function buildSheetMeta(sheetName) {
 function parseWorksheet(sheetName, worksheetXml, sharedStrings, importedAt) {
   const meta = buildSheetMeta(sheetName);
   const rows = [];
+  const hiddenRows = [];
+  const hiddenColumns = parseHiddenColumnRanges(worksheetXml);
   const rowRegex = /<row\b([^>]*)>([\s\S]*?)<\/row>/g;
   let rowMatch;
 
   while ((rowMatch = rowRegex.exec(worksheetXml))) {
     const rowNumber = Number(getAttr(rowMatch[1], 'r'));
     if (!Number.isFinite(rowNumber)) continue;
+    if (getAttr(rowMatch[1], 'hidden') === '1') {
+      hiddenRows.push(rowNumber);
+    }
 
     const cells = [];
     const cellRegex = /<c\b([^>]*)>([\s\S]*?)<\/c>/g;
@@ -301,6 +324,8 @@ function parseWorksheet(sheetName, worksheetXml, sharedStrings, importedAt) {
     ...meta,
     sheet_name: sheetName,
     rows,
+    ...(hiddenRows.length > 0 ? { hidden_rows: hiddenRows } : {}),
+    ...(hiddenColumns.length > 0 ? { hidden_columns: hiddenColumns } : {}),
     imported_at: importedAt,
   };
 }

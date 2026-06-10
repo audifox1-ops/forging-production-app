@@ -8,6 +8,8 @@ import {
   getCellMap,
   getCompactSheetColumns,
   getSheetColumns,
+  getVisibleSheetColumns,
+  getVisibleTemplateRows,
   TemplateEquipmentKey,
   TemplateSummaryRow,
 } from '../utils/templateWorkbook';
@@ -309,6 +311,7 @@ function EditableWorkbookCell({
 function RawTable({
   sheet,
   columns,
+  rows,
   editable = false,
   showCoordinates = false,
   showGridHeaders = true,
@@ -317,6 +320,7 @@ function RawTable({
 }: {
   sheet: TemplateWorkbookSheet;
   columns: string[];
+  rows?: TemplateWorkbookRow[];
   editable?: boolean;
   showCoordinates?: boolean;
   showGridHeaders?: boolean;
@@ -349,7 +353,7 @@ function RawTable({
           </thead>
         )}
         <tbody>
-          {sheet.rows.map(row => {
+          {(rows ?? sheet.rows).map(row => {
             const cellMap = getCellMap(row);
 
             return (
@@ -443,8 +447,8 @@ function ExcelPreviewDialog({
 }) {
   const [previewSheetId, setPreviewSheetId] = React.useState(initialSheetId);
   const previewSheet = sheets.find(sheet => sheet.id === previewSheetId) ?? sheets[0];
-  const previewRows = React.useMemo(() => previewSheet?.rows ?? [], [previewSheet]);
-  const previewColumns = React.useMemo(() => getSheetColumns(previewSheet), [previewSheet]);
+  const previewVisibleRows = React.useMemo(() => getVisibleTemplateRows(previewSheet), [previewSheet]);
+  const previewColumns = React.useMemo(() => getVisibleSheetColumns(previewSheet), [previewSheet]);
 
   React.useEffect(() => {
     if (!sheets.length) return;
@@ -460,7 +464,7 @@ function ExcelPreviewDialog({
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-gray-900">엑셀 미리보기</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              {previewSheet?.sheet_name ?? '-'} · {previewRows.length.toLocaleString('ko-KR')}행
+              {previewSheet?.sheet_name ?? '-'} · {previewVisibleRows.length.toLocaleString('ko-KR')}행
             </p>
           </div>
           <button
@@ -498,7 +502,7 @@ function ExcelPreviewDialog({
                   {previewSheet.year}년 · {previewSheet.kind === 'monthly' ? '월별' : '연간'}
                 </p>
               </div>
-              <RawTable sheet={previewSheet} columns={previewColumns} showGridHeaders={false} />
+              <RawTable sheet={previewSheet} columns={previewColumns} rows={previewVisibleRows} showGridHeaders={false} />
             </div>
           ) : (
             <div className="bg-white border border-gray-200 rounded-lg px-4 py-10 text-center text-sm text-gray-500">
@@ -546,6 +550,8 @@ export default function TemplateWorkbookPage() {
   const appSummary = React.useMemo(() => buildTemplateWorkbookAppSummary(templateSheets), [templateSheets]);
   const summaryRows = React.useMemo(() => extractTemplateSummaryRows(selectedSheet), [selectedSheet]);
   const rawColumns = React.useMemo(() => getSheetColumns(selectedSheet), [selectedSheet]);
+  const printColumns = React.useMemo(() => getVisibleSheetColumns(selectedSheet), [selectedSheet]);
+  const printRows = React.useMemo(() => getVisibleTemplateRows(selectedSheet), [selectedSheet]);
   const compactColumns = React.useMemo(() => getCompactSheetColumns(selectedSheet), [selectedSheet]);
   const visibleColumns = viewMode === 'raw' ? rawColumns : compactColumns;
   const totalRows = templateSheets.reduce((sum, sheet) => sum + sheet.rows.length, 0);
@@ -792,7 +798,7 @@ export default function TemplateWorkbookPage() {
             )}
           </div>
           <div className="template-print-workbook-content">
-            <RawTable sheet={selectedSheet} columns={rawColumns} showGridHeaders={false} />
+            <RawTable sheet={selectedSheet} columns={printColumns} rows={printRows} showGridHeaders={false} />
           </div>
         </div>
       )}

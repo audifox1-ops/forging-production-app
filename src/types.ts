@@ -116,12 +116,19 @@ export interface TemplateWorkbookRow {
   cells: TemplateWorkbookCell[];
 }
 
+export interface TemplateWorkbookColumnRange {
+  min: number;
+  max: number;
+}
+
 export interface TemplateWorkbookSheet {
   id: string;
   sheet_name: string;
   kind: TemplateWorkbookSheetKind;
   year: number;
   rows: TemplateWorkbookRow[];
+  hidden_rows?: number[];
+  hidden_columns?: TemplateWorkbookColumnRange[];
   imported_at: string;
 }
 

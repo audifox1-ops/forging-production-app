@@ -1,4 +1,4 @@
-import type { ProductionEntry, ProductionReport, TemplateWorkbookCell, TemplateWorkbookRow, TemplateWorkbookSheet } from '../types';
+import type { ProductionEntry, ProductionReport, TemplateWorkbookCell, TemplateWorkbookColumnRange, TemplateWorkbookRow, TemplateWorkbookSheet } from '../types';
 
 export type TemplateEquipmentKey = 'P15' | 'P5' | 'R/M' | 'TOTAL';
 
@@ -90,6 +90,65 @@ export const TEMPLATE_COMPACT_COLUMNS = Array.from(new Set([
 
 export function columnToNumber(column: string) {
   return column.split('').reduce((value, char) => value * 26 + char.charCodeAt(0) - 64, 0);
+}
+
+const MONTHLY_TEMPLATE_HIDDEN_COLUMNS: TemplateWorkbookColumnRange[] = [
+  { min: 6, max: 6 },
+  { min: 8, max: 15 },
+  { min: 20, max: 20 },
+  { min: 22, max: 29 },
+  { min: 34, max: 41 },
+  { min: 48, max: 49 },
+  { min: 52, max: 57 },
+];
+
+const ANNUAL_TEMPLATE_HIDDEN_COLUMNS: TemplateWorkbookColumnRange[] = [
+  { min: 3, max: 3 },
+  { min: 6, max: 6 },
+  { min: 8, max: 15 },
+  { min: 17, max: 17 },
+  { min: 20, max: 20 },
+  { min: 22, max: 29 },
+  { min: 31, max: 32 },
+  { min: 34, max: 34 },
+  { min: 37, max: 44 },
+  { min: 46, max: 46 },
+  { min: 49, max: 56 },
+  { min: 58, max: 58 },
+  { min: 63, max: 64 },
+  { min: 67, max: 71 },
+];
+
+const TEMPLATE_HIDDEN_COLUMNS_BY_SHEET: Record<string, TemplateWorkbookColumnRange[]> = {
+  '2601월': MONTHLY_TEMPLATE_HIDDEN_COLUMNS,
+  '2604월': MONTHLY_TEMPLATE_HIDDEN_COLUMNS,
+  '2024년 전체': ANNUAL_TEMPLATE_HIDDEN_COLUMNS,
+  '2025년 전체': ANNUAL_TEMPLATE_HIDDEN_COLUMNS,
+};
+
+function getTemplateHiddenColumnRanges(sheet: TemplateWorkbookSheet | undefined) {
+  if (!sheet) return [];
+  if (sheet.hidden_columns?.length) return sheet.hidden_columns;
+  return TEMPLATE_HIDDEN_COLUMNS_BY_SHEET[sheet.sheet_name] ?? [];
+}
+
+function isColumnHidden(column: string, hiddenColumns: TemplateWorkbookColumnRange[]) {
+  const columnNumber = columnToNumber(column);
+  return hiddenColumns.some(range => columnNumber >= range.min && columnNumber <= range.max);
+}
+
+export function getVisibleSheetColumns(sheet: TemplateWorkbookSheet | undefined) {
+  if (!sheet) return [];
+
+  const hiddenColumns = getTemplateHiddenColumnRanges(sheet);
+  return getSheetColumns(sheet).filter(column => !isColumnHidden(column, hiddenColumns));
+}
+
+export function getVisibleTemplateRows(sheet: TemplateWorkbookSheet | undefined) {
+  if (!sheet) return [];
+
+  const hiddenRows = new Set(sheet.hidden_rows ?? []);
+  return sheet.rows.filter(row => !hiddenRows.has(row.row_number));
 }
 
 export function getCellMap(row: TemplateWorkbookRow) {
