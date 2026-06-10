@@ -132,11 +132,22 @@ body {
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    box-shadow: none !important;
+  }
+
+  html,
+  body,
+  #root {
+    width: 202mm !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   body {
     background: white !important;
-    font-size: 10pt !important;
+    font-size: 7pt !important;
+    line-height: 1.15 !important;
     color: black !important;
   }
 
@@ -158,20 +169,70 @@ body {
 
   @page {
     size: A4 portrait;
-    margin: 15mm 12mm;
+    margin: 4mm;
+  }
+
+  .print-area {
+    width: 202mm !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  .print-sheet {
+    width: 202mm !important;
+    max-width: none !important;
+    margin: 0 !important;
+    zoom: 0.82;
+  }
+
+  .print-section {
+    margin-bottom: 1.4mm !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-kpi-grid {
+    gap: 1.5mm !important;
+    margin-bottom: 1.2mm !important;
+  }
+
+  .print-kpi-card {
+    padding: 1.2mm !important;
+    border-radius: 1.5mm !important;
+  }
+
+  .print-kpi-value {
+    font-size: 10pt !important;
+    line-height: 1 !important;
+    margin-top: 0.5mm !important;
+  }
+
+  .print-summary-box,
+  .print-opinion {
+    padding: 1.4mm !important;
+    border-radius: 1mm !important;
+    font-size: 6.8pt !important;
+    line-height: 1.18 !important;
+    min-height: 0 !important;
   }
 
   /* 인쇄용 테이블 */
   .print-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 9pt;
+    table-layout: fixed;
+    font-size: 6.4pt;
+    line-height: 1.08;
   }
 
   .print-table th,
   .print-table td {
     border: 1px solid #333;
-    padding: 4px 6px;
+    padding: 0.75mm 0.9mm !important;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
   }
 
   .print-table th {
@@ -183,20 +244,58 @@ body {
 
   .print-header {
     text-align: center;
-    font-size: 14pt;
+    font-size: 8pt;
     font-weight: bold;
-    margin-bottom: 12px;
-    padding-bottom: 6px;
+    margin-bottom: 1.6mm !important;
+    padding-bottom: 1.2mm !important;
     border-bottom: 2px solid #1e3a8a;
   }
 
+  .print-header h1 {
+    font-size: 13pt !important;
+    line-height: 1.1 !important;
+    margin: 0 !important;
+  }
+
+  .print-header div {
+    font-size: 6.8pt !important;
+    margin-top: 0.8mm !important;
+  }
+
   .print-section-title {
-    font-size: 10pt;
+    font-size: 7pt;
     font-weight: bold;
     background-color: #dbeafe !important;
-    padding: 4px 8px;
-    margin: 8px 0 4px 0;
+    padding: 0.9mm 1.5mm !important;
+    margin: 0 0 1mm 0 !important;
     border-left: 3px solid #1e3a8a;
+  }
+
+  .print-table-actual th:nth-child(1),
+  .print-table-plan th:nth-child(1) {
+    width: 10mm;
+  }
+
+  .print-table-actual th:nth-child(2),
+  .print-table-plan th:nth-child(2) {
+    width: 10mm;
+  }
+
+  .print-table-actual th:last-child,
+  .print-table-plan th:last-child {
+    width: 18mm;
+  }
+
+  .print-table-reasons th:nth-child(1) {
+    width: 12mm;
+  }
+
+  .print-table-reasons th:nth-child(2) {
+    width: 18mm;
+  }
+
+  .print-opinion {
+    margin-bottom: 0 !important;
   }
 }
 

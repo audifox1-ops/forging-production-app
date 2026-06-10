@@ -7,7 +7,7 @@ import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import { generateOverallSummary, generateReasonSentence } from '../utils/reportTextGenerator';
 import { getEquipmentReasonGroups } from '../utils/reasonGroups';
-import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
+import type { Equipment, Shift } from '../types';
 import {
   getActualDateFromPlanDate,
   getPlanDateFromActualDate,
@@ -25,6 +25,14 @@ function getPrintRateClass(rate: number | null) {
   return 'text-red-700';
 }
 
+const PRINT_EQUIPMENT_ORDER: Equipment[] = ['P15', 'P5', 'R/M', 'P8'];
+const PRINT_SHIFT_ORDER: Shift[] = ['주간', '야간'];
+
+function getOrderIndex<T>(order: readonly T[], value: T) {
+  const index = order.indexOf(value);
+  return index === -1 ? order.length : index;
+}
+
 export default function PrintReportPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
   const navigate = useNavigate();
@@ -36,10 +44,10 @@ export default function PrintReportPage() {
   const reportPlanDate = report?.next_plan_date || planDate;
   const entries = report ? getEntriesByReport(report.id) : [];
   const summary = calcDashboardSummary(entries);
-  const equipmentGroups = EQUIPMENT_LIST.map(equipment => {
+  const equipmentGroups = PRINT_EQUIPMENT_ORDER.map(equipment => {
     const rows = entries
       .filter(entry => entry.equipment === equipment)
-      .sort((a, b) => SHIFT_LIST.indexOf(a.shift) - SHIFT_LIST.indexOf(b.shift))
+      .sort((a, b) => getOrderIndex(PRINT_SHIFT_ORDER, a.shift) - getOrderIndex(PRINT_SHIFT_ORDER, b.shift))
       .map(entry => {
         const productShortfall = Math.max(0, (entry.product_plan || 0) - (entry.product_actual || 0));
         const billetShortfall = Math.max(0, (entry.billet_plan || 0) - (entry.billet_actual || 0));
@@ -114,7 +122,7 @@ export default function PrintReportPage() {
 
       {/* 인쇄 콘텐츠 */}
       <div className="print-area bg-white min-h-screen p-8 pt-20 no-print:pt-20">
-        <div className="max-w-4xl mx-auto">
+        <div className="print-sheet max-w-4xl mx-auto">
           {/* 보고서 헤더 */}
           <div className="print-header text-center mb-6 pb-4 border-b-2 border-blue-800">
             <h1 className="text-2xl font-bold text-blue-900">단조 생산 일일 보고서</h1>
@@ -126,17 +134,17 @@ export default function PrintReportPage() {
           </div>
 
           {/* 1. 종합 요약 */}
-          <div className="mb-5">
+          <div className="print-section mb-5">
             <div className="print-section-title bg-blue-100 px-3 py-2 font-bold text-blue-900 text-sm mb-2 border-l-4 border-blue-700">
               1. 전일 실적 및 금일 계획 요약
             </div>
-            <div className="grid grid-cols-4 gap-3 mb-3">
-              <div className={`p-3 rounded-lg text-center border-2 ${
+            <div className="print-kpi-grid grid grid-cols-4 gap-3 mb-3">
+              <div className={`print-kpi-card p-3 rounded-lg text-center border-2 ${
                 summary.total_achievement_rate >= 100 ? 'bg-green-50 border-green-300' :
                   summary.total_achievement_rate >= 90 ? 'bg-yellow-50 border-yellow-300' : 'bg-red-50 border-red-300'
               }`}>
                 <div className="text-xs text-gray-500">전체 달성율</div>
-                <div className={`text-2xl font-bold mt-1 ${
+                <div className={`print-kpi-value text-2xl font-bold mt-1 ${
                   summary.total_achievement_rate >= 100 ? 'text-green-700' :
                     summary.total_achievement_rate >= 90 ? 'text-yellow-700' : 'text-red-700'
                 }`}>
@@ -146,27 +154,27 @@ export default function PrintReportPage() {
                   {formatNumber(summary.total_actual)} / {formatNumber(summary.total_plan)} KG
                 </div>
               </div>
-              <div className="p-3 rounded-lg text-center border bg-blue-50 border-blue-200">
+              <div className="print-kpi-card p-3 rounded-lg text-center border bg-blue-50 border-blue-200">
                 <div className="text-xs text-gray-500">제품 달성율</div>
-                <div className="text-2xl font-bold mt-1 text-blue-700">
+                <div className="print-kpi-value text-2xl font-bold mt-1 text-blue-700">
                   {summary.product_achievement_rate.toFixed(1)}%
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   {formatNumber(summary.total_product_actual)} / {formatNumber(summary.total_product_plan)} KG
                 </div>
               </div>
-              <div className="p-3 rounded-lg text-center border bg-amber-50 border-amber-200">
+              <div className="print-kpi-card p-3 rounded-lg text-center border bg-amber-50 border-amber-200">
                 <div className="text-xs text-gray-500">황지 달성율</div>
-                <div className="text-2xl font-bold mt-1 text-amber-700">
+                <div className="print-kpi-value text-2xl font-bold mt-1 text-amber-700">
                   {summary.billet_achievement_rate.toFixed(1)}%
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   {formatNumber(summary.total_billet_actual)} / {formatNumber(summary.total_billet_plan)} KG
                 </div>
               </div>
-              <div className="p-3 rounded-lg text-center border bg-green-50 border-green-200">
+              <div className="print-kpi-card p-3 rounded-lg text-center border bg-green-50 border-green-200">
                 <div className="text-xs text-gray-500">금일 계획</div>
-                <div className="text-2xl font-bold mt-1 text-green-700">
+                <div className="print-kpi-value text-2xl font-bold mt-1 text-green-700">
                   {formatNumber(summary.total_next_plan)}
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
@@ -174,17 +182,17 @@ export default function PrintReportPage() {
                 </div>
               </div>
             </div>
-            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 leading-relaxed">
+            <div className="print-summary-box p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 leading-relaxed">
               {overallSummary}
             </div>
           </div>
 
           {/* 2. 설비별 실적 표 */}
-          <div className="mb-5">
+          <div className="print-section mb-5">
             <div className="print-section-title bg-blue-100 px-3 py-2 font-bold text-blue-900 text-sm mb-2 border-l-4 border-blue-700">
               2. 전일 생산실적 보고 (단위: KG)
             </div>
-            <table className="print-table w-full text-xs">
+            <table className="print-table print-table-actual w-full text-xs">
               <thead>
                 <tr>
                   <th rowSpan={2} className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">설비</th>
@@ -298,11 +306,11 @@ export default function PrintReportPage() {
 
           {/* 3. 미달성 사유 및 만회대책 */}
           {reasonGroups.length > 0 && (
-            <div className="mb-5">
+            <div className="print-section mb-5">
               <div className="print-section-title bg-blue-100 px-3 py-2 font-bold text-blue-900 text-sm mb-2 border-l-4 border-blue-700">
                 3. 미달성 사유 및 만회대책
               </div>
-              <table className="print-table w-full text-xs">
+              <table className="print-table print-table-reasons w-full text-xs">
                 <thead>
                   <tr>
                     <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400 w-20">설비</th>
@@ -345,11 +353,11 @@ export default function PrintReportPage() {
           )}
 
           {/* 4. 금일 생산계획 */}
-          <div className="mb-5">
+          <div className="print-section mb-5">
             <div className="print-section-title bg-blue-100 px-3 py-2 font-bold text-blue-900 text-sm mb-2 border-l-4 border-blue-700">
               4. 금일 생산계획 보고 (계획일: {formattedPlanDate})
             </div>
-            <table className="print-table w-full text-xs">
+            <table className="print-table print-table-plan w-full text-xs">
               <thead>
                 <tr>
                   <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">설비</th>
@@ -397,11 +405,11 @@ export default function PrintReportPage() {
           </div>
 
           {/* 5. 종합 의견 */}
-          <div className="mb-5">
+          <div className="print-section mb-5">
             <div className="print-section-title bg-blue-100 px-3 py-2 font-bold text-blue-900 text-sm mb-2 border-l-4 border-blue-700">
               5. 종합 의견
             </div>
-            <div className="border border-gray-300 rounded-lg p-4 text-sm text-gray-700 leading-relaxed min-h-[80px] bg-white">
+            <div className="print-opinion border border-gray-300 rounded-lg p-4 text-sm text-gray-700 leading-relaxed min-h-[80px] bg-white">
               {overallSummary}
               {summary.total_shortfall > 0 && (
                 <div className="mt-2 text-red-700">
