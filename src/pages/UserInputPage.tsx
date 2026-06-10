@@ -15,17 +15,6 @@ import {
 type ReasonFormData = {
   reason_category: ReasonCategory | '';
   reason_detail: string;
-  action_today: string;
-  recovery_plan: string;
-  support_request: string;
-};
-
-const EMPTY_REASON: ReasonFormData = {
-  reason_category: '',
-  reason_detail: '',
-  action_today: '',
-  recovery_plan: '',
-  support_request: '',
 };
 
 function getEntryShortfall(entry: { product_plan?: number; product_actual?: number; billet_plan?: number; billet_actual?: number }) {
@@ -38,28 +27,13 @@ function getReasonFromEntry(entry?: Partial<ReasonFormData>): ReasonFormData {
   return {
     reason_category: entry?.reason_category || '',
     reason_detail: entry?.reason_detail || '',
-    action_today: entry?.action_today || '',
-    recovery_plan: entry?.recovery_plan || '',
-    support_request: entry?.support_request || '',
   };
 }
 
 function hasReasonContent(entry: Partial<ReasonFormData>) {
   return Boolean(
     entry.reason_category ||
-    entry.reason_detail?.trim() ||
-    entry.action_today?.trim() ||
-    entry.recovery_plan?.trim() ||
-    entry.support_request?.trim()
-  );
-}
-
-function isReasonComplete(reason: ReasonFormData) {
-  return Boolean(
-    reason.reason_category &&
-    reason.reason_detail.trim() &&
-    reason.action_today.trim() &&
-    reason.recovery_plan.trim()
+    entry.reason_detail?.trim()
   );
 }
 
@@ -67,9 +41,9 @@ function getReasonPayload(reason: ReasonFormData) {
   return {
     reason_category: reason.reason_category || null,
     reason_detail: reason.reason_detail.trim() || null,
-    action_today: reason.action_today.trim() || null,
-    recovery_plan: reason.recovery_plan.trim() || null,
-    support_request: reason.support_request.trim() || null,
+    action_today: null,
+    recovery_plan: null,
+    support_request: null,
   } as any;
 }
 
@@ -143,9 +117,6 @@ export default function UserInputPage() {
     selectedReasonSource?.id,
     selectedReasonSource?.reason_category,
     selectedReasonSource?.reason_detail,
-    selectedReasonSource?.action_today,
-    selectedReasonSource?.recovery_plan,
-    selectedReasonSource?.support_request,
   ]);
 
   const handlePlanDateChange = (value: string) => {
@@ -191,8 +162,6 @@ export default function UserInputPage() {
     const errors: string[] = [];
     if (!sharedReason.reason_category) errors.push('미달성 사유를 선택해주세요.');
     if (!sharedReason.reason_detail.trim()) errors.push('상세 원인을 입력해주세요.');
-    if (!sharedReason.action_today.trim()) errors.push('금일 조치사항을 입력해주세요.');
-    if (!sharedReason.recovery_plan.trim()) errors.push('금일 만회계획을 입력해주세요.');
 
     setSharedReasonErrors(errors);
     return errors.length === 0;
@@ -254,7 +223,7 @@ export default function UserInputPage() {
           {canWrite || canEdit ? (
             <>
               <strong>전일 생산계획과 실적, 금일 생산계획을 언제든지 수정할 수 있습니다.</strong>{' '}
-              목표값은 기준값으로만 표시되며, 전일 계획 대비 미달 항목은 사유와 만회대책을 작성해야 합니다.
+              목표값은 기준값으로만 표시되며, 전일 계획 대비 미달 항목은 사유를 작성해야 합니다.
             </>
           ) : (
             <>관리자에게 쓰기 또는 편집 권한을 받아야 실적을 입력하거나 수정할 수 있습니다.</>
@@ -754,7 +723,7 @@ function SharedReasonSection({
       >
         <span className="flex items-center gap-2">
           <AlertCircle size={15} />
-          {equipment} 공통 미달성 사유 및 만회대책
+          {equipment} 공통 미달성 사유
           {hasShortfall && <span className="text-red-500 text-xs">* 필수 입력</span>}
         </span>
         {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -766,7 +735,7 @@ function SharedReasonSection({
             <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
               <div>
-                <div>주야합산 설비 일일 목표 기준 미달이 발생했습니다. 사유와 만회대책은 이 공통 입력란에 한 번만 작성합니다.</div>
+                <div>주야합산 설비 일일 목표 기준 미달이 발생했습니다. 사유는 이 공통 입력란에 한 번만 작성합니다.</div>
                 <div className="mt-1 text-xs">
                   {shortfallRows.map(row => (
                     <span key={row.entry.id} className="mr-3">
@@ -821,48 +790,6 @@ function SharedReasonSection({
               placeholder="구체적인 원인을 작성해 주세요 (설비명, 시간, 수량 등 포함)"
               className="form-textarea"
               rows={3}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="form-label">
-                금일 조치사항 {hasShortfall && <span className="text-red-500">*</span>}
-              </label>
-              <textarea
-                value={reason.action_today}
-                onChange={e => onChange('action_today', e.target.value)}
-                disabled={!canModify}
-                placeholder="금일 즉시 취한 또는 취할 조치를 작성해 주세요"
-                className="form-textarea"
-                rows={3}
-              />
-            </div>
-
-            <div>
-              <label className="form-label">
-                금일 만회계획 {hasShortfall && <span className="text-red-500">*</span>}
-              </label>
-              <textarea
-                value={reason.recovery_plan}
-                onChange={e => onChange('recovery_plan', e.target.value)}
-                disabled={!canModify}
-                placeholder="금일 어느 설비에서 얼마를 추가 생산할지 수량 기준으로 작성"
-                className="form-textarea"
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="form-label">지원 요청사항</label>
-            <textarea
-              value={reason.support_request}
-              onChange={e => onChange('support_request', e.target.value)}
-              disabled={!canModify}
-              placeholder="관리자 또는 타 부서에 지원이 필요한 사항을 작성해 주세요 (선택)"
-              className="form-textarea"
-              rows={2}
             />
           </div>
 
