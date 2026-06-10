@@ -6,6 +6,7 @@ import { Printer, ArrowLeft } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import { generateOverallSummary, generateReasonSentence } from '../utils/reportTextGenerator';
+import { getEquipmentReasonGroups } from '../utils/reasonGroups';
 import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
 import {
   getActualDateFromPlanDate,
@@ -72,6 +73,8 @@ export default function PrintReportPage() {
       },
     };
   }).filter(group => group.rows.length > 0);
+  const reasonGroups = getEquipmentReasonGroups(entries);
+  const reasonGroupsByEquipment = new Map(reasonGroups.map(group => [group.equipment, group]));
 
   const handlePrint = () => window.print();
 
@@ -202,9 +205,13 @@ export default function PrintReportPage() {
                 </tr>
               </thead>
               <tbody>
-                {equipmentGroups.map(group => (
+                {equipmentGroups.map(group => {
+                  const reasonGroup = reasonGroupsByEquipment.get(group.equipment);
+                  const reasonLabel = reasonGroup?.categories.join(', ');
+
+                  return (
                   <React.Fragment key={group.equipment}>
-                    {group.rows.map(row => (
+                    {group.rows.map((row, rowIndex) => (
                       <tr
                         key={row.entry.id}
                         style={row.hasShortfall && row.entry.product_actual > 0 ? { backgroundColor: '#fff7ed' } : {}}
@@ -227,9 +234,11 @@ export default function PrintReportPage() {
                         <td className={`px-2 py-1.5 text-right border border-gray-300 ${row.billetShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
                           {row.billetShortfall > 0 ? formatNumber(row.billetShortfall) : '-'}
                         </td>
-                        <td className="px-2 py-1.5 text-center text-xs border border-gray-300">
-                          {row.entry.reason_category || '-'}
-                        </td>
+                        {rowIndex === 0 && (
+                          <td rowSpan={group.rows.length + 1} className="px-2 py-1.5 text-center text-xs border border-gray-300 align-middle">
+                            {reasonLabel || '-'}
+                          </td>
+                        )}
                       </tr>
                     ))}
                     <tr style={{ backgroundColor: '#f8fafc', fontWeight: 'bold' }}>
@@ -250,10 +259,10 @@ export default function PrintReportPage() {
                       <td className={`px-2 py-1.5 text-right border border-gray-300 ${group.total.billetShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
                         {group.total.billetShortfall > 0 ? formatNumber(group.total.billetShortfall) : '-'}
                       </td>
-                      <td className="border border-gray-300"></td>
                     </tr>
                   </React.Fragment>
-                ))}
+                  );
+                })}
                 {/* 합계 행 */}
                 <tr style={{ backgroundColor: '#dbeafe', fontWeight: 'bold', borderTop: '2px solid #1d4ed8' }}>
                   <td colSpan={2} className="px-2 py-1.5 text-center border border-gray-400">합 계</td>
@@ -288,7 +297,7 @@ export default function PrintReportPage() {
           </div>
 
           {/* 3. 미달성 사유 및 만회대책 */}
-          {entries.some(e => e.reason_category) && (
+          {reasonGroups.length > 0 && (
             <div className="mb-5">
               <div className="print-section-title bg-blue-100 px-3 py-2 font-bold text-blue-900 text-sm mb-2 border-l-4 border-blue-700">
                 3. 미달성 사유 및 만회대책
@@ -296,35 +305,40 @@ export default function PrintReportPage() {
               <table className="print-table w-full text-xs">
                 <thead>
                   <tr>
-                    <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400 w-20">설비/조</th>
+                    <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400 w-20">설비</th>
                     <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400 w-20">미달 사유</th>
-                    <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">상세 원인</th>
-                    <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">금일 조치사항</th>
-                    <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">금일 만회계획</th>
+                    <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">내용</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {entries
-                    .filter(e => e.reason_category)
-                    .map(entry => (
-                      <tr key={entry.id}>
+                  {reasonGroups.map(group => (
+                      <tr key={group.equipment}>
                         <td className="px-2 py-2 text-center font-bold border border-gray-300">
-                          {entry.equipment}<br/>{entry.shift}
+                          {group.equipment}
                         </td>
                         <td className="px-2 py-2 text-center border border-gray-300 text-orange-700 font-medium">
-                          {entry.reason_category}
+                          {group.categories.join(', ') || '-'}
                         </td>
                         <td className="px-2 py-2 border border-gray-300 leading-relaxed">
-                          {entry.reason_detail || '-'}
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300 leading-relaxed">
-                          {entry.action_today || '-'}
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300 leading-relaxed">
-                          {entry.recovery_plan || '-'}
+                          {group.reasonDetails.length > 0 && (
+                            <div><strong>상세 원인:</strong> {group.reasonDetails.join(' / ')}</div>
+                          )}
+                          {group.actionsToday.length > 0 && (
+                            <div><strong>금일 조치:</strong> {group.actionsToday.join(' / ')}</div>
+                          )}
+                          {group.recoveryPlans.length > 0 && (
+                            <div><strong>만회계획:</strong> {group.recoveryPlans.join(' / ')}</div>
+                          )}
+                          {group.supportRequests.length > 0 && (
+                            <div><strong>지원 요청:</strong> {group.supportRequests.join(' / ')}</div>
+                          )}
+                          {group.reasonDetails.length === 0 &&
+                            group.actionsToday.length === 0 &&
+                            group.recoveryPlans.length === 0 &&
+                            group.supportRequests.length === 0 && '-'}
                         </td>
                       </tr>
-                    ))}
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -347,21 +361,29 @@ export default function PrintReportPage() {
                 </tr>
               </thead>
               <tbody>
-                {entries.map(entry => {
-                  const nextProductPlan = entry.next_product_plan || 0;
-                  const nextBilletPlan = entry.next_billet_plan || 0;
-                  return (
-                    <tr key={entry.id}>
-                      <td className="px-2 py-1.5 text-center font-bold border border-gray-300">{entry.equipment}</td>
-                      <td className="px-2 py-1.5 text-center border border-gray-300">{entry.shift}</td>
-                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(nextProductPlan)}</td>
-                      <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(nextBilletPlan)}</td>
-                      <td className="px-2 py-1.5 text-right border border-gray-300 font-medium">{formatNumber(nextProductPlan + nextBilletPlan)}</td>
-                      <td className="px-2 py-1.5 text-center border border-gray-300 text-gray-500">
-                        {entry.recovery_plan || '-'}
-                      </td>
-                    </tr>
-                  );
+                {equipmentGroups.map(group => {
+                  const recoveryLabel = reasonGroupsByEquipment.get(group.equipment)?.recoveryPlans.join(' / ');
+
+                  return group.rows.map((row, rowIndex) => {
+                    const entry = row.entry;
+                    const nextProductPlan = entry.next_product_plan || 0;
+                    const nextBilletPlan = entry.next_billet_plan || 0;
+
+                    return (
+                      <tr key={entry.id}>
+                        <td className="px-2 py-1.5 text-center font-bold border border-gray-300">{entry.equipment}</td>
+                        <td className="px-2 py-1.5 text-center border border-gray-300">{entry.shift}</td>
+                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(nextProductPlan)}</td>
+                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(nextBilletPlan)}</td>
+                        <td className="px-2 py-1.5 text-right border border-gray-300 font-medium">{formatNumber(nextProductPlan + nextBilletPlan)}</td>
+                        {rowIndex === 0 && (
+                          <td rowSpan={group.rows.length} className="px-2 py-1.5 text-center border border-gray-300 text-gray-500 align-middle">
+                            {recoveryLabel || '-'}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  });
                 })}
                 <tr style={{ backgroundColor: '#dbeafe', fontWeight: 'bold' }}>
                   <td colSpan={2} className="px-2 py-1.5 text-center border border-gray-400">합 계</td>

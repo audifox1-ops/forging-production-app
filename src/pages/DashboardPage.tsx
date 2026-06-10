@@ -27,10 +27,11 @@ import {
 } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
+import { getEquipmentReasonGroups } from '../utils/reasonGroups';
 import KPIStatusCard from '../components/KPIStatusCard';
 import SubmitStatusBadge from '../components/SubmitStatusBadge';
 import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
-import type { Equipment, PeriodTargetType, ProductionReport } from '../types';
+import type { PeriodTargetType, ProductionReport } from '../types';
 import {
   getActualDateFromPlanDate,
   getReportPlanDate,
@@ -325,6 +326,9 @@ export default function DashboardPage() {
     const formatRows = (rows: typeof detailRows) =>
       rows.slice(0, 4).map(row => `${row.entry.equipment}/${row.entry.shift}`).join(', ') +
       (rows.length > 4 ? ` 외 ${rows.length - 4}건` : '');
+    const formatEquipments = (equipments: string[]) =>
+      equipments.slice(0, 4).join(', ') +
+      (equipments.length > 4 ? ` 외 ${equipments.length - 4}개 설비` : '');
     const notStartedRows = detailRows.filter(row => row.entry.submit_status === 'not_started');
     const unsubmittedRows = detailRows.filter(row =>
       row.entry.submit_status !== 'submitted' && row.entry.submit_status !== 'approved'
@@ -333,6 +337,7 @@ export default function DashboardPage() {
       row.hasShortfall &&
       (!row.entry.reason_category || !row.entry.reason_detail?.trim() || !row.entry.recovery_plan?.trim())
     );
+    const missingReasonEquipments = Array.from(new Set(missingReasonRows.map(row => row.entry.equipment)));
     const alerts: { title: string; message: string; tone: 'danger' | 'warning' | 'normal' | 'success' }[] = [];
 
     if (notStartedRows.length > 0) {
@@ -349,10 +354,10 @@ export default function DashboardPage() {
         tone: 'warning',
       });
     }
-    if (missingReasonRows.length > 0) {
+    if (missingReasonEquipments.length > 0) {
       alerts.push({
-        title: `미달 사유 보완 ${missingReasonRows.length}건`,
-        message: formatRows(missingReasonRows),
+        title: `미달 사유 보완 ${missingReasonEquipments.length}개 설비`,
+        message: formatEquipments(missingReasonEquipments),
         tone: 'danger',
       });
     }
@@ -366,6 +371,11 @@ export default function DashboardPage() {
 
     return alerts;
   }, [detailRows]);
+  const reasonGroups = React.useMemo(() => getEquipmentReasonGroups(entries), [entries]);
+  const reasonGroupsByEquipment = React.useMemo(
+    () => new Map(reasonGroups.map(group => [group.equipment, group])),
+    [reasonGroups]
+  );
   const reasonAnalysis = React.useMemo(() => {
     const reasonMap = new Map<string, {
       category: string;
@@ -375,23 +385,26 @@ export default function DashboardPage() {
       equipments: Record<string, number>;
     }>();
 
-    detailRows.forEach(row => {
-      const totalShortfall = row.productShortfall + row.billetShortfall;
-      if (!row.entry.reason_category && totalShortfall <= 0) return;
+    detailGroups.forEach(group => {
+      const totalShortfall = group.total.productShortfall + group.total.billetShortfall;
+      const reasonGroup = reasonGroupsByEquipment.get(group.equipment);
+      const categories = reasonGroup?.categories.length ? reasonGroup.categories : ['사유 미입력'];
+      if (!reasonGroup?.categories.length && totalShortfall <= 0) return;
 
-      const category = row.entry.reason_category || '사유 미입력';
-      const current = reasonMap.get(category) ?? {
-        category,
-        count: 0,
-        productShortfall: 0,
-        billetShortfall: 0,
-        equipments: {},
-      };
-      current.count += 1;
-      current.productShortfall += row.productShortfall;
-      current.billetShortfall += row.billetShortfall;
-      current.equipments[row.entry.equipment] = (current.equipments[row.entry.equipment] || 0) + 1;
-      reasonMap.set(category, current);
+      categories.forEach(category => {
+        const current = reasonMap.get(category) ?? {
+          category,
+          count: 0,
+          productShortfall: 0,
+          billetShortfall: 0,
+          equipments: {},
+        };
+        current.count += 1;
+        current.productShortfall += group.total.productShortfall;
+        current.billetShortfall += group.total.billetShortfall;
+        current.equipments[group.equipment] = (current.equipments[group.equipment] || 0) + 1;
+        reasonMap.set(category, current);
+      });
     });
 
     return Array.from(reasonMap.values())
@@ -402,53 +415,7 @@ export default function DashboardPage() {
         return { ...item, mainEquipment, totalShortfall };
       })
       .sort((a, b) => b.totalShortfall - a.totalShortfall || b.count - a.count);
-  }, [detailRows]);
-  const reasonGroups = React.useMemo(() => {
-    const addUnique = (items: string[], value?: string | null) => {
-      const trimmed = value?.trim();
-      if (trimmed && !items.includes(trimmed)) items.push(trimmed);
-    };
-    const groupMap = new Map<string, {
-      key: string;
-      equipment: Equipment;
-      actualDate: string;
-      categories: string[];
-      reasonDetails: string[];
-      actionsToday: string[];
-      recoveryPlans: string[];
-      supportRequests: string[];
-    }>();
-
-    entries
-      .filter(entry => entry.reason_category && entry.submit_status === 'submitted')
-      .forEach(entry => {
-        const actualDate = reportDateById.get(entry.report_id) ?? selectedActualDate;
-        const key = `${selectedPeriod === 'day' ? selectedActualDate : actualDate}-${entry.equipment}`;
-        const group = groupMap.get(key) ?? {
-          key,
-          equipment: entry.equipment,
-          actualDate,
-          categories: [],
-          reasonDetails: [],
-          actionsToday: [],
-          recoveryPlans: [],
-          supportRequests: [],
-        };
-
-        addUnique(group.categories, entry.reason_category);
-        addUnique(group.reasonDetails, entry.reason_detail);
-        addUnique(group.actionsToday, entry.action_today);
-        addUnique(group.recoveryPlans, entry.recovery_plan);
-        addUnique(group.supportRequests, entry.support_request);
-        groupMap.set(key, group);
-      });
-
-    return Array.from(groupMap.values()).sort((a, b) => {
-      const dateOrder = a.actualDate.localeCompare(b.actualDate);
-      if (dateOrder !== 0) return dateOrder;
-      return EQUIPMENT_LIST.indexOf(a.equipment) - EQUIPMENT_LIST.indexOf(b.equipment);
-    });
-  }, [entries, reportDateById, selectedActualDate, selectedPeriod]);
+  }, [detailGroups, reasonGroupsByEquipment]);
   const topReason = reasonAnalysis[0];
   const missingReasonCount = reasonAnalysis.find(item => item.category === '사유 미입력')?.count ?? 0;
   const totalReasonShortfall = reasonAnalysis.reduce((sum, item) => sum + item.totalShortfall, 0);
@@ -1161,9 +1128,13 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {detailGroups.map(group => (
+                  {detailGroups.map(group => {
+                    const reasonGroup = reasonGroupsByEquipment.get(group.equipment);
+                    const reasonLabel = reasonGroup?.categories.join(', ');
+
+                    return (
                     <React.Fragment key={group.equipment}>
-                      {group.rows.map(row => (
+                      {group.rows.map((row, rowIndex) => (
                         <tr
                           key={row.entry.id}
                           className={row.hasShortfall && row.entry.submit_status !== 'not_started' ? 'shortfall-row' : ''}
@@ -1195,9 +1166,11 @@ export default function DashboardPage() {
                           <td className={row.billetShortfall > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>
                             {row.billetShortfall > 0 ? `▼ ${formatNumber(row.billetShortfall)}` : '-'}
                           </td>
-                          <td className="text-center-cell text-xs">
-                            {row.entry.reason_category || <span className="text-gray-300">-</span>}
-                          </td>
+                          {rowIndex === 0 && (
+                            <td rowSpan={group.rows.length + 1} className="text-center-cell text-xs align-middle">
+                              {reasonLabel || <span className="text-gray-300">-</span>}
+                            </td>
+                          )}
                           <td className="text-center-cell">
                             <SubmitStatusBadge status={row.entry.submit_status} />
                           </td>
@@ -1223,10 +1196,11 @@ export default function DashboardPage() {
                         <td className={group.total.billetShortfall > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>
                           {group.total.billetShortfall > 0 ? `▼ ${formatNumber(group.total.billetShortfall)}` : '-'}
                         </td>
-                        <td colSpan={2}></td>
+                        <td></td>
                       </tr>
                     </React.Fragment>
-                  ))}
+                    );
+                  })}
 
                   {/* 합계 행 */}
                   <tr className="bg-blue-50 font-bold border-t-2 border-blue-200">
@@ -1338,55 +1312,44 @@ export default function DashboardPage() {
                 <h3 className="font-semibold text-gray-800">미달성 사유 및 만회대책</h3>
                 <span className="text-xs text-gray-500">설비별 통합 표시</span>
               </div>
-              <div className="card-body space-y-4">
-                {reasonGroups.map(group => (
-                  <div key={group.key} className="border border-orange-200 bg-orange-50 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <AlertTriangle size={16} className="text-orange-500" />
-                      <div>
-                        <div className="font-semibold text-orange-800">
-                          {selectedPeriod !== 'day' && `${format(parseISO(group.actualDate), 'MM.dd')} · `}
-                          {group.equipment} 미달성 사유 — {group.categories.join(', ')}
-                        </div>
-                        <div className="text-xs text-orange-700 mt-0.5">주간/야간 통합 작성 내용</div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                      {group.reasonDetails.length > 0 && (
-                        <div>
-                          <div className="text-xs text-gray-500 mb-1 font-medium">상세 원인</div>
-                          {group.reasonDetails.map(text => (
-                            <div key={text} className="text-gray-700">{text}</div>
-                          ))}
-                        </div>
-                      )}
-                      {group.actionsToday.length > 0 && (
-                        <div>
-                          <div className="text-xs text-gray-500 mb-1 font-medium">금일 조치사항</div>
-                          {group.actionsToday.map(text => (
-                            <div key={text} className="text-gray-700">{text}</div>
-                          ))}
-                        </div>
-                      )}
-                      {group.recoveryPlans.length > 0 && (
-                        <div>
-                          <div className="text-xs text-gray-500 mb-1 font-medium">금일 만회계획</div>
-                          {group.recoveryPlans.map(text => (
-                            <div key={text} className="text-gray-700">{text}</div>
-                          ))}
-                        </div>
-                      )}
-                      {group.supportRequests.length > 0 && (
-                        <div>
-                          <div className="text-xs text-gray-500 mb-1 font-medium">지원 요청사항</div>
-                          {group.supportRequests.map(text => (
-                            <div key={text} className="text-gray-700 text-orange-700">{text}</div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="card-body">
+                <div className="table-wrapper">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-orange-50 border-b border-orange-100">
+                        <th className="px-4 py-2.5 text-left text-orange-800 font-medium">설비</th>
+                        <th className="px-4 py-2.5 text-left text-orange-800 font-medium">사유</th>
+                        <th className="px-4 py-2.5 text-left text-orange-800 font-medium">내용</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-orange-50">
+                      {reasonGroups.map(group => (
+                        <tr key={group.equipment} className="align-top">
+                          <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">{group.equipment}</td>
+                          <td className="px-4 py-3 text-orange-700 whitespace-nowrap">{group.categories.join(', ') || '-'}</td>
+                          <td className="px-4 py-3 text-gray-700 leading-relaxed">
+                            {group.reasonDetails.length > 0 && (
+                              <div><span className="font-medium text-gray-800">상세 원인:</span> {group.reasonDetails.join(' / ')}</div>
+                            )}
+                            {group.actionsToday.length > 0 && (
+                              <div><span className="font-medium text-gray-800">금일 조치:</span> {group.actionsToday.join(' / ')}</div>
+                            )}
+                            {group.recoveryPlans.length > 0 && (
+                              <div><span className="font-medium text-gray-800">만회계획:</span> {group.recoveryPlans.join(' / ')}</div>
+                            )}
+                            {group.supportRequests.length > 0 && (
+                              <div><span className="font-medium text-gray-800">지원 요청:</span> {group.supportRequests.join(' / ')}</div>
+                            )}
+                            {group.reasonDetails.length === 0 &&
+                              group.actionsToday.length === 0 &&
+                              group.recoveryPlans.length === 0 &&
+                              group.supportRequests.length === 0 && '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

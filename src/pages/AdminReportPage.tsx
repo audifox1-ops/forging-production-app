@@ -6,6 +6,7 @@ import { ArrowLeft, Printer } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import { generateReportText } from '../utils/reportTextGenerator';
+import { getEquipmentReasonGroups } from '../utils/reasonGroups';
 import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
 import {
   getActualDateFromPlanDate,
@@ -74,6 +75,8 @@ export default function AdminReportPage() {
       },
     };
   }).filter(group => group.rows.length > 0);
+  const reasonGroups = getEquipmentReasonGroups(entries);
+  const reasonGroupsByEquipment = new Map(reasonGroups.map(group => [group.equipment, group]));
   const summaryItems = [
     {
       label: '제품',
@@ -204,9 +207,13 @@ export default function AdminReportPage() {
               </tr>
             </thead>
             <tbody>
-              {equipmentGroups.map(group => (
+              {equipmentGroups.map(group => {
+                const reasonGroup = reasonGroupsByEquipment.get(group.equipment);
+                const reasonLabel = reasonGroup?.categories.join(', ');
+
+                return (
                 <React.Fragment key={group.equipment}>
-                  {group.rows.map(row => (
+                  {group.rows.map((row, rowIndex) => (
                     <tr key={row.entry.id}>
                       <td className="text-center-cell font-bold">{row.entry.equipment}</td>
                       <td className="text-center-cell">{row.entry.shift}</td>
@@ -226,9 +233,11 @@ export default function AdminReportPage() {
                       <td className={row.billetShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
                         {row.billetShortfall > 0 ? formatNumber(row.billetShortfall) : '-'}
                       </td>
-                      <td className="text-center-cell text-xs">
-                        {row.entry.reason_category || <span className="text-gray-300">-</span>}
-                      </td>
+                      {rowIndex === 0 && (
+                        <td rowSpan={group.rows.length + 1} className="text-center-cell text-xs align-middle">
+                          {reasonLabel || <span className="text-gray-300">-</span>}
+                        </td>
+                      )}
                     </tr>
                   ))}
                   <tr className="bg-slate-50 font-semibold border-t border-slate-200">
@@ -249,10 +258,10 @@ export default function AdminReportPage() {
                     <td className={group.total.billetShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
                       {group.total.billetShortfall > 0 ? formatNumber(group.total.billetShortfall) : '-'}
                     </td>
-                    <td></td>
                   </tr>
                 </React.Fragment>
-              ))}
+                );
+              })}
               {/* 합계 행 */}
               <tr className="bg-blue-50 font-bold border-t-2 border-blue-200">
                 <td colSpan={2} className="text-center-cell">합 계</td>
@@ -305,22 +314,29 @@ export default function AdminReportPage() {
               </tr>
             </thead>
             <tbody>
-              {entries.map(entry => {
-                const nextProductPlan = entry.next_product_plan || 0;
-                const nextBilletPlan = entry.next_billet_plan || 0;
+              {equipmentGroups.map(group => {
+                const recoveryLabel = reasonGroupsByEquipment.get(group.equipment)?.recoveryPlans.join(' / ');
 
-                return (
-                  <tr key={entry.id}>
-                    <td className="text-center-cell font-bold">{entry.equipment}</td>
-                    <td className="text-center-cell">{entry.shift}</td>
-                    <td>{formatNumber(nextProductPlan)}</td>
-                    <td>{formatNumber(nextBilletPlan)}</td>
-                    <td className="font-medium">{formatNumber(nextProductPlan + nextBilletPlan)}</td>
-                    <td className="text-center-cell text-xs">
-                      {entry.recovery_plan || <span className="text-gray-300">-</span>}
-                    </td>
-                  </tr>
-                );
+                return group.rows.map((row, rowIndex) => {
+                  const entry = row.entry;
+                  const nextProductPlan = entry.next_product_plan || 0;
+                  const nextBilletPlan = entry.next_billet_plan || 0;
+
+                  return (
+                    <tr key={entry.id}>
+                      <td className="text-center-cell font-bold">{entry.equipment}</td>
+                      <td className="text-center-cell">{entry.shift}</td>
+                      <td>{formatNumber(nextProductPlan)}</td>
+                      <td>{formatNumber(nextBilletPlan)}</td>
+                      <td className="font-medium">{formatNumber(nextProductPlan + nextBilletPlan)}</td>
+                      {rowIndex === 0 && (
+                        <td rowSpan={group.rows.length} className="text-center-cell text-xs align-middle">
+                          {recoveryLabel || <span className="text-gray-300">-</span>}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                });
               })}
               <tr className="bg-green-50 font-bold border-t-2 border-green-200">
                 <td colSpan={2} className="text-center-cell">합 계</td>
@@ -335,7 +351,7 @@ export default function AdminReportPage() {
       </div>
 
       {/* 미달성 사유 및 만회대책 */}
-      {entries.some(e => e.reason_category) && (
+      {reasonGroups.length > 0 && (
         <div className="card">
           <div className="card-header">
             <h3 className="font-semibold text-gray-800">미달성 사유 및 만회대책</h3>
@@ -344,35 +360,40 @@ export default function AdminReportPage() {
             <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
               <thead>
                 <tr className="bg-gray-100">
-                  <th className="px-3 py-2 text-left border-b border-gray-200">설비/근무조</th>
+                  <th className="px-3 py-2 text-left border-b border-gray-200">설비</th>
                   <th className="px-3 py-2 text-left border-b border-gray-200">사유</th>
-                  <th className="px-3 py-2 text-left border-b border-gray-200">상세 원인</th>
-                  <th className="px-3 py-2 text-left border-b border-gray-200">금일 조치</th>
-                  <th className="px-3 py-2 text-left border-b border-gray-200">만회계획</th>
+                  <th className="px-3 py-2 text-left border-b border-gray-200">내용</th>
                 </tr>
               </thead>
               <tbody>
-                {entries
-                  .filter(e => e.reason_category)
-                  .map(entry => (
-                    <tr key={entry.id} className="border-b border-gray-100">
-                      <td className="px-3 py-2 font-medium whitespace-nowrap">
-                        {entry.equipment} / {entry.shift}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-orange-700">
-                        {entry.reason_category}
-                      </td>
-                      <td className="px-3 py-2 text-gray-600 max-w-xs">
-                        {entry.reason_detail || '-'}
-                      </td>
-                      <td className="px-3 py-2 text-gray-600 max-w-xs">
-                        {entry.action_today || '-'}
-                      </td>
-                      <td className="px-3 py-2 text-gray-600 max-w-xs">
-                        {entry.recovery_plan || '-'}
-                      </td>
-                    </tr>
-                  ))}
+                {reasonGroups.map(group => (
+                  <tr key={group.equipment} className="border-b border-gray-100">
+                    <td className="px-3 py-2 font-medium whitespace-nowrap">
+                      {group.equipment}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-orange-700">
+                      {group.categories.join(', ') || '-'}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600 leading-relaxed">
+                      {group.reasonDetails.length > 0 && (
+                        <div><span className="font-medium text-gray-700">상세 원인:</span> {group.reasonDetails.join(' / ')}</div>
+                      )}
+                      {group.actionsToday.length > 0 && (
+                        <div><span className="font-medium text-gray-700">금일 조치:</span> {group.actionsToday.join(' / ')}</div>
+                      )}
+                      {group.recoveryPlans.length > 0 && (
+                        <div><span className="font-medium text-gray-700">만회계획:</span> {group.recoveryPlans.join(' / ')}</div>
+                      )}
+                      {group.supportRequests.length > 0 && (
+                        <div><span className="font-medium text-gray-700">지원 요청:</span> {group.supportRequests.join(' / ')}</div>
+                      )}
+                      {group.reasonDetails.length === 0 &&
+                        group.actionsToday.length === 0 &&
+                        group.recoveryPlans.length === 0 &&
+                        group.supportRequests.length === 0 && '-'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
