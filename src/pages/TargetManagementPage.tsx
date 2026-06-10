@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useReportStore } from '../store/reportStore';
-import { EQUIPMENT_LIST, SHIFT_LIST, PERIOD_TARGET_LABELS, PeriodTargetType } from '../types';
+import { SHIFT_LIST, PERIOD_TARGET_LABELS, PeriodTargetType } from '../types';
 import { formatNumber } from '../utils/calculations';
-import { ANNUAL_WORKDAYS_2026, WORKDAYS_2026_BY_MONTH } from '../utils/targetConfig';
+import { ANNUAL_WORKDAYS_2026, TARGET_EQUIPMENT_LIST, WORKDAYS_2026_BY_MONTH } from '../utils/targetConfig';
 import { Save, Lock } from 'lucide-react';
 
 export default function TargetManagementPage() {
@@ -49,7 +49,7 @@ export default function TargetManagementPage() {
 
   const handleSaveAll = () => {
     if (!canManageTargets) return;
-    EQUIPMENT_LIST.forEach(equipment => {
+    TARGET_EQUIPMENT_LIST.forEach(equipment => {
       SHIFT_LIST.forEach(shift => {
         const key = `${equipment}-${shift}`;
         const val = localTargets[key];
@@ -67,10 +67,10 @@ export default function TargetManagementPage() {
   };
 
   // 합계 계산
-  const totalProduct = EQUIPMENT_LIST.reduce((sum, eq) => {
+  const totalProduct = TARGET_EQUIPMENT_LIST.reduce((sum, eq) => {
     return sum + (localTargets[`${eq}-주간`]?.product || 0) + (localTargets[`${eq}-야간`]?.product || 0);
   }, 0);
-  const totalBillet = EQUIPMENT_LIST.reduce((sum, eq) => {
+  const totalBillet = TARGET_EQUIPMENT_LIST.reduce((sum, eq) => {
     return sum + (localTargets[`${eq}-주간`]?.billet || 0) + (localTargets[`${eq}-야간`]?.billet || 0);
   }, 0);
   const periodTotalProduct = (Object.keys(PERIOD_TARGET_LABELS) as PeriodTargetType[]).reduce((sum, period) => {
@@ -122,7 +122,7 @@ export default function TargetManagementPage() {
               </tr>
             </thead>
             <tbody>
-              {EQUIPMENT_LIST.map(equipment => {
+              {TARGET_EQUIPMENT_LIST.map(equipment => {
                 const equipmentProduct = SHIFT_LIST.reduce((sum, shift) => {
                   return sum + (localTargets[`${equipment}-${shift}`]?.product || 0);
                 }, 0);

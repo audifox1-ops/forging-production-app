@@ -1,4 +1,4 @@
-import { ProductionEntry, CalculatedEntry, DashboardSummaryData, EquipmentSummary, ShiftSummary, Equipment, Shift } from '../types';
+import { ProductionEntry, CalculatedEntry, DashboardSummaryData, EquipmentSummary, ShiftSummary, EQUIPMENT_LIST, SHIFT_LIST } from '../types';
 
 // 달성율 계산 (계획이 0이면 null 반환)
 export function calcAchievementRate(actual: number, plan: number): number | null {
@@ -85,8 +85,7 @@ export function calcDashboardSummary(entries: ProductionEntry[]): DashboardSumma
   const total_shortfall = Math.max(0, total_plan - total_actual);
 
   // 설비별 집계
-  const equipments: Equipment[] = ['P15', 'P5', 'R/M'];
-  const by_equipment: EquipmentSummary[] = equipments.map(equipment => {
+  const by_equipment: EquipmentSummary[] = EQUIPMENT_LIST.map(equipment => {
     const eq_entries = entries.filter(e => e.equipment === equipment);
     const pp = eq_entries.reduce((s, e) => s + (e.product_plan || 0), 0);
     const pa = eq_entries.reduce((s, e) => s + (e.product_actual || 0), 0);
@@ -104,8 +103,7 @@ export function calcDashboardSummary(entries: ProductionEntry[]): DashboardSumma
   });
 
   // 근무조별 집계
-  const shifts: Shift[] = ['주간', '야간'];
-  const by_shift: ShiftSummary[] = shifts.map(shift => {
+  const by_shift: ShiftSummary[] = SHIFT_LIST.map(shift => {
     const sh_entries = entries.filter(e => e.shift === shift);
     const pp = sh_entries.reduce((s, e) => s + (e.product_plan || 0), 0);
     const pa = sh_entries.reduce((s, e) => s + (e.product_actual || 0), 0);

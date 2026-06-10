@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS public.production_entries (
   report_id TEXT NOT NULL REFERENCES public.production_reports(id) ON DELETE CASCADE,
   user_id TEXT REFERENCES public.users(id),
   user_name TEXT,
-  equipment TEXT NOT NULL CHECK (equipment IN ('P15', 'P5', 'R/M')),
+  equipment TEXT NOT NULL CHECK (equipment IN ('P15', 'P5', 'R/M', 'P8')),
   shift TEXT NOT NULL CHECK (shift IN ('주간', '야간')),
   product_plan INTEGER NOT NULL DEFAULT 0,
   product_actual INTEGER NOT NULL DEFAULT 0,
@@ -82,6 +82,11 @@ CREATE TABLE IF NOT EXISTS public.equipment_targets (
   UNIQUE(equipment, shift, effective_date)
 );
 
+ALTER TABLE public.production_entries
+  DROP CONSTRAINT IF EXISTS production_entries_equipment_check,
+  ADD CONSTRAINT production_entries_equipment_check
+    CHECK (equipment IN ('P15', 'P5', 'R/M', 'P8'));
+
 CREATE TABLE IF NOT EXISTS public.production_period_targets (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   period TEXT NOT NULL CHECK (period IN ('weekly', 'monthly', 'yearly')),
@@ -112,12 +117,12 @@ CREATE TABLE IF NOT EXISTS public.report_status_logs (
 
 INSERT INTO public.users (id, name, email, employee_no, role, assigned_equipment, assigned_shift, can_write, can_edit, can_delete)
 VALUES
-  ('11111111-1111-1111-1111-111111111111', '관리자', 'admin@forging.com', '10001', 'admin', ARRAY['P15', 'P5', 'R/M'], NULL, TRUE, TRUE, TRUE),
-  ('22222222-2222-2222-2222-222222222222', '김회근 부장', 'hoegeun.kim@forging.com', '10002', 'manager', ARRAY['P15', 'P5', 'R/M'], NULL, TRUE, TRUE, FALSE),
+  ('11111111-1111-1111-1111-111111111111', '관리자', 'admin@forging.com', '10001', 'admin', ARRAY['P15', 'P5', 'R/M', 'P8'], NULL, TRUE, TRUE, TRUE),
+  ('22222222-2222-2222-2222-222222222222', '김회근 부장', 'hoegeun.kim@forging.com', '10002', 'manager', ARRAY['P15', 'P5', 'R/M', 'P8'], NULL, TRUE, TRUE, FALSE),
   ('33333333-3333-3333-3333-333333333333', '김현 차장', 'hyun.kim@forging.com', '10003', 'user', ARRAY['P15'], NULL, TRUE, FALSE, FALSE),
   ('44444444-4444-4444-4444-444444444444', '구병준 차장', 'byeongjun.koo@forging.com', '10004', 'user', ARRAY['P5'], NULL, TRUE, FALSE, FALSE),
-  ('55555555-5555-5555-5555-555555555555', '우재한 과장', 'jaehan.woo@forging.com', '10005', 'user', ARRAY['R/M'], NULL, TRUE, FALSE, FALSE),
-  ('66666666-6666-6666-6666-666666666666', '이은서 대리', 'eunseo.lee@forging.com', '10006', 'manager', ARRAY['P15', 'P5', 'R/M'], NULL, TRUE, TRUE, FALSE)
+  ('55555555-5555-5555-5555-555555555555', '우재한 과장', 'jaehan.woo@forging.com', '10005', 'user', ARRAY['R/M', 'P8'], NULL, TRUE, FALSE, FALSE),
+  ('66666666-6666-6666-6666-666666666666', '이은서 대리', 'eunseo.lee@forging.com', '10006', 'manager', ARRAY['P15', 'P5', 'R/M', 'P8'], NULL, TRUE, TRUE, FALSE)
 ON CONFLICT (email) DO UPDATE SET
   name = EXCLUDED.name,
   employee_no = EXCLUDED.employee_no,
@@ -144,6 +149,43 @@ VALUES
   ('monthly', 0, 0, '2026-01-01'),
   ('yearly', 100430000, 48400000, '2026-01-01')
 ON CONFLICT DO NOTHING;
+
+INSERT INTO public.production_entries (
+  id,
+  report_id,
+  user_id,
+  user_name,
+  equipment,
+  shift,
+  product_plan,
+  product_actual,
+  billet_plan,
+  billet_actual,
+  next_product_plan,
+  next_billet_plan,
+  submit_status,
+  created_at,
+  updated_at
+)
+SELECT
+  gen_random_uuid()::text,
+  report.id,
+  COALESCE((SELECT id FROM public.users WHERE email = 'jaehan.woo@forging.com' LIMIT 1), '55555555-5555-5555-5555-555555555555'),
+  COALESCE((SELECT name FROM public.users WHERE email = 'jaehan.woo@forging.com' LIMIT 1), '우재한 과장'),
+  'P8',
+  shift_value.shift,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  'not_started',
+  NOW(),
+  NOW()
+FROM public.production_reports report
+CROSS JOIN (VALUES ('주간'), ('야간')) AS shift_value(shift)
+ON CONFLICT (report_id, equipment, shift) DO NOTHING;
 
 CREATE OR REPLACE FUNCTION public.update_updated_at()
 RETURNS TRIGGER AS $$

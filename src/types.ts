@@ -1,9 +1,9 @@
-import { SHIFT_TARGETS_2026_BY_EQUIPMENT } from './utils/targetConfig';
+import { SHIFT_TARGETS_2026_BY_EQUIPMENT, TargetEquipment } from './utils/targetConfig';
 
 // 타입 정의
 
 export type UserRole = 'admin' | 'manager' | 'user' | 'viewer';
-export type Equipment = 'P15' | 'P5' | 'R/M';
+export type Equipment = 'P15' | 'P5' | 'R/M' | 'P8';
 export type Shift = '주간' | '야간';
 export type ProductionType = '제품' | '황지';
 export type PeriodTargetType = 'weekly' | 'monthly' | 'yearly';
@@ -75,7 +75,7 @@ export interface ProductionEntry {
 
 export interface EquipmentTarget {
   id: string;
-  equipment: Equipment;
+  equipment: TargetEquipment;
   shift: Shift;
   product_target: number;
   billet_target: number;
@@ -173,7 +173,7 @@ export const DEFAULT_TARGETS: Omit<EquipmentTarget, 'id' | 'created_at'>[] = [
   { equipment: 'R/M', shift: '야간', product_target: SHIFT_TARGETS_2026_BY_EQUIPMENT['R/M'].product, billet_target: SHIFT_TARGETS_2026_BY_EQUIPMENT['R/M'].billet, effective_date: '2026-01-01' },
 ];
 
-export const EQUIPMENT_LIST: Equipment[] = ['P15', 'P5', 'R/M'];
+export const EQUIPMENT_LIST: Equipment[] = ['P15', 'P5', 'R/M', 'P8'];
 export const SHIFT_LIST: Shift[] = ['주간', '야간'];
 
 export const PERIOD_TARGET_LABELS: Record<PeriodTargetType, string> = {

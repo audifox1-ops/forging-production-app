@@ -5,7 +5,9 @@ export type TargetTotals = {
   billet: number;
 };
 
-type TargetEquipment = 'P15' | 'P5' | 'R/M';
+export type TargetEquipment = 'P15' | 'P5' | 'R/M';
+
+export const TARGET_EQUIPMENT_LIST: TargetEquipment[] = ['P15', 'P5', 'R/M'];
 
 export const DAILY_TARGETS_2026_BY_EQUIPMENT: Record<TargetEquipment, TargetTotals> = {
   P15: { product: 145000, billet: 150000 },

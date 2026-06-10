@@ -87,16 +87,15 @@ export default function UserInputPage() {
   const actualDate = reportDate || getActualDateFromPlanDate(getTodayPlanDate());
   const planDate = getPlanDateFromActualDate(actualDate);
   let report = getReport(actualDate);
+  const entries = report ? getEntriesByReport(report.id) : [];
 
   // 보고서가 없으면 자동 생성
   useEffect(() => {
-    if (!report && canCreateReport) {
+    if (canCreateReport) {
       createReport(actualDate);
     }
-  }, [actualDate, canCreateReport]);
+  }, [actualDate, canCreateReport, entries.length]);
 
-  report = getReport(actualDate);
-  const entries = report ? getEntriesByReport(report.id) : [];
   const equipmentTabs = EQUIPMENT_LIST.map(equipment => {
     const equipmentEntries = entries.filter(entry => entry.equipment === equipment);
     const submittedCount = equipmentEntries.filter(entry =>
@@ -270,7 +269,7 @@ export default function UserInputPage() {
               {selectedEquipment} · {selectedEntries.length}개 항목
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {equipmentTabs.map(tab => {
               const isActive = selectedEquipment === tab.equipment;
               const totalCount = tab.entries.length;
@@ -278,7 +277,9 @@ export default function UserInputPage() {
                 ? 'border-blue-500 bg-blue-50 text-blue-800'
                 : tab.equipment === 'P5'
                   ? 'border-purple-500 bg-purple-50 text-purple-800'
-                  : 'border-green-500 bg-green-50 text-green-800';
+                  : tab.equipment === 'R/M'
+                    ? 'border-green-500 bg-green-50 text-green-800'
+                    : 'border-slate-500 bg-slate-50 text-slate-800';
 
               return (
                 <button
@@ -385,6 +386,7 @@ function EntryInputCard({
 }) {
   const isSubmitted = entry.submit_status === 'submitted' || entry.submit_status === 'approved';
   const canModify = canWrite || canEdit;
+  const isActualOnly = entry.equipment === 'P8';
   const [formData, setFormData] = useState({
     product_plan: entry.product_plan,
     product_actual: entry.product_actual,
@@ -423,7 +425,7 @@ function EntryInputCard({
     if (formData.product_actual === 0 && formData.billet_actual === 0) {
       errs.push('전일 제품 또는 황지 실적 중 하나 이상 입력해주세요.');
     }
-    if (formData.next_product_plan === 0 && formData.next_billet_plan === 0) {
+    if (!isActualOnly && formData.next_product_plan === 0 && formData.next_billet_plan === 0) {
       errs.push('금일 제품 또는 황지 생산계획 중 하나 이상 입력해주세요.');
     }
     setErrors(errs);
@@ -432,13 +434,22 @@ function EntryInputCard({
 
   const handleSave = () => {
     if (!canModify) return;
+    const entryFormData = isActualOnly
+      ? {
+          ...formData,
+          product_plan: 0,
+          billet_plan: 0,
+          next_product_plan: 0,
+          next_billet_plan: 0,
+        }
+      : formData;
     onSave({
       id: entry.id,
       report_id: reportId,
       user_id: entry.user_id,
       equipment: entry.equipment,
       shift: entry.shift,
-      ...formData,
+      ...entryFormData,
       ...getReasonPayload(sharedReason),
     });
     onSaveSharedReason(entry.id);
@@ -471,7 +482,8 @@ function EntryInputCard({
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm text-white ${
             entry.equipment === 'P15' ? 'bg-blue-600' :
-              entry.equipment === 'P5' ? 'bg-purple-600' : 'bg-green-600'
+              entry.equipment === 'P5' ? 'bg-purple-600' :
+                entry.equipment === 'R/M' ? 'bg-green-600' : 'bg-slate-600'
           }`}>
             {entry.equipment.replace('/', '')}
           </div>
@@ -571,7 +583,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.product_plan}
                       onChange={e => handleChange('product_plan', Number(e.target.value))}
-                      disabled={!canModify}
+                      disabled={!canModify || isActualOnly}
                       min={0}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded text-right text-sm bg-gray-50 disabled:bg-gray-100"
                     />
@@ -597,7 +609,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.next_product_plan}
                       onChange={e => handleChange('next_product_plan', Number(e.target.value))}
-                      disabled={!canModify}
+                      disabled={!canModify || isActualOnly}
                       min={0}
                       className="w-full px-2 py-1.5 border border-green-300 rounded text-right text-sm bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-100"
                     />
@@ -613,7 +625,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.billet_plan}
                       onChange={e => handleChange('billet_plan', Number(e.target.value))}
-                      disabled={!canModify}
+                      disabled={!canModify || isActualOnly}
                       min={0}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded text-right text-sm bg-gray-50 disabled:bg-gray-100"
                     />
@@ -639,7 +651,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.next_billet_plan}
                       onChange={e => handleChange('next_billet_plan', Number(e.target.value))}
-                      disabled={!canModify}
+                      disabled={!canModify || isActualOnly}
                       min={0}
                       className="w-full px-2 py-1.5 border border-green-300 rounded text-right text-sm bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-100"
                     />

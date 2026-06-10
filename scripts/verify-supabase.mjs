@@ -176,9 +176,22 @@ async function verifyAppWrites(client) {
     updated_at: now,
   };
   const testComment = {
-    id: `verify-comment-${suffix}`,
+    id: `verify-p8-entry-${suffix}`,
     report_id: testReport.id,
-    summary: 'Supabase Verify',
+    summary: JSON.stringify({
+      type: 'p8-production-entry',
+      entry: {
+        ...testEntry,
+        id: `verify-p8-entry-${suffix}`,
+        equipment: 'P8',
+        product_plan: 0,
+        product_actual: 1,
+        billet_plan: 0,
+        billet_actual: 0,
+        next_product_plan: 0,
+        next_billet_plan: 0,
+      },
+    }),
     manager_comment: null,
     created_at: now,
     updated_at: now,
@@ -242,9 +255,16 @@ async function main() {
 }
 
 main().catch(error => {
-  console.error(error instanceof Error ? error.message : error);
-  console.error(
-    'If this mentions SQLSTATE 42P01 or schema cache, run supabase/fix-42p01.sql in the Supabase SQL Editor, then rerun this verifier.'
-  );
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message);
+  if (/production_entries_equipment_check|code=23514/.test(message)) {
+    console.error(
+      'Run supabase/add-p8-equipment.sql in the Supabase SQL Editor, then rerun this verifier.'
+    );
+  } else {
+    console.error(
+      'If this mentions SQLSTATE 42P01 or schema cache, run supabase/fix-42p01.sql in the Supabase SQL Editor, then rerun this verifier.'
+    );
+  }
   process.exit(1);
 });

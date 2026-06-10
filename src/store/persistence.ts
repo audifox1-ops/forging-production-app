@@ -3,6 +3,7 @@ import {
   EquipmentTarget,
   ProductionEntry,
   ProductionPeriodTarget,
+  ReportComment,
   ProductionReport,
   User,
 } from '../types';
@@ -23,16 +24,19 @@ export type SupabaseTableName =
   | 'production_reports'
   | 'production_entries'
   | 'equipment_targets'
-  | 'production_period_targets';
+  | 'production_period_targets'
+  | 'report_comments';
 
 type SupabaseRow =
   | User
   | ProductionReport
   | ProductionEntry
   | EquipmentTarget
-  | ProductionPeriodTarget;
+  | ProductionPeriodTarget
+  | ReportComment;
 
 const STORAGE_KEY = 'forging-production-app:report-state:v1';
+const P8_COMMENT_TYPE = 'p8-production-entry';
 
 function getLocalStorage() {
   if (typeof window === 'undefined') return null;
@@ -75,6 +79,67 @@ function assertSupabase() {
   return supabase;
 }
 
+function isP8Entry(row: SupabaseRow): row is ProductionEntry {
+  return 'equipment' in row && row.equipment === 'P8';
+}
+
+function getP8CommentId(entry: ProductionEntry) {
+  return `p8-entry-${entry.report_id}-${entry.shift}`;
+}
+
+function serializeP8Entry(entry: ProductionEntry) {
+  return JSON.stringify({ type: P8_COMMENT_TYPE, entry });
+}
+
+function parseP8EntryComment(comment: ReportComment): ProductionEntry | null {
+  try {
+    const payload = JSON.parse(comment.summary);
+    if (payload?.type !== P8_COMMENT_TYPE || payload?.entry?.equipment !== 'P8') return null;
+    return payload.entry as ProductionEntry;
+  } catch {
+    return null;
+  }
+}
+
+function toP8EntryComment(entry: ProductionEntry): ReportComment {
+  return {
+    id: getP8CommentId(entry),
+    report_id: entry.report_id,
+    summary: serializeP8Entry(entry),
+    created_at: entry.created_at,
+    updated_at: entry.updated_at,
+  };
+}
+
+function splitP8Entries(rows: SupabaseRow[]) {
+  const p8Entries: ProductionEntry[] = [];
+  const regularRows: SupabaseRow[] = [];
+
+  rows.forEach(row => {
+    if (isP8Entry(row)) {
+      p8Entries.push(row);
+    } else {
+      regularRows.push(row);
+    }
+  });
+
+  return { regularRows, p8Entries };
+}
+
+function mergeP8Entries(entries: ProductionEntry[], comments: ReportComment[]) {
+  const byKey = new Map<string, ProductionEntry>();
+  entries.forEach(entry => {
+    byKey.set(`${entry.report_id}-${entry.equipment}-${entry.shift}`, entry);
+  });
+  comments
+    .map(parseP8EntryComment)
+    .filter((entry): entry is ProductionEntry => Boolean(entry))
+    .forEach(entry => {
+      byKey.set(`${entry.report_id}-${entry.equipment}-${entry.shift}`, entry);
+    });
+  return Array.from(byKey.values());
+}
+
 async function ensureSupabaseSession(client: NonNullable<typeof supabase>) {
   const { data } = await client.auth.getSession();
   if (data.session) return;
@@ -88,21 +153,25 @@ async function ensureSupabaseSession(client: NonNullable<typeof supabase>) {
 export async function loadSupabaseReportState(): Promise<Partial<PersistedReportState>> {
   const client = assertSupabase();
   await ensureSupabaseSession(client);
-  const [users, reports, entries, targets, periodTargets] = await Promise.all([
+  const [users, reports, entries, targets, periodTargets, comments] = await Promise.all([
     client.from('users').select('*').order('created_at', { ascending: true }),
     client.from('production_reports').select('*').order('report_date', { ascending: true }),
     client.from('production_entries').select('*').order('created_at', { ascending: true }),
     client.from('equipment_targets').select('*').order('created_at', { ascending: true }),
     client.from('production_period_targets').select('*').order('created_at', { ascending: true }),
+    client.from('report_comments').select('*').order('created_at', { ascending: true }),
   ]);
 
-  const firstError = [users, reports, entries, targets, periodTargets].find(result => result.error)?.error;
+  const firstError = [users, reports, entries, targets, periodTargets, comments].find(result => result.error)?.error;
   if (firstError) throw firstError;
 
   return {
     users: (users.data ?? []) as User[],
     reports: (reports.data ?? []) as ProductionReport[],
-    entries: (entries.data ?? []) as ProductionEntry[],
+    entries: mergeP8Entries(
+      (entries.data ?? []) as ProductionEntry[],
+      (comments.data ?? []) as ReportComment[]
+    ),
     targets: (targets.data ?? []) as EquipmentTarget[],
     periodTargets: (periodTargets.data ?? []) as ProductionPeriodTarget[],
   };
@@ -113,6 +182,8 @@ export async function saveSupabaseReportState(state: PersistedReportState) {
 
   const client = assertSupabase();
   await ensureSupabaseSession(client);
+  const { regularRows: regularEntries, p8Entries } = splitP8Entries(state.entries);
+  const p8Comments = p8Entries.map(toP8EntryComment);
   const operations = [
     state.users.length > 0
       ? client.from('users').upsert(state.users, { onConflict: 'id' })
@@ -126,8 +197,11 @@ export async function saveSupabaseReportState(state: PersistedReportState) {
     state.periodTargets.length > 0
       ? client.from('production_period_targets').upsert(state.periodTargets, { onConflict: 'id' })
       : Promise.resolve({ error: null }),
-    state.entries.length > 0
-      ? client.from('production_entries').upsert(state.entries, { onConflict: 'id' })
+    regularEntries.length > 0
+      ? client.from('production_entries').upsert(regularEntries as ProductionEntry[], { onConflict: 'id' })
+      : Promise.resolve({ error: null }),
+    p8Comments.length > 0
+      ? client.from('report_comments').upsert(p8Comments, { onConflict: 'id' })
       : Promise.resolve({ error: null }),
   ];
 
@@ -153,6 +227,24 @@ export async function upsertSupabaseRows(table: SupabaseTableName, rows: Supabas
 
   const records = Array.isArray(rows) ? rows : [rows];
   if (records.length === 0) return;
+
+  if (table === 'production_entries') {
+    const { regularRows, p8Entries } = splitP8Entries(records);
+    const p8Comments = p8Entries.map(toP8EntryComment);
+
+    await runSupabaseMutation(async client => {
+      const results = await Promise.all([
+        regularRows.length > 0
+          ? client.from('production_entries').upsert(regularRows as ProductionEntry[], { onConflict: 'id' })
+          : Promise.resolve({ error: null }),
+        p8Comments.length > 0
+          ? client.from('report_comments').upsert(p8Comments, { onConflict: 'id' })
+          : Promise.resolve({ error: null }),
+      ]);
+      return { error: results.find(result => result.error)?.error ?? null };
+    });
+    return;
+  }
 
   await runSupabaseMutation(client => client.from(table).upsert(records, { onConflict: 'id' }));
 }
@@ -202,6 +294,13 @@ export function getStorageErrorMessage(error: unknown) {
 
   if (isSupabaseSchemaError(error)) {
     return `Supabase 테이블을 찾을 수 없습니다${code ? ` (${code})` : ''}. Supabase SQL Editor에서 supabase/fix-42p01.sql을 실행하세요. 서버 공유 저장이 복구될 때까지 다른 자리와 데이터가 공유되지 않을 수 있습니다.`;
+  }
+
+  if (
+    code === '23514' &&
+    /production_entries_equipment_check|violates check constraint/i.test(message)
+  ) {
+    return 'Supabase가 아직 P8 실적 저장을 허용하지 않습니다. Supabase SQL Editor에서 supabase/add-p8-equipment.sql을 실행한 뒤 다시 저장하세요.';
   }
 
   if (message) return message;

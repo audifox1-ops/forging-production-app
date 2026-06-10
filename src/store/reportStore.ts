@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ProductionReport, ProductionEntry, EquipmentTarget, User, ProductionPeriodTarget, PeriodTargetType, Equipment } from '../types';
+import { ProductionReport, ProductionEntry, EquipmentTarget, User, ProductionPeriodTarget, PeriodTargetType, Equipment, Shift, EQUIPMENT_LIST, SHIFT_LIST } from '../types';
 import {
   DEMO_REPORTS,
   DEMO_ENTRIES,
@@ -24,6 +24,8 @@ import { getPlanDateFromActualDate } from '../utils/reportDates';
 import {
   ANNUAL_TARGET_TOTALS_2026,
   SHIFT_TARGETS_2026_BY_EQUIPMENT,
+  TARGET_EQUIPMENT_LIST,
+  TargetEquipment,
 } from '../utils/targetConfig';
 
 interface CreateReportOptions {
@@ -87,11 +89,19 @@ const normalizeReports = (reports: ProductionReport[]) =>
       : report
   );
 
-const PREVIOUS_2026_TARGETS_BY_EQUIPMENT: Record<Equipment, { product: number; billet: number }> = {
+const PREVIOUS_2026_TARGETS_BY_EQUIPMENT: Record<TargetEquipment, { product: number; billet: number }> = {
   P15: { product: 17545, billet: 18150 },
   P5: { product: 8470, billet: 6070 },
   'R/M': { product: 23985, billet: 0 },
 };
+
+const ACTUAL_ONLY_EQUIPMENT: Equipment[] = ['P8'];
+
+const isTargetEquipment = (equipment: Equipment): equipment is TargetEquipment =>
+  TARGET_EQUIPMENT_LIST.includes(equipment as TargetEquipment);
+
+const isActualOnlyEquipment = (equipment: Equipment) =>
+  ACTUAL_ONLY_EQUIPMENT.includes(equipment);
 
 const PREVIOUS_2026_ANNUAL_TARGETS = {
   product: 24200000,
@@ -101,6 +111,8 @@ const PREVIOUS_2026_ANNUAL_TARGETS = {
 const normalizeTargetDefaults = (targets: EquipmentTarget[]) => {
   let changed = false;
   const value = targets.map(target => {
+    if (!isTargetEquipment(target.equipment)) return target;
+
     const previousTarget = PREVIOUS_2026_TARGETS_BY_EQUIPMENT[target.equipment];
     const newDefault = SHIFT_TARGETS_2026_BY_EQUIPMENT[target.equipment];
     const isPrevious2026Target = target.effective_date === '2026-01-01' &&
@@ -146,10 +158,36 @@ const normalizePeriodTargetDefaults = (periodTargets: ProductionPeriodTarget[]) 
   return { value, changed };
 };
 
-const INITIAL_ASSIGNEES_BY_EQUIPMENT: Record<Equipment, Pick<ProductionEntry, 'user_id' | 'user_name'>> = {
-  P15: { user_id: 'user-kim-hyun', user_name: '김현 차장' },
-  P5: { user_id: 'user-koo-byeongjun', user_name: '구병준 차장' },
-  'R/M': { user_id: 'user-woo-jaehan', user_name: '우재한 과장' },
+const addEquipment = (equipmentList: Equipment[], equipment: Equipment) =>
+  equipmentList.includes(equipment) ? equipmentList : [...equipmentList, equipment];
+
+const normalizeUserDefaults = (users: User[]) => {
+  let changed = false;
+  const value = users.map(user => {
+    const shouldAddP8 =
+      user.email === 'admin@forging.com' ||
+      user.email === 'hoegeun.kim@forging.com' ||
+      user.email === 'eunseo.lee@forging.com' ||
+      user.email === 'jaehan.woo@forging.com';
+
+    if (!shouldAddP8 || user.assigned_equipment.includes('P8')) return user;
+
+    changed = true;
+    const assigned_equipment = user.email === 'jaehan.woo@forging.com'
+      ? addEquipment(addEquipment(user.assigned_equipment, 'R/M'), 'P8')
+      : addEquipment(user.assigned_equipment, 'P8');
+
+    return { ...user, assigned_equipment };
+  });
+
+  return { value, changed };
+};
+
+const INITIAL_ASSIGNEES_BY_EQUIPMENT: Record<Equipment, { email: string; fallbackUserId: string; userName: string }> = {
+  P15: { email: 'hyun.kim@forging.com', fallbackUserId: 'user-kim-hyun', userName: '김현 차장' },
+  P5: { email: 'byeongjun.koo@forging.com', fallbackUserId: 'user-koo-byeongjun', userName: '구병준 차장' },
+  'R/M': { email: 'jaehan.woo@forging.com', fallbackUserId: 'user-woo-jaehan', userName: '우재한 과장' },
+  P8: { email: 'jaehan.woo@forging.com', fallbackUserId: 'user-woo-jaehan', userName: '우재한 과장' },
 };
 
 export const useReportStore = create<ReportStore>((set, get) => {
@@ -201,17 +239,65 @@ export const useReportStore = create<ReportStore>((set, get) => {
     return users.find(user => user.role === 'admin')?.id ?? users[0]?.id ?? currentUserId;
   };
 
+  const buildDefaultEntry = (
+    reportId: string,
+    equipment: Equipment,
+    shift: Shift,
+    sourceEntries: ProductionEntry[]
+  ): ProductionEntry => {
+    const currentTarget = get().targets.find(item => item.equipment === equipment && item.shift === shift);
+    const sourceEntry = sourceEntries.find(entry => entry.equipment === equipment && entry.shift === shift);
+    const initialAssignee = INITIAL_ASSIGNEES_BY_EQUIPMENT[equipment];
+    const assignedUser = get().users.find(user => user.email === initialAssignee.email);
+    const actualOnly = isActualOnlyEquipment(equipment);
+
+    return {
+      id: genId(),
+      report_id: reportId,
+      user_id: assignedUser?.id ?? initialAssignee.fallbackUserId,
+      user_name: assignedUser?.name ?? initialAssignee.userName,
+      equipment,
+      shift,
+      product_plan: actualOnly ? 0 : sourceEntry?.next_product_plan ?? currentTarget?.product_target ?? 0,
+      product_actual: 0,
+      billet_plan: actualOnly ? 0 : sourceEntry?.next_billet_plan ?? currentTarget?.billet_target ?? 0,
+      billet_actual: 0,
+      next_product_plan: 0,
+      next_billet_plan: 0,
+      submit_status: 'not_started',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  };
+
+  const buildMissingEntries = (reportId: string, sourceEntries: ProductionEntry[]) => {
+    const existingEntries = get().entries.filter(entry => entry.report_id === reportId);
+    const newEntries: ProductionEntry[] = [];
+
+    EQUIPMENT_LIST.forEach(equipment => {
+      SHIFT_LIST.forEach(shift => {
+        const exists = existingEntries.some(entry => entry.equipment === equipment && entry.shift === shift);
+        if (!exists) {
+          newEntries.push(buildDefaultEntry(reportId, equipment, shift, sourceEntries));
+        }
+      });
+    });
+
+    return newEntries;
+  };
+
   const initialTargets = normalizeTargetDefaults(getInitialArray(LOCAL_STATE?.targets, DEMO_TARGETS)).value;
   const initialPeriodTargets = normalizePeriodTargetDefaults(
     getInitialArray(LOCAL_STATE?.periodTargets, DEMO_PERIOD_TARGETS)
   ).value;
+  const initialUsers = normalizeUserDefaults(getInitialArray(LOCAL_STATE?.users, DEMO_USERS)).value;
 
   return ({
   reports: normalizeReports(getInitialArray(LOCAL_STATE?.reports, DEMO_REPORTS)),
   entries: getInitialArray(LOCAL_STATE?.entries, DEMO_ENTRIES),
   targets: initialTargets,
   periodTargets: initialPeriodTargets,
-  users: getInitialArray(LOCAL_STATE?.users, DEMO_USERS),
+  users: initialUsers,
   currentUserId: LOCAL_STATE?.currentUserId || 'user-admin',
   storageMode: getInitialStorageMode(),
   hasHydrated: false,
@@ -225,9 +311,19 @@ export const useReportStore = create<ReportStore>((set, get) => {
 
   createReport: (reportDate, options) => {
     const existing = get().getReport(reportDate);
-    if (existing) return existing;
     const sourceReport = getSourceReport(reportDate, options);
     const sourceEntries = sourceReport ? get().getEntriesByReport(sourceReport.id) : [];
+
+    if (existing) {
+      const missingEntries = buildMissingEntries(existing.id, sourceEntries);
+      if (missingEntries.length > 0) {
+        set(state => ({
+          entries: [...state.entries, ...missingEntries],
+        }));
+        persistCurrentState(true, () => upsertSupabaseRows('production_entries', missingEntries));
+      }
+      return existing;
+    }
 
     const newReport: ProductionReport = {
       id: genId(),
@@ -239,37 +335,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
       updated_at: new Date().toISOString(),
     };
 
-    // 기본 실적 항목 생성 (설비 x 근무조 6행)
-    const equipments = ['P15', 'P5', 'R/M'] as const;
-    const shifts = ['주간', '야간'] as const;
-    const targets = get().targets;
-
-    const newEntries: ProductionEntry[] = [];
-    equipments.forEach(equipment => {
-      shifts.forEach(shift => {
-        const target = targets.find(t => t.equipment === equipment && t.shift === shift);
-        const sourceEntry = sourceEntries.find(entry => entry.equipment === equipment && entry.shift === shift);
-        const initialAssignee = INITIAL_ASSIGNEES_BY_EQUIPMENT[equipment];
-
-        newEntries.push({
-          id: genId(),
-          report_id: newReport.id,
-          user_id: initialAssignee.user_id,
-          user_name: initialAssignee.user_name,
-          equipment,
-          shift,
-          product_plan: sourceEntry?.next_product_plan ?? target?.product_target ?? 0,
-          product_actual: 0,
-          billet_plan: sourceEntry?.next_billet_plan ?? target?.billet_target ?? 0,
-          billet_actual: 0,
-          next_product_plan: 0,
-          next_billet_plan: 0,
-          submit_status: 'not_started',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-      });
-    });
+    const newEntries = buildMissingEntries(newReport.id, sourceEntries);
 
     set(state => ({
       reports: [...state.reports, newReport],
@@ -505,7 +571,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
     const localState = shouldUseLocalCache ? loadLocalReportState() : null;
     if (localState) {
       set(state => {
-        const users = getInitialArray(localState.users, state.users);
+        const normalizedUsers = normalizeUserDefaults(getInitialArray(localState.users, state.users));
         const normalizedTargets = normalizeTargetDefaults(getInitialArray(localState.targets, state.targets));
         const normalizedPeriodTargets = normalizePeriodTargetDefaults(
           getInitialArray(localState.periodTargets, state.periodTargets)
@@ -515,8 +581,8 @@ export const useReportStore = create<ReportStore>((set, get) => {
           entries: getInitialArray(localState.entries, state.entries),
           targets: normalizedTargets.value,
           periodTargets: normalizedPeriodTargets.value,
-          users,
-          currentUserId: resolveCurrentUserId(users, localState.currentUserId || state.currentUserId),
+          users: normalizedUsers.value,
+          currentUserId: resolveCurrentUserId(normalizedUsers.value, localState.currentUserId || state.currentUserId),
         };
       });
     }
@@ -542,20 +608,20 @@ export const useReportStore = create<ReportStore>((set, get) => {
       if (hasRemoteData) {
         let remoteDefaultsChanged = false;
         set(state => {
-          const users = getInitialArray(remoteState.users, state.users);
+          const normalizedUsers = normalizeUserDefaults(getInitialArray(remoteState.users, state.users));
           const normalizedTargets = normalizeTargetDefaults(getInitialArray(remoteState.targets, state.targets));
           const normalizedPeriodTargets = normalizePeriodTargetDefaults(
             getInitialArray(remoteState.periodTargets, state.periodTargets)
           );
-          remoteDefaultsChanged = normalizedTargets.changed || normalizedPeriodTargets.changed;
+          remoteDefaultsChanged = normalizedUsers.changed || normalizedTargets.changed || normalizedPeriodTargets.changed;
 
           return {
             reports: normalizeReports(getInitialArray(remoteState.reports, state.reports)),
             entries: getInitialArray(remoteState.entries, state.entries),
             targets: normalizedTargets.value,
             periodTargets: normalizedPeriodTargets.value,
-            users,
-            currentUserId: resolveCurrentUserId(users, state.currentUserId),
+            users: normalizedUsers.value,
+            currentUserId: resolveCurrentUserId(normalizedUsers.value, state.currentUserId),
           };
         });
         if (remoteDefaultsChanged) {
