@@ -1,4 +1,12 @@
-import type { ProductionEntry, ProductionReport, TemplateWorkbookCell, TemplateWorkbookColumnRange, TemplateWorkbookRow, TemplateWorkbookSheet } from '../types';
+import type {
+  ProductionEntry,
+  ProductionReport,
+  TemplateWorkbookCell,
+  TemplateWorkbookColumnRange,
+  TemplateWorkbookMergeRange,
+  TemplateWorkbookRow,
+  TemplateWorkbookSheet,
+} from '../types';
 
 export type TemplateEquipmentKey = 'P15' | 'P5' | 'R/M' | 'TOTAL';
 
@@ -92,6 +100,30 @@ export function columnToNumber(column: string) {
   return column.split('').reduce((value, char) => value * 26 + char.charCodeAt(0) - 64, 0);
 }
 
+function parseCellReference(cellReference: string) {
+  const match = /^([A-Z]+)(\d+)$/.exec(cellReference);
+  if (!match) return null;
+
+  return {
+    column: match[1],
+    row: Number(match[2]),
+  };
+}
+
+function parseMergeReference(mergeReference: string): TemplateWorkbookMergeRange | null {
+  const [startReference, endReference] = mergeReference.split(':');
+  const start = parseCellReference(startReference);
+  const end = parseCellReference(endReference);
+  if (!start || !end) return null;
+
+  return {
+    startColumn: start.column,
+    startRow: start.row,
+    endColumn: end.column,
+    endRow: end.row,
+  };
+}
+
 const MONTHLY_TEMPLATE_HIDDEN_COLUMNS: TemplateWorkbookColumnRange[] = [
   { min: 6, max: 6 },
   { min: 8, max: 15 },
@@ -119,6 +151,63 @@ const ANNUAL_TEMPLATE_HIDDEN_COLUMNS: TemplateWorkbookColumnRange[] = [
   { min: 67, max: 71 },
 ];
 
+const MONTHLY_TEMPLATE_MERGE_REFS = [
+  'A1:D4',
+  'E1:Q2',
+  'R1:AP2',
+  'AQ1:AQ4',
+  'AR1:AS1',
+  'E3:Q3',
+  'R3:AP3',
+  'E4:Q4',
+  'R4:AP4',
+  'AT1:AW1',
+  'AG6:AG7',
+  'AX1:AY1',
+  'AR2:AS4',
+  'AT2:AW4',
+  'AX2:AY4',
+  'AP6:AR6',
+  'AS6:AS7',
+  'AT6:AT7',
+  'AH5:AO5',
+  'AP5:AY5',
+  'J6:K6',
+  'A5:A7',
+  'B5:G5',
+  'H5:O5',
+  'P5:U5',
+  'B6:D6',
+  'E6:E7',
+  'F6:F7',
+  'G6:G7',
+  'H6:I6',
+  'L6:O6',
+  'P6:R6',
+  'S6:S7',
+  'T6:T7',
+  'AZ5:BC5',
+  'BD5:BD7',
+  'U6:U7',
+  'V6:W6',
+  'X6:Y6',
+  'Z6:AC6',
+  'AD6:AF6',
+  'AU6:AU7',
+  'AV6:AW6',
+  'AX6:AY6',
+  'AZ6:BC6',
+  'AH6:AI6',
+  'AJ6:AK6',
+  'AL6:AO6',
+  'V5:AC5',
+  'AD5:AG5',
+] as const;
+
+const MONTHLY_TEMPLATE_MERGED_CELLS = MONTHLY_TEMPLATE_MERGE_REFS
+  .map(parseMergeReference)
+  .filter((range): range is TemplateWorkbookMergeRange => Boolean(range));
+
 const TEMPLATE_HIDDEN_COLUMNS_BY_SHEET: Record<string, TemplateWorkbookColumnRange[]> = {
   '2601월': MONTHLY_TEMPLATE_HIDDEN_COLUMNS,
   '2604월': MONTHLY_TEMPLATE_HIDDEN_COLUMNS,
@@ -129,7 +218,15 @@ const TEMPLATE_HIDDEN_COLUMNS_BY_SHEET: Record<string, TemplateWorkbookColumnRan
 function getTemplateHiddenColumnRanges(sheet: TemplateWorkbookSheet | undefined) {
   if (!sheet) return [];
   if (sheet.hidden_columns?.length) return sheet.hidden_columns;
+  if (sheet.kind === 'monthly') return MONTHLY_TEMPLATE_HIDDEN_COLUMNS;
   return TEMPLATE_HIDDEN_COLUMNS_BY_SHEET[sheet.sheet_name] ?? [];
+}
+
+export function getTemplateMergedCells(sheet: TemplateWorkbookSheet | undefined) {
+  if (!sheet) return [];
+  if (sheet.merged_cells?.length) return sheet.merged_cells;
+  if (sheet.kind === 'monthly') return MONTHLY_TEMPLATE_MERGED_CELLS;
+  return [];
 }
 
 function isColumnHidden(column: string, hiddenColumns: TemplateWorkbookColumnRange[]) {

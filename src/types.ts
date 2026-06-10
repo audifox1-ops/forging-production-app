@@ -121,6 +121,13 @@ export interface TemplateWorkbookColumnRange {
   max: number;
 }
 
+export interface TemplateWorkbookMergeRange {
+  startColumn: string;
+  startRow: number;
+  endColumn: string;
+  endRow: number;
+}
+
 export interface TemplateWorkbookSheet {
   id: string;
   sheet_name: string;
@@ -129,6 +136,7 @@ export interface TemplateWorkbookSheet {
   rows: TemplateWorkbookRow[];
   hidden_rows?: number[];
   hidden_columns?: TemplateWorkbookColumnRange[];
+  merged_cells?: TemplateWorkbookMergeRange[];
   imported_at: string;
 }
 

@@ -4,10 +4,12 @@ import { useReportStore } from '../store/reportStore';
 import { downloadTemplateWorkbook } from '../utils/excelTemplate';
 import {
   buildTemplateWorkbookAppSummary,
+  columnToNumber,
   extractTemplateSummaryRows,
   getCellMap,
   getCompactSheetColumns,
   getSheetColumns,
+  getTemplateMergedCells,
   getVisibleSheetColumns,
   getVisibleTemplateRows,
   TemplateEquipmentKey,
@@ -308,6 +310,65 @@ function EditableWorkbookCell({
   );
 }
 
+const OUTPUT_PLAN_COLUMNS = new Set(['C', 'Q', 'AE', 'AQ']);
+
+type MergedCellLayout = {
+  spans: Map<string, { colSpan: number; rowSpan: number }>;
+  coveredCells: Set<string>;
+};
+
+function getCellKey(rowNumber: number, column: string) {
+  return `${rowNumber}:${column}`;
+}
+
+function buildMergedCellLayout(
+  sheet: TemplateWorkbookSheet,
+  columns: string[],
+  rows: TemplateWorkbookRow[],
+  enabled: boolean
+): MergedCellLayout {
+  const spans = new Map<string, { colSpan: number; rowSpan: number }>();
+  const coveredCells = new Set<string>();
+
+  if (!enabled) return { spans, coveredCells };
+
+  const columnNumbers = new Map(columns.map(column => [column, columnToNumber(column)]));
+
+  getTemplateMergedCells(sheet).forEach(range => {
+    const startColumnNumber = columnToNumber(range.startColumn);
+    const endColumnNumber = columnToNumber(range.endColumn);
+    const visibleColumns = columns.filter(column => {
+      const columnNumber = columnNumbers.get(column);
+      return (
+        typeof columnNumber === 'number' &&
+        columnNumber >= startColumnNumber &&
+        columnNumber <= endColumnNumber
+      );
+    });
+    const visibleRows = rows.filter(row => row.row_number >= range.startRow && row.row_number <= range.endRow);
+
+    if (visibleColumns.length === 0 || visibleRows.length === 0) return;
+
+    const anchorRow = visibleRows[0];
+    const anchorColumn = visibleColumns[0];
+    const anchorKey = getCellKey(anchorRow.row_number, anchorColumn);
+
+    spans.set(anchorKey, {
+      colSpan: visibleColumns.length,
+      rowSpan: visibleRows.length,
+    });
+
+    visibleRows.forEach(row => {
+      visibleColumns.forEach(column => {
+        const key = getCellKey(row.row_number, column);
+        if (key !== anchorKey) coveredCells.add(key);
+      });
+    });
+  });
+
+  return { spans, coveredCells };
+}
+
 function RawTable({
   sheet,
   columns,
@@ -315,6 +376,7 @@ function RawTable({
   editable = false,
   showCoordinates = false,
   showGridHeaders = true,
+  useMergedCells = false,
   onCellChange,
   onDeleteRow,
 }: {
@@ -324,12 +386,19 @@ function RawTable({
   editable?: boolean;
   showCoordinates?: boolean;
   showGridHeaders?: boolean;
+  useMergedCells?: boolean;
   onCellChange?: (rowNumber: number, column: string, value: string | number | null) => void;
   onDeleteRow?: (rowNumber: number) => void;
 }) {
+  const displayRows = rows ?? sheet.rows;
+  const mergedCellLayout = React.useMemo(
+    () => buildMergedCellLayout(sheet, columns, displayRows, useMergedCells),
+    [columns, displayRows, sheet, useMergedCells]
+  );
+
   return (
     <div className="template-print-sheet overflow-auto max-h-[calc(100vh-360px)] print-sheet">
-      <table className="template-raw-print-table min-w-max w-full border-collapse text-xs">
+      <table className={`template-raw-print-table min-w-max w-full border-collapse text-xs ${useMergedCells ? 'template-output-workbook-table' : ''}`}>
         {showGridHeaders && (
           <thead>
             <tr>
@@ -353,7 +422,7 @@ function RawTable({
           </thead>
         )}
         <tbody>
-          {(rows ?? sheet.rows).map(row => {
+          {displayRows.map(row => {
             const cellMap = getCellMap(row);
 
             return (
@@ -376,19 +445,31 @@ function RawTable({
                   </td>
                 )}
                 {columns.map(column => {
+                  const cellKey = getCellKey(row.row_number, column);
+                  if (mergedCellLayout.coveredCells.has(cellKey)) return null;
+
                   const cell = cellMap[column];
                   const value = formatCellValue(cell, column, row);
                   const address = getCellAddress(row.row_number, column);
                   const formula = cell?.formula ? `=${cell.formula}` : null;
                   const canEditCell = editable && onCellChange && !cell?.formula;
+                  const mergeSpan = mergedCellLayout.spans.get(cellKey);
+                  const alignmentClass = useMergedCells
+                    ? 'text-center align-middle'
+                    : typeof cell?.value === 'number'
+                      ? 'text-right align-top'
+                      : 'text-left align-top';
+                  const planColumnClass = useMergedCells && OUTPUT_PLAN_COLUMNS.has(column) ? 'template-plan-column' : '';
 
                   return (
                     <td
                       key={`${row.row_number}-${column}`}
+                      colSpan={mergeSpan && mergeSpan.colSpan > 1 ? mergeSpan.colSpan : undefined}
+                      rowSpan={mergeSpan && mergeSpan.rowSpan > 1 ? mergeSpan.rowSpan : undefined}
                       title={getCellTitle(cell, address)}
-                      className={`border border-gray-200 px-2 py-1.5 min-h-8 tabular-nums align-top ${
-                        typeof cell?.value === 'number' ? 'text-right' : 'text-left'
-                      } ${cell?.formula ? 'bg-amber-50/70' : ''}`}
+                      className={`border border-gray-200 px-2 py-1.5 min-h-8 tabular-nums ${alignmentClass} ${planColumnClass} ${
+                        cell?.formula ? 'bg-amber-50/70' : ''
+                      }`}
                     >
                       {showCoordinates && (
                         <div className="mb-1 flex items-center justify-between gap-1 text-[10px] leading-none">
@@ -502,7 +583,13 @@ function ExcelPreviewDialog({
                   {previewSheet.year}년 · {previewSheet.kind === 'monthly' ? '월별' : '연간'}
                 </p>
               </div>
-              <RawTable sheet={previewSheet} columns={previewColumns} rows={previewVisibleRows} showGridHeaders={false} />
+              <RawTable
+                sheet={previewSheet}
+                columns={previewColumns}
+                rows={previewVisibleRows}
+                showGridHeaders={false}
+                useMergedCells
+              />
             </div>
           ) : (
             <div className="bg-white border border-gray-200 rounded-lg px-4 py-10 text-center text-sm text-gray-500">
@@ -798,7 +885,13 @@ export default function TemplateWorkbookPage() {
             )}
           </div>
           <div className="template-print-workbook-content">
-            <RawTable sheet={selectedSheet} columns={printColumns} rows={printRows} showGridHeaders={false} />
+            <RawTable
+              sheet={selectedSheet}
+              columns={printColumns}
+              rows={printRows}
+              showGridHeaders={false}
+              useMergedCells
+            />
           </div>
         </div>
       )}

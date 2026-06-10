@@ -241,6 +241,40 @@ function parseHiddenColumnRanges(worksheetXml) {
   return ranges;
 }
 
+function parseCellReference(cellReference) {
+  const match = /^([A-Z]+)(\d+)$/.exec(cellReference);
+  if (!match) return null;
+
+  return {
+    column: match[1],
+    row: Number(match[2]),
+  };
+}
+
+function parseMergedCells(worksheetXml) {
+  const ranges = [];
+  const mergeRegex = /<mergeCell\b([^>]*)\/?>/g;
+  let mergeMatch;
+
+  while ((mergeMatch = mergeRegex.exec(worksheetXml))) {
+    const mergeReference = getAttr(mergeMatch[1], 'ref');
+    const [startReference, endReference] = (mergeReference ?? '').split(':');
+    const start = parseCellReference(startReference);
+    const end = parseCellReference(endReference);
+
+    if (start && end) {
+      ranges.push({
+        startColumn: start.column,
+        startRow: start.row,
+        endColumn: end.column,
+        endRow: end.row,
+      });
+    }
+  }
+
+  return ranges;
+}
+
 function buildSheetMeta(sheetName) {
   const monthlyMatch = /^(\d{2})(\d{2})월$/.exec(sheetName);
   if (monthlyMatch) {
@@ -272,6 +306,7 @@ function parseWorksheet(sheetName, worksheetXml, sharedStrings, importedAt) {
   const rows = [];
   const hiddenRows = [];
   const hiddenColumns = parseHiddenColumnRanges(worksheetXml);
+  const mergedCells = parseMergedCells(worksheetXml);
   const rowRegex = /<row\b([^>]*)>([\s\S]*?)<\/row>/g;
   let rowMatch;
 
@@ -326,6 +361,7 @@ function parseWorksheet(sheetName, worksheetXml, sharedStrings, importedAt) {
     rows,
     ...(hiddenRows.length > 0 ? { hidden_rows: hiddenRows } : {}),
     ...(hiddenColumns.length > 0 ? { hidden_columns: hiddenColumns } : {}),
+    ...(mergedCells.length > 0 ? { merged_cells: mergedCells } : {}),
     imported_at: importedAt,
   };
 }

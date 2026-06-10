@@ -539,6 +539,16 @@ body {
     word-break: keep-all !important;
   }
 
+  html.template-workbook-print-document .template-output-workbook-table td {
+    border-color: #111827 !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+  }
+
+  html.template-workbook-print-document .template-output-workbook-table .template-plan-column {
+    background-color: #e5e7eb !important;
+  }
+
   html.template-workbook-print-document .template-print-sheet th {
     background-color: #1e40af !important;
     color: white !important;
@@ -614,4 +624,13 @@ input[type="number"] {
 
 .shortfall-row:hover td {
   background-color: #ffedd5 !important;
+}
+
+.template-output-workbook-table td {
+  border-color: #334155;
+  vertical-align: middle;
+}
+
+.template-output-workbook-table .template-plan-column {
+  background-color: #e5e7eb;
 }
