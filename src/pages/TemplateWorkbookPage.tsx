@@ -17,6 +17,7 @@ type ViewMode = 'summary' | 'compact' | 'raw';
 
 const PRINT_DOCUMENT_CLASS = 'template-workbook-print-document';
 const PRINT_PAGE_STYLE_ID = 'template-workbook-landscape-print-style';
+const PREVIEW_PRINTING_CLASS = 'template-workbook-preview-printing';
 const PERCENT_COLUMNS = new Set(['D', 'R', 'AF', 'AR']);
 const EQUIPMENT_COLUMNS: Array<{ key: TemplateEquipmentKey; label: string; colorClass: string }> = [
   { key: 'P15', label: 'P15', colorClass: 'text-blue-700' },
@@ -97,6 +98,37 @@ function ensureLandscapePrintStyle() {
   }
 
   return printStyle;
+}
+
+function setPreviewPrintMode(enabled: boolean) {
+  if (typeof document === 'undefined') return;
+
+  document.documentElement.classList.toggle(PREVIEW_PRINTING_CLASS, enabled);
+  document.body.classList.toggle(PREVIEW_PRINTING_CLASS, enabled);
+}
+
+function printTemplateWorkbook(options: { preview?: boolean } = {}) {
+  ensureLandscapePrintStyle();
+
+  const isPreviewPrint = Boolean(options.preview);
+  if (isPreviewPrint) {
+    setPreviewPrintMode(true);
+  }
+
+  const cleanupPreviewPrint = () => {
+    if (isPreviewPrint) setPreviewPrintMode(false);
+  };
+
+  if (isPreviewPrint) {
+    window.addEventListener('afterprint', cleanupPreviewPrint, { once: true });
+  }
+
+  window.setTimeout(() => {
+    window.print();
+    if (isPreviewPrint) {
+      window.setTimeout(cleanupPreviewPrint, 3000);
+    }
+  }, 0);
 }
 
 function formatPeriodLabel(row: TemplateSummaryRow) {
@@ -360,11 +392,13 @@ function ExcelPreviewDialog({
   initialSheetId,
   onClose,
   onDownload,
+  onPrint,
 }: {
   sheets: TemplateWorkbookSheet[];
   initialSheetId: string;
   onClose: () => void;
   onDownload: () => void;
+  onPrint: () => void;
 }) {
   const [previewSheetId, setPreviewSheetId] = React.useState(initialSheetId);
   const previewSheet = sheets.find(sheet => sheet.id === previewSheetId) ?? sheets[0];
@@ -379,9 +413,9 @@ function ExcelPreviewDialog({
   }, [previewSheetId, sheets]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/55 flex items-center justify-center p-4 no-print">
-      <div className="bg-white rounded-lg shadow-xl border border-gray-200 w-[min(1180px,96vw)] max-h-[92vh] flex flex-col overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+    <div className="template-preview-print-modal fixed inset-0 z-50 bg-slate-900/55 flex items-center justify-center p-4">
+      <div className="template-preview-dialog bg-white rounded-lg shadow-xl border border-gray-200 w-[min(1180px,96vw)] max-h-[92vh] flex flex-col overflow-hidden">
+        <div className="template-preview-controls no-print px-5 py-4 border-b border-gray-100 flex items-center gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-gray-900">엑셀 미리보기</h2>
             <p className="text-xs text-gray-500 mt-0.5">
@@ -397,7 +431,7 @@ function ExcelPreviewDialog({
           </button>
         </div>
 
-        <div className="px-5 py-3 border-b border-gray-100 flex gap-2 overflow-x-auto">
+        <div className="template-preview-controls no-print px-5 py-3 border-b border-gray-100 flex gap-2 overflow-x-auto">
           {sheets.map(sheet => (
             <button
               key={sheet.id}
@@ -417,11 +451,23 @@ function ExcelPreviewDialog({
         <div className="flex-1 overflow-auto p-5 bg-slate-50">
           {previewSheet ? (
             previewRows.length > 0 ? (
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div className="template-preview-print-area bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="template-preview-print-header template-print-header hidden">
+                  <h2 className="font-semibold text-gray-900">{previewSheet.sheet_name}</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {previewSheet.year}년 · {previewSheet.kind === 'monthly' ? '월별' : '연간'}
+                  </p>
+                </div>
                 <SummaryTable rows={previewRows} />
               </div>
             ) : (
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div className="template-preview-print-area bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="template-preview-print-header template-print-header hidden">
+                  <h2 className="font-semibold text-gray-900">{previewSheet.sheet_name}</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {previewSheet.year}년 · {previewSheet.kind === 'monthly' ? '월별' : '연간'}
+                  </p>
+                </div>
                 <RawTable sheet={previewSheet} columns={previewColumns} />
               </div>
             )
@@ -432,9 +478,13 @@ function ExcelPreviewDialog({
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+        <div className="template-preview-controls no-print px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
           <button onClick={onClose} className="btn-secondary">
             닫기
+          </button>
+          <button onClick={onPrint} disabled={!previewSheet} className="btn-secondary flex items-center gap-2">
+            <Printer size={16} />
+            출력
           </button>
           <button onClick={onDownload} disabled={sheets.length === 0} className="btn-primary flex items-center gap-2">
             <Download size={16} />
@@ -484,7 +534,9 @@ export default function TemplateWorkbookPage() {
 
     return () => {
       document.documentElement.classList.remove(PRINT_DOCUMENT_CLASS);
+      document.documentElement.classList.remove(PREVIEW_PRINTING_CLASS);
       document.body.classList.remove(PRINT_DOCUMENT_CLASS);
+      document.body.classList.remove(PREVIEW_PRINTING_CLASS);
       document.getElementById(PRINT_PAGE_STYLE_ID)?.remove();
     };
   }, []);
@@ -527,8 +579,11 @@ export default function TemplateWorkbookPage() {
   };
 
   const handlePrint = () => {
-    ensureLandscapePrintStyle();
-    window.setTimeout(() => window.print(), 0);
+    printTemplateWorkbook();
+  };
+
+  const handlePreviewPrint = () => {
+    printTemplateWorkbook({ preview: true });
   };
 
   return (
@@ -713,6 +768,7 @@ export default function TemplateWorkbookPage() {
           initialSheetId={selectedSheet?.id ?? templateSheets[0]?.id ?? ''}
           onClose={() => setIsExcelPreviewOpen(false)}
           onDownload={handlePreviewDownload}
+          onPrint={handlePreviewPrint}
         />
       )}
     </div>

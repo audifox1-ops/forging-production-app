@@ -521,6 +521,35 @@ export function syncTemplateSheetsWithReportEntries(
   return nextSheets;
 }
 
+function compareTemplateSheetContent(sheets: TemplateWorkbookSheet[]) {
+  return JSON.stringify(
+    sheets.map(({ imported_at: _importedAt, ...sheet }) => sheet)
+  );
+}
+
+export function syncTemplateSheetsWithAllReportEntries(
+  sheets: TemplateWorkbookSheet[],
+  reports: ProductionReport[],
+  entries: ProductionEntry[]
+) {
+  if (sheets.length === 0 || reports.length === 0) return sheets;
+  const sortedReports = [...reports].sort((a, b) => a.report_date.localeCompare(b.report_date));
+
+  return sortedReports.reduce((currentSheets, report) => {
+    const previousContent = compareTemplateSheetContent(currentSheets);
+    const syncedSheets = syncTemplateSheetsWithReportEntries(
+      currentSheets,
+      reports,
+      entries,
+      report.id
+    );
+
+    return compareTemplateSheetContent(syncedSheets) === previousContent
+      ? currentSheets
+      : syncedSheets;
+  }, sheets);
+}
+
 export function updateTemplateWorkbookCell(
   sheets: TemplateWorkbookSheet[],
   sheetId: string,

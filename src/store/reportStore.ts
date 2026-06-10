@@ -31,6 +31,7 @@ import {
 import {
   addTemplateWorkbookRow,
   deleteTemplateWorkbookRow,
+  syncTemplateSheetsWithAllReportEntries,
   syncTemplateSheetsWithReportEntries,
   updateTemplateWorkbookCell,
 } from '../utils/templateWorkbook';
@@ -299,13 +300,20 @@ export const useReportStore = create<ReportStore>((set, get) => {
     getInitialArray(LOCAL_STATE?.periodTargets, DEMO_PERIOD_TARGETS)
   ).value;
   const initialUsers = normalizeUserDefaults(getInitialArray(LOCAL_STATE?.users, DEMO_USERS)).value;
+  const initialReports = normalizeReports(getInitialArray(LOCAL_STATE?.reports, DEMO_REPORTS));
+  const initialEntries = getInitialArray(LOCAL_STATE?.entries, DEMO_ENTRIES);
+  const initialTemplateSheets = syncTemplateSheetsWithAllReportEntries(
+    getInitialArray(LOCAL_STATE?.templateSheets, []),
+    initialReports,
+    initialEntries
+  );
 
   return ({
-  reports: normalizeReports(getInitialArray(LOCAL_STATE?.reports, DEMO_REPORTS)),
-  entries: getInitialArray(LOCAL_STATE?.entries, DEMO_ENTRIES),
+  reports: initialReports,
+  entries: initialEntries,
   targets: initialTargets,
   periodTargets: initialPeriodTargets,
-  templateSheets: getInitialArray(LOCAL_STATE?.templateSheets, []),
+  templateSheets: initialTemplateSheets,
   users: initialUsers,
   currentUserId: LOCAL_STATE?.currentUserId || 'user-admin',
   storageMode: getInitialStorageMode(),
@@ -630,12 +638,19 @@ export const useReportStore = create<ReportStore>((set, get) => {
         const normalizedPeriodTargets = normalizePeriodTargetDefaults(
           getInitialArray(localState.periodTargets, state.periodTargets)
         );
+        const reports = normalizeReports(getInitialArray(localState.reports, state.reports));
+        const entries = getInitialArray(localState.entries, state.entries);
+        const templateSheets = syncTemplateSheetsWithAllReportEntries(
+          getInitialArray(localState.templateSheets, state.templateSheets),
+          reports,
+          entries
+        );
         return {
-          reports: normalizeReports(getInitialArray(localState.reports, state.reports)),
-          entries: getInitialArray(localState.entries, state.entries),
+          reports,
+          entries,
           targets: normalizedTargets.value,
           periodTargets: normalizedPeriodTargets.value,
-          templateSheets: getInitialArray(localState.templateSheets, state.templateSheets),
+          templateSheets,
           users: normalizedUsers.value,
           currentUserId: resolveCurrentUserId(normalizedUsers.value, localState.currentUserId || state.currentUserId),
         };
@@ -663,6 +678,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
 
       if (hasRemoteData) {
         let remoteDefaultsChanged = false;
+        let remoteTemplateSheetsSynced = false;
         set(state => {
           const normalizedUsers = normalizeUserDefaults(getInitialArray(remoteState.users, state.users));
           const normalizedTargets = normalizeTargetDefaults(getInitialArray(remoteState.targets, state.targets));
@@ -670,18 +686,23 @@ export const useReportStore = create<ReportStore>((set, get) => {
             getInitialArray(remoteState.periodTargets, state.periodTargets)
           );
           remoteDefaultsChanged = normalizedUsers.changed || normalizedTargets.changed || normalizedPeriodTargets.changed;
+          const reports = normalizeReports(getInitialArray(remoteState.reports, state.reports));
+          const entries = getInitialArray(remoteState.entries, state.entries);
+          const templateSheets = getInitialArray(remoteState.templateSheets, state.templateSheets);
+          const syncedTemplateSheets = syncTemplateSheetsWithAllReportEntries(templateSheets, reports, entries);
+          remoteTemplateSheetsSynced = syncedTemplateSheets !== templateSheets;
 
           return {
-            reports: normalizeReports(getInitialArray(remoteState.reports, state.reports)),
-            entries: getInitialArray(remoteState.entries, state.entries),
+            reports,
+            entries,
             targets: normalizedTargets.value,
             periodTargets: normalizedPeriodTargets.value,
-            templateSheets: getInitialArray(remoteState.templateSheets, state.templateSheets),
+            templateSheets: syncedTemplateSheets,
             users: normalizedUsers.value,
             currentUserId: resolveCurrentUserId(normalizedUsers.value, state.currentUserId),
           };
         });
-        if (remoteDefaultsChanged) {
+        if (remoteDefaultsChanged || remoteTemplateSheetsSynced) {
           await saveSupabaseReportState(getPersistedState());
         }
       } else {
