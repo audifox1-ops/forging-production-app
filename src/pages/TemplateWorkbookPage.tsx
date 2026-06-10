@@ -23,6 +23,35 @@ const PRINT_DOCUMENT_CLASS = 'template-workbook-print-document';
 const PRINT_PAGE_STYLE_ID = 'template-workbook-landscape-print-style';
 const PREVIEW_PRINTING_CLASS = 'template-workbook-preview-printing';
 const PERCENT_COLUMNS = new Set(['D', 'R', 'AF', 'AR']);
+const TAEWOONG_LOGO_SRC = '/templates/taewoong-logo.jpeg';
+const MONTHLY_OUTPUT_DATA_COLUMNS = [
+  'B',
+  'C',
+  'D',
+  'E',
+  'G',
+  'P',
+  'Q',
+  'R',
+  'S',
+  'U',
+  'AD',
+  'AE',
+  'AF',
+  'AG',
+  'AP',
+  'AQ',
+  'AR',
+  'AS',
+  'AT',
+  'AU',
+  'AX',
+  'AY',
+] as const;
+const MONTHLY_OUTPUT_SHADED_COLUMNS = new Set(['C', 'Q', 'AE', 'AQ', 'AX', 'AY']);
+const MONTHLY_OUTPUT_GROUP_START_COLUMNS = new Set(['B', 'P', 'AD', 'AP', 'AX']);
+const MONTHLY_OUTPUT_GROUP_END_COLUMNS = new Set(['G', 'U', 'AG', 'AY']);
+const KOREAN_WEEKDAYS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
 const EQUIPMENT_COLUMNS: Array<{ key: TemplateEquipmentKey; label: string; colorClass: string }> = [
   { key: 'P15', label: 'P15', colorClass: 'text-blue-700' },
   { key: 'P5', label: 'P5', colorClass: 'text-emerald-700' },
@@ -64,6 +93,46 @@ function formatCellValue(cell: TemplateWorkbookCell | undefined, column: string,
   return cell.value.replace(/\s+/g, ' ').trim();
 }
 
+function formatIssueDate(value = new Date()) {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}.${month}.${day} ${KOREAN_WEEKDAYS[date.getDay()]}`;
+}
+
+function formatLocalIsoDate(value = new Date()) {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatMonthlyOutputDate(row: TemplateWorkbookRow) {
+  const cell = getCellMap(row).A;
+  if (typeof cell?.value === 'string' && cell.value.trim()) return cell.value.trim();
+
+  if (row.row_date) {
+    const [, month, day] = row.row_date.split('-').map(value => Number(value));
+    if (Number.isFinite(month) && Number.isFinite(day)) return `${month}/${day}`;
+  }
+
+  return formatCellValue(cell, 'A', row);
+}
+
+function formatMonthlyOutputCell(row: TemplateWorkbookRow, column: string) {
+  const cell = getCellMap(row)[column];
+  if (!cell) return '';
+  if (cell.value === null || cell.value === undefined || cell.value === '') return '';
+  return formatCellValue(cell, column, row);
+}
+
+function shouldBlankMonthlyOutputRow(row: TemplateWorkbookRow, issueDateIso: string) {
+  return Boolean(row.row_date && row.row_date >= issueDateIso);
+}
+
 function getCellAddress(rowNumber: number, column: string) {
   return `${column}${rowNumber}`;
 }
@@ -95,6 +164,18 @@ function formatImportedAt(value: string | undefined) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function getCurrentMonthlySheetId() {
+  const now = new Date();
+  const year = String(now.getFullYear()).slice(2);
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}${month}`;
+}
+
+function getDefaultTemplateSheet(sheets: TemplateWorkbookSheet[]) {
+  const currentMonthlySheetId = getCurrentMonthlySheetId();
+  return sheets.find(sheet => sheet.id === currentMonthlySheetId) ?? sheets[0];
 }
 
 function ensureLandscapePrintStyle() {
@@ -513,6 +594,135 @@ function RawTable({
   );
 }
 
+function getMonthlyOutputCellClass(column: string) {
+  return [
+    MONTHLY_OUTPUT_SHADED_COLUMNS.has(column) ? 'sample-output-shaded' : '',
+    MONTHLY_OUTPUT_GROUP_START_COLUMNS.has(column) ? 'sample-output-thick-left' : '',
+    MONTHLY_OUTPUT_GROUP_END_COLUMNS.has(column) ? 'sample-output-thick-right' : '',
+  ].filter(Boolean).join(' ');
+}
+
+function MonthlyOutputTabulation({
+  rows,
+}: {
+  sheet: TemplateWorkbookSheet;
+  rows: TemplateWorkbookRow[];
+}) {
+  const issueDate = React.useMemo(() => formatIssueDate(), []);
+  const issueDateIso = React.useMemo(() => formatLocalIsoDate(), []);
+  const outputRows = rows.filter(row => row.row_number >= 8 && row.row_number <= 38);
+
+  return (
+    <div className="sample-output-sheet template-print-sheet">
+      <table className="sample-output-table">
+        <colgroup>
+          <col className="sample-date-column" />
+          {MONTHLY_OUTPUT_DATA_COLUMNS.map(column => (
+            <col key={column} className={getMonthlyOutputCellClass(column)} />
+          ))}
+        </colgroup>
+        <tbody>
+          <tr className="sample-document-row">
+            <td rowSpan={4} colSpan={4} className="sample-logo-cell sample-output-thick-left sample-output-thick-top">
+              <img src={TAEWOONG_LOGO_SRC} alt="TAEWOONG" />
+            </td>
+            <td rowSpan={2} colSpan={4} className="sample-document-label sample-output-thick-top">
+              <span className="sample-korean-label">문서제목</span>
+              <span className="sample-english-label">Document Name</span>
+            </td>
+            <td rowSpan={2} colSpan={8} className="sample-document-title sample-output-thick-top">
+              <span className="sample-document-title-primary">생산량 집계표</span>
+              <span className="sample-document-title-secondary">Output Tabulation</span>
+            </td>
+            <td rowSpan={4} className="sample-approval-vertical sample-output-thick-top">결<br /><br />재</td>
+            <td colSpan={2} className="sample-approval-title sample-output-thick-top">담당</td>
+            <td colSpan={2} className="sample-approval-title sample-output-thick-top">팀 장</td>
+            <td colSpan={2} className="sample-approval-title sample-output-thick-top sample-output-thick-right">부문장</td>
+          </tr>
+          <tr className="sample-document-row">
+            <td rowSpan={3} colSpan={2} className="sample-approval-signature" />
+            <td rowSpan={3} colSpan={2} className="sample-approval-signature" />
+            <td rowSpan={3} colSpan={2} className="sample-approval-signature sample-output-thick-right" />
+          </tr>
+          <tr className="sample-document-row">
+            <td colSpan={4} className="sample-document-label">
+              <span className="sample-korean-label">작성일자</span>
+              <span className="sample-english-label">Issue Date</span>
+            </td>
+            <td colSpan={8} className="sample-issue-date">{issueDate}</td>
+          </tr>
+          <tr className="sample-document-row">
+            <td colSpan={4} className="sample-document-label">
+              <span className="sample-korean-label">작성부서</span>
+              <span className="sample-english-label">Issue Department</span>
+            </td>
+            <td colSpan={8} className="sample-issue-department">단조생산부문</td>
+          </tr>
+
+          <tr className="sample-header-row sample-header-group-row">
+            <td rowSpan={3} className="sample-output-thick-left" />
+            <td colSpan={5} className="sample-output-thick-left sample-output-thick-right">15000TON (월 3,045TON)</td>
+            <td colSpan={5} className="sample-output-thick-left sample-output-thick-right">5000TON (월 1,470TON)</td>
+            <td colSpan={4} className="sample-output-thick-left sample-output-thick-right">Ø11000 R/M (월 4,200TON)</td>
+            <td colSpan={8} className="sample-output-thick-left sample-output-thick-right">TOTAL (월 8,715TON)</td>
+          </tr>
+          <tr className="sample-header-row">
+            <td colSpan={3} className="sample-output-thick-left">제품(일일 145TON)</td>
+            <td rowSpan={2}>황지</td>
+            <td rowSpan={2} className="sample-output-thick-right">합계</td>
+            <td colSpan={3} className="sample-output-thick-left">제품(일일 70TON)</td>
+            <td rowSpan={2}>황지</td>
+            <td rowSpan={2} className="sample-output-thick-right">합계</td>
+            <td colSpan={3} className="sample-output-thick-left">제품(일일 200TON)</td>
+            <td rowSpan={2} className="sample-output-thick-right">합계</td>
+            <td colSpan={3} className="sample-output-thick-left">제품(일일 415TON)</td>
+            <td rowSpan={2}>황지</td>
+            <td rowSpan={2}>COGGING</td>
+            <td rowSpan={2}>합계</td>
+            <td colSpan={2} className="sample-output-thick-left sample-output-thick-right">지적작 (품질)</td>
+          </tr>
+          <tr className="sample-header-row sample-header-leaf-row">
+            <td className="sample-output-thick-left">생산량</td>
+            <td className="sample-output-shaded">계획량</td>
+            <td>달성률</td>
+            <td className="sample-output-thick-left">생산량</td>
+            <td className="sample-output-shaded">계획량</td>
+            <td>달성률</td>
+            <td className="sample-output-thick-left">생산량</td>
+            <td className="sample-output-shaded">계획량</td>
+            <td>달성률</td>
+            <td className="sample-output-thick-left">생산량</td>
+            <td className="sample-output-shaded">계획량</td>
+            <td>달성률</td>
+            <td className="sample-output-shaded sample-output-thick-left">지적작</td>
+            <td className="sample-output-shaded sample-output-thick-right">수정</td>
+          </tr>
+
+          {outputRows.map(row => {
+            const isTotalRow = row.row_number === 38 || formatMonthlyOutputDate(row) === '합계';
+            const shouldBlankRow = !isTotalRow && shouldBlankMonthlyOutputRow(row, issueDateIso);
+
+            return (
+              <tr key={row.row_number} className={isTotalRow ? 'sample-total-row' : 'sample-body-row'}>
+                <td className="sample-date-cell sample-output-thick-left">{formatMonthlyOutputDate(row)}</td>
+                {MONTHLY_OUTPUT_DATA_COLUMNS.map(column => (
+                  <td key={`${row.row_number}-${column}`} className={getMonthlyOutputCellClass(column)}>
+                    {shouldBlankRow ? '' : formatMonthlyOutputCell(row, column)}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="sample-output-footer">
+        <span>DOC ID NO.:CP-601-01 REV.1 DATE:2013.01.04</span>
+        <span>1 / 1</span>
+      </div>
+    </div>
+  );
+}
+
 function ExcelPreviewDialog({
   sheets,
   initialSheetId,
@@ -577,19 +787,25 @@ function ExcelPreviewDialog({
         <div className="flex-1 overflow-auto p-5 bg-slate-50">
           {previewSheet ? (
             <div className="template-preview-print-area bg-white border border-gray-200 rounded-lg overflow-hidden">
-              <div className="template-preview-print-header template-print-header hidden">
+              {previewSheet.kind !== 'monthly' && (
+                <div className="template-preview-print-header template-print-header hidden">
                 <h2 className="font-semibold text-gray-900">{previewSheet.sheet_name}</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {previewSheet.year}년 · {previewSheet.kind === 'monthly' ? '월별' : '연간'}
+                  {previewSheet.year}년 · 연간
                 </p>
-              </div>
-              <RawTable
+                </div>
+              )}
+              {previewSheet.kind === 'monthly' ? (
+                <MonthlyOutputTabulation sheet={previewSheet} rows={previewVisibleRows} />
+              ) : (
+                <RawTable
                 sheet={previewSheet}
                 columns={previewColumns}
                 rows={previewVisibleRows}
                 showGridHeaders={false}
-                useMergedCells
-              />
+                  useMergedCells
+                />
+              )}
             </div>
           ) : (
             <div className="bg-white border border-gray-200 rounded-lg px-4 py-10 text-center text-sm text-gray-500">
@@ -633,7 +849,8 @@ export default function TemplateWorkbookPage() {
   const [selectedSheetId, setSelectedSheetId] = React.useState<string>('');
   const [viewMode, setViewMode] = React.useState<ViewMode>('summary');
   const [isExcelPreviewOpen, setIsExcelPreviewOpen] = React.useState(false);
-  const selectedSheet = templateSheets.find(sheet => sheet.id === selectedSheetId) ?? templateSheets[0];
+  const defaultSheet = React.useMemo(() => getDefaultTemplateSheet(templateSheets), [templateSheets]);
+  const selectedSheet = templateSheets.find(sheet => sheet.id === selectedSheetId) ?? defaultSheet;
   const appSummary = React.useMemo(() => buildTemplateWorkbookAppSummary(templateSheets), [templateSheets]);
   const summaryRows = React.useMemo(() => extractTemplateSummaryRows(selectedSheet), [selectedSheet]);
   const rawColumns = React.useMemo(() => getSheetColumns(selectedSheet), [selectedSheet]);
@@ -666,7 +883,7 @@ export default function TemplateWorkbookPage() {
   React.useEffect(() => {
     if (!templateSheets.length) return;
     if (!selectedSheetId || !templateSheets.some(sheet => sheet.id === selectedSheetId)) {
-      setSelectedSheetId(templateSheets[0].id);
+      setSelectedSheetId(getDefaultTemplateSheet(templateSheets).id);
     }
   }, [selectedSheetId, templateSheets]);
 
@@ -885,13 +1102,17 @@ export default function TemplateWorkbookPage() {
             )}
           </div>
           <div className="template-print-workbook-content">
-            <RawTable
-              sheet={selectedSheet}
-              columns={printColumns}
-              rows={printRows}
-              showGridHeaders={false}
-              useMergedCells
-            />
+            {selectedSheet.kind === 'monthly' ? (
+              <MonthlyOutputTabulation sheet={selectedSheet} rows={printRows} />
+            ) : (
+              <RawTable
+                sheet={selectedSheet}
+                columns={printColumns}
+                rows={printRows}
+                showGridHeaders={false}
+                useMergedCells
+              />
+            )}
           </div>
         </div>
       )}
