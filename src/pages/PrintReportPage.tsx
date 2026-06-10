@@ -28,6 +28,7 @@ function getPrintRateClass(rate: number | null) {
 }
 
 const PRINT_EQUIPMENT_ORDER: Equipment[] = ['P15', 'P5', 'R/M', 'P8'];
+const DAILY_REPORT_PRINT_CLASS = 'daily-report-print-document';
 const PRINT_SHIFT_ORDER: Shift[] = ['주간', '야간'];
 
 function getOrderIndex<T>(order: readonly T[], value: T) {
@@ -39,6 +40,18 @@ export default function PrintReportPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
   const navigate = useNavigate();
   const { reports, getEntriesByReport } = useReportStore();
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+
+    document.documentElement.classList.add(DAILY_REPORT_PRINT_CLASS);
+    document.body.classList.add(DAILY_REPORT_PRINT_CLASS);
+
+    return () => {
+      document.documentElement.classList.remove(DAILY_REPORT_PRINT_CLASS);
+      document.body.classList.remove(DAILY_REPORT_PRINT_CLASS);
+    };
+  }, []);
 
   const actualDate = reportDate || getActualDateFromPlanDate(getTodayPlanDate());
   const planDate = getPlanDateFromActualDate(actualDate);
@@ -143,8 +156,8 @@ export default function PrintReportPage() {
       </div>
 
       {/* 인쇄 콘텐츠 */}
-      <div className="print-area bg-white min-h-screen p-8 pt-20 no-print:pt-20">
-        <div className="print-sheet max-w-4xl mx-auto">
+      <div className="print-area daily-report-print-area bg-white min-h-screen p-8 pt-20 no-print:pt-20">
+        <div className="print-sheet daily-report-print-sheet max-w-4xl mx-auto">
           {/* 보고서 헤더 */}
           <div className="print-header text-center mb-6 pb-4 border-b-2 border-blue-800">
             <h1 className="text-2xl font-bold text-blue-900">단조 생산 일일 보고서</h1>

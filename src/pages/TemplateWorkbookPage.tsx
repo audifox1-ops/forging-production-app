@@ -677,9 +677,9 @@ function MonthlyOutputTabulation({
             <td rowSpan={2} className="sample-output-thick-right">합계</td>
             <td colSpan={3} className="sample-output-thick-left">제품(일일 415TON)</td>
             <td rowSpan={2}>황지</td>
-            <td rowSpan={2}>COGGING</td>
+            <td rowSpan={2} className="sample-cogging-header">COGGING</td>
             <td rowSpan={2}>합계</td>
-            <td colSpan={2} className="sample-output-thick-left sample-output-thick-right">지적작 (품질)</td>
+            <td colSpan={2} className="sample-output-thick-left sample-output-thick-right">재제작 (품질)</td>
           </tr>
           <tr className="sample-header-row sample-header-leaf-row">
             <td className="sample-output-thick-left">생산량</td>
@@ -694,7 +694,7 @@ function MonthlyOutputTabulation({
             <td className="sample-output-thick-left">생산량</td>
             <td className="sample-output-shaded">계획량</td>
             <td>달성률</td>
-            <td className="sample-output-shaded sample-output-thick-left">지적작</td>
+            <td className="sample-output-shaded sample-output-thick-left">재제작</td>
             <td className="sample-output-shaded sample-output-thick-right">수정</td>
           </tr>
 

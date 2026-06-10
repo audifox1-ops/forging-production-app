@@ -172,6 +172,11 @@ body {
     margin: 4mm;
   }
 
+  @page daily-report-landscape {
+    size: A4 landscape;
+    margin: 5mm;
+  }
+
   .print-area {
     width: 202mm !important;
     min-height: 0 !important;
@@ -326,6 +331,140 @@ body {
 
   .print-opinion {
     margin-bottom: 0 !important;
+  }
+
+  html.daily-report-print-document,
+  html.daily-report-print-document body,
+  html.daily-report-print-document #root {
+    width: 287mm !important;
+    min-width: 287mm !important;
+    min-height: 200mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    overflow: visible !important;
+  }
+
+  html.daily-report-print-document body {
+    font-size: 9pt !important;
+    line-height: 1.24 !important;
+  }
+
+  html.daily-report-print-document .daily-report-print-area {
+    page: daily-report-landscape;
+    width: 287mm !important;
+    min-width: 287mm !important;
+    min-height: 200mm !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 5mm 5mm 4mm 5mm !important;
+    background: white !important;
+    overflow: visible !important;
+  }
+
+  html.daily-report-print-document .daily-report-print-sheet {
+    width: 277mm !important;
+    max-width: 277mm !important;
+    margin: 0 auto !important;
+    zoom: 1 !important;
+  }
+
+  html.daily-report-print-document .print-section {
+    margin-bottom: 2.2mm !important;
+  }
+
+  html.daily-report-print-document .print-header {
+    margin-bottom: 2.4mm !important;
+    padding-bottom: 1.8mm !important;
+  }
+
+  html.daily-report-print-document .print-header h1 {
+    font-size: 18pt !important;
+    line-height: 1.12 !important;
+  }
+
+  html.daily-report-print-document .print-header div {
+    font-size: 9.2pt !important;
+    line-height: 1.2 !important;
+    margin-top: 1.2mm !important;
+  }
+
+  html.daily-report-print-document .print-section-title {
+    font-size: 10.5pt !important;
+    line-height: 1.2 !important;
+    padding: 1.35mm 2mm !important;
+    margin-bottom: 1.3mm !important;
+  }
+
+  html.daily-report-print-document .print-kpi-grid {
+    gap: 2.2mm !important;
+    margin-bottom: 1.8mm !important;
+  }
+
+  html.daily-report-print-document .print-kpi-card {
+    padding: 2mm 1.8mm !important;
+  }
+
+  html.daily-report-print-document .print-kpi-card .text-xs {
+    font-size: 9pt !important;
+    line-height: 1.2 !important;
+  }
+
+  html.daily-report-print-document .print-kpi-value {
+    font-size: 17pt !important;
+    line-height: 1.08 !important;
+    margin-top: 0.8mm !important;
+  }
+
+  html.daily-report-print-document .print-summary-box,
+  html.daily-report-print-document .print-opinion {
+    padding: 2mm !important;
+    font-size: 9.6pt !important;
+    line-height: 1.35 !important;
+  }
+
+  html.daily-report-print-document .print-table {
+    width: 100% !important;
+    font-size: 9pt !important;
+    line-height: 1.18 !important;
+  }
+
+  html.daily-report-print-document .print-table th,
+  html.daily-report-print-document .print-table td {
+    padding: 1.15mm 1.2mm !important;
+    border-width: 0.25mm !important;
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+  }
+
+  html.daily-report-print-document .print-table-actual th:nth-child(1),
+  html.daily-report-print-document .print-table-plan th:nth-child(1) {
+    width: 14mm !important;
+  }
+
+  html.daily-report-print-document .print-table-actual th:nth-child(2),
+  html.daily-report-print-document .print-table-plan th:nth-child(2) {
+    width: 13mm !important;
+  }
+
+  html.daily-report-print-document .print-table-actual th:last-child,
+  html.daily-report-print-document .print-table-plan th:last-child {
+    width: 34mm !important;
+  }
+
+  html.daily-report-print-document .print-table-reasons th:nth-child(1) {
+    width: 16mm !important;
+  }
+
+  html.daily-report-print-document .print-table-reasons th:nth-child(2) {
+    width: 28mm !important;
+  }
+
+  html.daily-report-print-document .reason-content,
+  html.daily-report-print-document .reason-text,
+  html.daily-report-print-document .reason-content-row {
+    font-size: 9.6pt !important;
+    line-height: 1.32 !important;
   }
 
   @page template-workbook-landscape {
@@ -553,8 +692,12 @@ body {
     width: 287mm !important;
     min-width: 287mm !important;
     max-width: 287mm !important;
+    min-height: 200mm !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 8mm 0 7mm 0 !important;
     overflow: visible !important;
   }
 
@@ -569,7 +712,7 @@ body {
 
   html.template-workbook-print-document .sample-output-table td {
     height: 3.7mm !important;
-    padding: 0 0.55mm !important;
+    padding: 0 0.35mm !important;
     border: 0.18mm solid #111 !important;
     color: #111 !important;
     background: #fff !important;
@@ -605,20 +748,24 @@ body {
     font-size: 7.7pt !important;
   }
 
+  html.template-workbook-print-document .sample-header-row td.sample-cogging-header {
+    font-size: 6.4pt !important;
+  }
+
   html.template-workbook-print-document .sample-body-row td {
     height: 3.7mm !important;
-    font-size: 7.25pt !important;
+    font-size: 6.55pt !important;
   }
 
   html.template-workbook-print-document .sample-total-row td {
     height: 4.1mm !important;
     border-top-width: 0.38mm !important;
-    font-size: 7.6pt !important;
+    font-size: 6.55pt !important;
   }
 
   html.template-workbook-print-document .sample-output-footer {
     width: 287mm !important;
-    margin-top: 20mm !important;
+    margin-top: auto !important;
     padding: 0 15mm !important;
     font-size: 10.5pt !important;
   }
@@ -712,9 +859,13 @@ input[type="number"] {
 .sample-output-sheet {
   width: 287mm;
   min-width: 287mm;
+  min-height: 200mm;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   background: #fff;
   color: #111;
-  padding: 0;
+  padding: 8mm 0 7mm 0;
   font-family: Arial, "Malgun Gothic", "Noto Sans KR", sans-serif;
 }
 
@@ -737,7 +888,7 @@ input[type="number"] {
 
 .sample-output-table td {
   height: 3.7mm;
-  padding: 0 0.55mm;
+  padding: 0 0.35mm;
   border: 0.18mm solid #111;
   color: #111;
   background: #fff;
@@ -829,6 +980,10 @@ input[type="number"] {
   font-size: 7.7pt;
 }
 
+.sample-header-row td.sample-cogging-header {
+  font-size: 6.4pt;
+}
+
 .sample-header-group-row td {
   height: 3.9mm;
 }
@@ -839,7 +994,7 @@ input[type="number"] {
 
 .sample-body-row td {
   height: 3.7mm;
-  font-size: 7.25pt;
+  font-size: 6.55pt;
 }
 
 .sample-date-cell {
@@ -849,7 +1004,7 @@ input[type="number"] {
 .sample-total-row td {
   height: 4.1mm;
   border-top-width: 0.38mm;
-  font-size: 7.6pt;
+  font-size: 6.55pt;
 }
 
 .sample-output-footer {
@@ -857,7 +1012,7 @@ input[type="number"] {
   grid-template-columns: 1fr 1fr 1fr;
   align-items: end;
   width: 287mm;
-  margin-top: 20mm;
+  margin-top: auto;
   padding: 0 15mm;
   color: #111;
   font-size: 10.5pt;
