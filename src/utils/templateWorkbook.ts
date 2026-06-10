@@ -1,4 +1,4 @@
-import type { TemplateWorkbookCell, TemplateWorkbookRow, TemplateWorkbookSheet } from '../types';
+import type { ProductionEntry, ProductionReport, TemplateWorkbookCell, TemplateWorkbookRow, TemplateWorkbookSheet } from '../types';
 
 export type TemplateEquipmentKey = 'P15' | 'P5' | 'R/M' | 'TOTAL';
 
@@ -7,6 +7,7 @@ export interface TemplateEquipmentSummary {
   productPlan: number | null;
   achievementRate: number | null;
   billetActual: number | null;
+  coggingActual: number | null;
   grossTotal: number | null;
 }
 
@@ -32,6 +33,7 @@ type SummaryColumnMap = Record<TemplateEquipmentKey, {
   productPlan: string;
   achievementRate: string;
   billetActual?: string;
+  coggingActual?: string;
   grossTotal: string;
 }>;
 
@@ -41,6 +43,7 @@ export const TEMPLATE_SUMMARY_COLUMNS: SummaryColumnMap = {
     productPlan: 'C',
     achievementRate: 'D',
     billetActual: 'E',
+    coggingActual: 'F',
     grossTotal: 'G',
   },
   P5: {
@@ -48,6 +51,7 @@ export const TEMPLATE_SUMMARY_COLUMNS: SummaryColumnMap = {
     productPlan: 'Q',
     achievementRate: 'R',
     billetActual: 'S',
+    coggingActual: 'T',
     grossTotal: 'U',
   },
   'R/M': {
@@ -61,9 +65,16 @@ export const TEMPLATE_SUMMARY_COLUMNS: SummaryColumnMap = {
     productPlan: 'AQ',
     achievementRate: 'AR',
     billetActual: 'AS',
+    coggingActual: 'AT',
     grossTotal: 'AU',
   },
 };
+
+const SYNC_EQUIPMENT_COLUMNS = {
+  P15: TEMPLATE_SUMMARY_COLUMNS.P15,
+  P5: TEMPLATE_SUMMARY_COLUMNS.P5,
+  'R/M': TEMPLATE_SUMMARY_COLUMNS['R/M'],
+} as const;
 
 export const TEMPLATE_COMPACT_COLUMNS = Array.from(new Set([
   'A',
@@ -72,6 +83,7 @@ export const TEMPLATE_COMPACT_COLUMNS = Array.from(new Set([
     group.productPlan,
     group.achievementRate,
     group.billetActual,
+    group.coggingActual,
     group.grossTotal,
   ].filter((column): column is string => Boolean(column))),
 ]));
@@ -125,6 +137,7 @@ function buildEquipmentSummary(
     productPlan: getSummaryValue(cellMap, columns.productPlan),
     achievementRate: getSummaryValue(cellMap, columns.achievementRate),
     billetActual: getSummaryValue(cellMap, columns.billetActual),
+    coggingActual: getSummaryValue(cellMap, columns.coggingActual),
     grossTotal: getSummaryValue(cellMap, columns.grossTotal),
   };
 }
@@ -148,6 +161,34 @@ function isTotalRow(label: string) {
   return /합계|total/i.test(label);
 }
 
+function getMonthlySheetMeta(sheet: TemplateWorkbookSheet) {
+  const match = /^(\d{2})(\d{2})월$/.exec(sheet.sheet_name);
+  if (!match) return null;
+
+  const year = 2000 + Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isFinite(year) || month < 1 || month > 12) return null;
+
+  return {
+    year,
+    month,
+    daysInMonth: new Date(Date.UTC(year, month, 0)).getUTCDate(),
+  };
+}
+
+function formatMonthlyDateLabel(month: number, day: number) {
+  return `${String(month).padStart(2, '0')}.${String(day).padStart(2, '0')}`;
+}
+
+function formatMonthlyIsoDate(year: number, month: number, day: number) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function excelSerialFromDate(dateString: string) {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return Math.round((Date.UTC(year, month - 1, day) - Date.UTC(1899, 11, 30)) / 86400000);
+}
+
 function hasAnyNumber(summary: TemplateSummaryRow) {
   return Object.values(summary.values).some(value =>
     Object.values(value).some(item => typeof item === 'number' && item !== 0)
@@ -161,28 +202,384 @@ function shouldIncludeSummaryRow(row: TemplateSummaryRow, sheet: TemplateWorkboo
   return hasAnyNumber(row);
 }
 
+function buildSummaryRow(
+  row: TemplateWorkbookRow | undefined,
+  label: string,
+  options: {
+    rowNumber: number;
+    date?: string;
+    isTotal?: boolean;
+  }
+): TemplateSummaryRow {
+  const cellMap = row ? getCellMap(row) : {};
+  const isTotal = options.isTotal ?? isTotalRow(label);
+
+  return {
+    rowNumber: options.rowNumber,
+    label,
+    date: options.date,
+    isTotal,
+    values: {
+      P15: buildEquipmentSummary(cellMap, TEMPLATE_SUMMARY_COLUMNS.P15),
+      P5: buildEquipmentSummary(cellMap, TEMPLATE_SUMMARY_COLUMNS.P5),
+      'R/M': buildEquipmentSummary(cellMap, TEMPLATE_SUMMARY_COLUMNS['R/M']),
+      TOTAL: buildEquipmentSummary(cellMap, TEMPLATE_SUMMARY_COLUMNS.TOTAL),
+    },
+  };
+}
+
+function sortCells(cells: TemplateWorkbookCell[]) {
+  return [...cells].sort((a, b) => columnToNumber(a.column) - columnToNumber(b.column));
+}
+
+function setRowCell(
+  row: TemplateWorkbookRow,
+  column: string,
+  value: TemplateWorkbookCell['value'],
+  formula?: string
+) {
+  const existingCell = row.cells.find(cell => cell.column === column);
+
+  if (existingCell) {
+    existingCell.value = value;
+    if (formula) {
+      existingCell.formula = formula;
+    } else {
+      delete existingCell.formula;
+    }
+  } else {
+    row.cells.push({
+      column,
+      value,
+      ...(formula ? { formula } : {}),
+    });
+    row.cells = sortCells(row.cells);
+  }
+}
+
+function getOrCreateMonthlyRow(sheet: TemplateWorkbookSheet, dateString: string) {
+  const meta = getMonthlySheetMeta(sheet);
+  if (!meta) return null;
+
+  const [, , dayString] = dateString.split('-');
+  const day = Number(dayString);
+  if (!Number.isFinite(day) || day < 1 || day > meta.daysInMonth) return null;
+
+  const rowNumber = day + 7;
+  let row = sheet.rows.find(item => item.row_number === rowNumber);
+
+  if (!row) {
+    row = {
+      row_number: rowNumber,
+      row_date: dateString,
+      cells: [],
+    };
+    sheet.rows.push(row);
+    sheet.rows.sort((a, b) => a.row_number - b.row_number);
+  }
+
+  row.row_date = dateString;
+  setRowCell(row, 'A', excelSerialFromDate(dateString));
+
+  return row;
+}
+
+function getOrCreateMonthlyTotalRow(sheet: TemplateWorkbookSheet) {
+  const meta = getMonthlySheetMeta(sheet);
+  if (!meta) return null;
+
+  const totalRowNumber = meta.daysInMonth + 8;
+  let row = sheet.rows.find(item => isTotalRow(getFirstCellLabel(item)));
+
+  if (!row) {
+    row = sheet.rows.find(item => item.row_number === totalRowNumber);
+  }
+
+  if (!row) {
+    row = {
+      row_number: totalRowNumber,
+      row_label: '합계',
+      cells: [],
+    };
+    sheet.rows.push(row);
+    sheet.rows.sort((a, b) => a.row_number - b.row_number);
+  }
+
+  row.row_label = '합계';
+  delete row.row_date;
+  setRowCell(row, 'A', '합계');
+
+  return row;
+}
+
+function safeRate(actual: number, plan: number) {
+  return plan > 0 ? actual / plan : 0;
+}
+
+function getNumericCell(row: TemplateWorkbookRow | undefined, column: string) {
+  if (!row) return 0;
+  return toNumber(row.cells.find(cell => cell.column === column)?.value) ?? 0;
+}
+
+function sumRows(rows: TemplateWorkbookRow[], column: string) {
+  return rows.reduce((sum, row) => sum + getNumericCell(row, column), 0);
+}
+
+function recalculateTemplateRow(row: TemplateWorkbookRow) {
+  (Object.values(SYNC_EQUIPMENT_COLUMNS)).forEach(columns => {
+    const productActual = getNumericCell(row, columns.productActual);
+    const productPlan = getNumericCell(row, columns.productPlan);
+    const billetActual = getNumericCell(row, columns.billetActual ?? '');
+    const coggingActual = getNumericCell(row, columns.coggingActual ?? '');
+
+    setRowCell(row, columns.achievementRate, safeRate(productActual, productPlan));
+    setRowCell(row, columns.grossTotal, productActual + billetActual + coggingActual);
+  });
+
+  const totalProductActual = getNumericCell(row, 'B') + getNumericCell(row, 'P') + getNumericCell(row, 'AD');
+  const totalProductPlan = getNumericCell(row, 'C') + getNumericCell(row, 'Q') + getNumericCell(row, 'AE');
+  const totalBilletActual = getNumericCell(row, 'E') + getNumericCell(row, 'S');
+  const totalCoggingActual = getNumericCell(row, 'F') + getNumericCell(row, 'T');
+
+  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.productActual, totalProductActual);
+  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.productPlan, totalProductPlan);
+  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.achievementRate, safeRate(totalProductActual, totalProductPlan));
+  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.billetActual!, totalBilletActual);
+  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.coggingActual!, totalCoggingActual);
+  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.grossTotal, totalProductActual + totalBilletActual + totalCoggingActual);
+}
+
+function recalculateMonthlyTotal(sheet: TemplateWorkbookSheet) {
+  const meta = getMonthlySheetMeta(sheet);
+  const totalRow = getOrCreateMonthlyTotalRow(sheet);
+  if (!meta || !totalRow) return;
+
+  const dailyRows = Array.from({ length: meta.daysInMonth }, (_, index) =>
+    sheet.rows.find(row => row.row_number === index + 8)
+  ).filter((row): row is TemplateWorkbookRow => Boolean(row));
+
+  const totalColumns = Array.from(new Set(
+    Object.values(TEMPLATE_SUMMARY_COLUMNS).flatMap(columns => [
+      columns.productActual,
+      columns.productPlan,
+      columns.billetActual,
+      columns.coggingActual,
+      columns.grossTotal,
+    ].filter((column): column is string => Boolean(column)))
+  ));
+
+  totalColumns.forEach(column => setRowCell(totalRow, column, sumRows(dailyRows, column)));
+  recalculateTemplateRow(totalRow);
+}
+
+function cloneTemplateSheets(sheets: TemplateWorkbookSheet[]) {
+  return sheets.map(sheet => ({
+    ...sheet,
+    rows: sheet.rows.map(row => ({
+      ...row,
+      cells: row.cells.map(cell => ({ ...cell })),
+    })),
+  }));
+}
+
+function getMonthlySheetForDate(sheets: TemplateWorkbookSheet[], dateString: string) {
+  const [year, month] = dateString.split('-');
+  const sheetName = `${year.slice(2)}${month}월`;
+  return sheets.find(sheet => sheet.sheet_name === sheetName);
+}
+
+function aggregateReportEntries(entries: ProductionEntry[], reportId: string) {
+  const targetEntries = entries.filter(entry => entry.report_id === reportId);
+
+  return (Object.keys(SYNC_EQUIPMENT_COLUMNS) as Array<keyof typeof SYNC_EQUIPMENT_COLUMNS>).reduce((acc, equipment) => {
+    const equipmentEntries = targetEntries.filter(entry => entry.equipment === equipment);
+    acc[equipment] = {
+      productPlan: equipmentEntries.reduce((sum, entry) => sum + (entry.product_plan || 0), 0),
+      productActual: equipmentEntries.reduce((sum, entry) => sum + (entry.product_actual || 0), 0),
+      billetPlan: equipment === 'R/M' ? 0 : equipmentEntries.reduce((sum, entry) => sum + (entry.billet_plan || 0), 0),
+      billetActual: equipment === 'R/M' ? 0 : equipmentEntries.reduce((sum, entry) => sum + (entry.billet_actual || 0), 0),
+      nextProductPlan: equipmentEntries.reduce((sum, entry) => sum + (entry.next_product_plan || 0), 0),
+      nextBilletPlan: equipment === 'R/M' ? 0 : equipmentEntries.reduce((sum, entry) => sum + (entry.next_billet_plan || 0), 0),
+    };
+    return acc;
+  }, {} as Record<keyof typeof SYNC_EQUIPMENT_COLUMNS, {
+    productPlan: number;
+    productActual: number;
+    billetPlan: number;
+    billetActual: number;
+    nextProductPlan: number;
+    nextBilletPlan: number;
+  }>);
+}
+
+function applyActualEntryValues(row: TemplateWorkbookRow, totals: ReturnType<typeof aggregateReportEntries>) {
+  (Object.keys(SYNC_EQUIPMENT_COLUMNS) as Array<keyof typeof SYNC_EQUIPMENT_COLUMNS>).forEach(equipment => {
+    const columns = SYNC_EQUIPMENT_COLUMNS[equipment];
+    const values = totals[equipment];
+
+    setRowCell(row, columns.productActual, values.productActual);
+    setRowCell(row, columns.productPlan, values.productPlan);
+    if (columns.billetActual) setRowCell(row, columns.billetActual, values.billetActual);
+  });
+  recalculateTemplateRow(row);
+}
+
+function applyPlanEntryValues(row: TemplateWorkbookRow, totals: ReturnType<typeof aggregateReportEntries>) {
+  (Object.keys(SYNC_EQUIPMENT_COLUMNS) as Array<keyof typeof SYNC_EQUIPMENT_COLUMNS>).forEach(equipment => {
+    const columns = SYNC_EQUIPMENT_COLUMNS[equipment];
+    const values = totals[equipment];
+
+    setRowCell(row, columns.productPlan, values.nextProductPlan);
+    if (columns.billetActual) {
+      const existingBilletActual = getNumericCell(row, columns.billetActual);
+      setRowCell(row, columns.billetActual, existingBilletActual);
+    }
+  });
+  recalculateTemplateRow(row);
+}
+
+function extractMonthlySummaryRows(sheet: TemplateWorkbookSheet) {
+  const meta = getMonthlySheetMeta(sheet);
+  if (!meta) return null;
+
+  const rowsByNumber = new Map(sheet.rows.map(row => [row.row_number, row]));
+  const dailyRows = Array.from({ length: meta.daysInMonth }, (_, index) => {
+    const day = index + 1;
+    const rowNumber = day + 7;
+    return buildSummaryRow(
+      rowsByNumber.get(rowNumber),
+      formatMonthlyDateLabel(meta.month, day),
+      {
+        rowNumber,
+        date: formatMonthlyIsoDate(meta.year, meta.month, day),
+        isTotal: false,
+      }
+    );
+  });
+  const totalRowNumber = meta.daysInMonth + 8;
+  const explicitTotalRow = sheet.rows.find(row => isTotalRow(getFirstCellLabel(row)));
+  const totalRow = buildSummaryRow(
+    explicitTotalRow ?? rowsByNumber.get(totalRowNumber),
+    '합계',
+    {
+      rowNumber: explicitTotalRow?.row_number ?? totalRowNumber,
+      isTotal: true,
+    }
+  );
+
+  return [...dailyRows, totalRow];
+}
+
 export function extractTemplateSummaryRows(sheet: TemplateWorkbookSheet | undefined) {
   if (!sheet) return [];
 
+  if (sheet.kind === 'monthly') {
+    const monthlyRows = extractMonthlySummaryRows(sheet);
+    if (monthlyRows) return monthlyRows;
+  }
+
   return sheet.rows
     .map((row): TemplateSummaryRow => {
-      const cellMap = getCellMap(row);
       const label = getSummaryRowLabel(row, sheet);
-
-      return {
+      return buildSummaryRow(row, label, {
         rowNumber: row.row_number,
-        label,
         date: row.row_date,
-        isTotal: isTotalRow(label),
-        values: {
-          P15: buildEquipmentSummary(cellMap, TEMPLATE_SUMMARY_COLUMNS.P15),
-          P5: buildEquipmentSummary(cellMap, TEMPLATE_SUMMARY_COLUMNS.P5),
-          'R/M': buildEquipmentSummary(cellMap, TEMPLATE_SUMMARY_COLUMNS['R/M']),
-          TOTAL: buildEquipmentSummary(cellMap, TEMPLATE_SUMMARY_COLUMNS.TOTAL),
-        },
-      };
+      });
     })
     .filter(row => shouldIncludeSummaryRow(row, sheet));
+}
+
+export function syncTemplateSheetsWithReportEntries(
+  sheets: TemplateWorkbookSheet[],
+  reports: ProductionReport[],
+  entries: ProductionEntry[],
+  reportId: string
+) {
+  const report = reports.find(item => item.id === reportId);
+  if (!report || sheets.length === 0) return sheets;
+
+  const nextSheets = cloneTemplateSheets(sheets);
+  const totals = aggregateReportEntries(entries, reportId);
+  const actualSheet = getMonthlySheetForDate(nextSheets, report.report_date);
+  const actualRow = actualSheet ? getOrCreateMonthlyRow(actualSheet, report.report_date) : null;
+
+  if (actualSheet && actualRow) {
+    applyActualEntryValues(actualRow, totals);
+    recalculateMonthlyTotal(actualSheet);
+    actualSheet.imported_at = new Date().toISOString();
+  }
+
+  const planSheet = getMonthlySheetForDate(nextSheets, report.next_plan_date);
+  const planRow = planSheet ? getOrCreateMonthlyRow(planSheet, report.next_plan_date) : null;
+
+  if (planSheet && planRow) {
+    applyPlanEntryValues(planRow, totals);
+    recalculateMonthlyTotal(planSheet);
+    planSheet.imported_at = new Date().toISOString();
+  }
+
+  return nextSheets;
+}
+
+export function updateTemplateWorkbookCell(
+  sheets: TemplateWorkbookSheet[],
+  sheetId: string,
+  rowNumber: number,
+  column: string,
+  value: TemplateWorkbookCell['value']
+) {
+  const nextSheets = cloneTemplateSheets(sheets);
+  const sheet = nextSheets.find(item => item.id === sheetId);
+  if (!sheet) return sheets;
+
+  let row = sheet.rows.find(item => item.row_number === rowNumber);
+  if (!row) {
+    row = { row_number: rowNumber, cells: [] };
+    sheet.rows.push(row);
+    sheet.rows.sort((a, b) => a.row_number - b.row_number);
+  }
+
+  setRowCell(row, column.toUpperCase(), value);
+  recalculateTemplateRow(row);
+  if (sheet.kind === 'monthly') recalculateMonthlyTotal(sheet);
+  sheet.imported_at = new Date().toISOString();
+
+  return nextSheets;
+}
+
+export function deleteTemplateWorkbookRow(
+  sheets: TemplateWorkbookSheet[],
+  sheetId: string,
+  rowNumber: number
+) {
+  const nextSheets = cloneTemplateSheets(sheets);
+  const sheet = nextSheets.find(item => item.id === sheetId);
+  if (!sheet) return sheets;
+
+  sheet.rows = sheet.rows.filter(row => row.row_number !== rowNumber);
+  if (sheet.kind === 'monthly') recalculateMonthlyTotal(sheet);
+  sheet.imported_at = new Date().toISOString();
+
+  return nextSheets;
+}
+
+export function addTemplateWorkbookRow(
+  sheets: TemplateWorkbookSheet[],
+  sheetId: string
+) {
+  const nextSheets = cloneTemplateSheets(sheets);
+  const sheet = nextSheets.find(item => item.id === sheetId);
+  if (!sheet) return sheets;
+
+  const nextRowNumber = Math.max(0, ...sheet.rows.map(row => row.row_number)) + 1;
+  sheet.rows.push({
+    row_number: nextRowNumber,
+    cells: [{ column: 'A', value: '' }],
+  });
+  sheet.rows.sort((a, b) => a.row_number - b.row_number);
+  sheet.imported_at = new Date().toISOString();
+
+  return nextSheets;
 }
 
 export function getTemplateSheetTotal(sheet: TemplateWorkbookSheet | undefined) {
@@ -205,6 +602,7 @@ function sumEquipmentSummary(rows: TemplateSummaryRow[], equipment: TemplateEqui
   const productActual = sumNullable(rows.map(row => row.values[equipment].productActual));
   const productPlan = sumNullable(rows.map(row => row.values[equipment].productPlan));
   const billetActual = sumNullable(rows.map(row => row.values[equipment].billetActual));
+  const coggingActual = sumNullable(rows.map(row => row.values[equipment].coggingActual));
   const grossTotal = sumNullable(rows.map(row => row.values[equipment].grossTotal));
 
   return {
@@ -212,6 +610,7 @@ function sumEquipmentSummary(rows: TemplateSummaryRow[], equipment: TemplateEqui
     productPlan,
     achievementRate: calculateRate(productActual, productPlan),
     billetActual,
+    coggingActual,
     grossTotal,
   };
 }

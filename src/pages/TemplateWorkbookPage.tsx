@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, Download, Eye, Grid2X2, Printer, RefreshCw, Table2, X } from 'lucide-react';
+import { BarChart3, Download, Eye, Grid2X2, Plus, Printer, RefreshCw, Table2, Trash2, X } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { downloadExcelTemplate } from '../utils/excelTemplate';
 import {
@@ -62,6 +62,15 @@ function formatCellValue(cell: TemplateWorkbookCell | undefined, column: string,
 function getCellTitle(cell: TemplateWorkbookCell | undefined) {
   if (!cell?.formula) return undefined;
   return `=${cell.formula}`;
+}
+
+function parseWorkbookInputValue(value: string, cell: TemplateWorkbookCell | undefined, column: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (column !== 'A' && (typeof cell?.value === 'number' || /^-?\d+(\.\d+)?$/.test(trimmed))) {
+    return Number(trimmed);
+  }
+  return trimmed;
 }
 
 function formatImportedAt(value: string | undefined) {
@@ -129,7 +138,7 @@ function SummaryTable({ rows }: { rows: TemplateSummaryRow[] }) {
 
   return (
     <div className="template-print-sheet overflow-auto max-h-[calc(100vh-360px)] print-sheet">
-      <table className="template-summary-print-table min-w-[1120px] w-full border-collapse text-xs">
+      <table className="template-summary-print-table min-w-[1200px] w-full border-collapse text-xs">
         <thead>
           <tr>
             <th rowSpan={2} className="sticky top-0 left-0 z-30 bg-slate-900 text-white border border-slate-700 px-3 py-2 text-left min-w-[86px]">
@@ -138,7 +147,7 @@ function SummaryTable({ rows }: { rows: TemplateSummaryRow[] }) {
             {EQUIPMENT_COLUMNS.map(group => (
               <th
                 key={group.key}
-                colSpan={group.key === 'TOTAL' ? 5 : 3}
+                colSpan={group.key === 'TOTAL' ? 6 : 3}
                 className="sticky top-0 z-20 bg-blue-800 text-white border border-blue-700 px-3 py-2 text-center"
               >
                 {group.label}
@@ -150,10 +159,11 @@ function SummaryTable({ rows }: { rows: TemplateSummaryRow[] }) {
               <React.Fragment key={group.key}>
                 <th className="sticky top-[33px] z-20 bg-blue-700 text-white border border-blue-600 px-2 py-2 text-right">제품</th>
                 <th className="sticky top-[33px] z-20 bg-blue-700 text-white border border-blue-600 px-2 py-2 text-right">계획</th>
-                <th className="sticky top-[33px] z-20 bg-blue-700 text-white border border-blue-600 px-2 py-2 text-right">달성</th>
+                    <th className="sticky top-[33px] z-20 bg-blue-700 text-white border border-blue-600 px-2 py-2 text-right">달성</th>
                 {group.key === 'TOTAL' && (
                   <>
                     <th className="sticky top-[33px] z-20 bg-blue-700 text-white border border-blue-600 px-2 py-2 text-right">황지</th>
+                    <th className="sticky top-[33px] z-20 bg-blue-700 text-white border border-blue-600 px-2 py-2 text-right">코깅</th>
                     <th className="sticky top-[33px] z-20 bg-blue-700 text-white border border-blue-600 px-2 py-2 text-right">총합</th>
                   </>
                 )}
@@ -192,6 +202,9 @@ function SummaryTable({ rows }: { rows: TemplateSummaryRow[] }) {
                         <td className="border border-gray-200 px-2 py-2 text-right tabular-nums text-orange-700">
                           {formatNumber(value.billetActual)}
                         </td>
+                        <td className="border border-gray-200 px-2 py-2 text-right tabular-nums text-fuchsia-700">
+                          {formatNumber(value.coggingActual)}
+                        </td>
                         <td className="border border-gray-200 px-2 py-2 text-right tabular-nums text-slate-900">
                           {formatNumber(value.grossTotal)}
                         </td>
@@ -208,19 +221,73 @@ function SummaryTable({ rows }: { rows: TemplateSummaryRow[] }) {
   );
 }
 
+function EditableWorkbookCell({
+  cell,
+  column,
+  row,
+  onChange,
+}: {
+  cell: TemplateWorkbookCell | undefined;
+  column: string;
+  row: TemplateWorkbookRow;
+  onChange: (rowNumber: number, column: string, value: string | number | null) => void;
+}) {
+  const displayValue = formatCellValue(cell, column, row);
+  const [value, setValue] = React.useState(displayValue);
+
+  React.useEffect(() => {
+    setValue(displayValue);
+  }, [displayValue]);
+
+  const commit = () => {
+    const parsedValue = parseWorkbookInputValue(value, cell, column);
+    const currentValue = cell?.value ?? null;
+    if (parsedValue === currentValue) return;
+    onChange(row.row_number, column, parsedValue);
+  };
+
+  return (
+    <input
+      value={value}
+      onChange={event => setValue(event.target.value)}
+      onBlur={commit}
+      onKeyDown={event => {
+        if (event.key === 'Enter') {
+          event.currentTarget.blur();
+        }
+      }}
+      title={getCellTitle(cell)}
+      className={`w-full h-7 px-1.5 rounded border text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+        typeof cell?.value === 'number' ? 'text-right' : 'text-left'
+      } ${cell?.formula ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200'}`}
+    />
+  );
+}
+
 function RawTable({
   sheet,
   columns,
+  editable = false,
+  onCellChange,
+  onDeleteRow,
 }: {
   sheet: TemplateWorkbookSheet;
   columns: string[];
+  editable?: boolean;
+  onCellChange?: (rowNumber: number, column: string, value: string | number | null) => void;
+  onDeleteRow?: (rowNumber: number) => void;
 }) {
   return (
     <div className="template-print-sheet overflow-auto max-h-[calc(100vh-360px)] print-sheet">
       <table className="template-raw-print-table min-w-max w-full border-collapse text-xs">
         <thead>
           <tr>
-            <th className="sticky top-0 left-0 z-30 bg-slate-900 text-white border border-slate-700 px-2 py-2 text-center w-14">
+            {editable && (
+              <th className="sticky top-0 left-0 z-40 bg-slate-900 text-white border border-slate-700 px-2 py-2 text-center w-12 no-print">
+                삭제
+              </th>
+            )}
+            <th className={`sticky top-0 ${editable ? 'left-12' : 'left-0'} z-30 bg-slate-900 text-white border border-slate-700 px-2 py-2 text-center w-14`}>
               행
             </th>
             {columns.map(column => (
@@ -239,7 +306,19 @@ function RawTable({
 
             return (
               <tr key={row.row_number} className="odd:bg-white even:bg-slate-50 hover:bg-blue-50">
-                <td className="sticky left-0 z-10 bg-slate-100 border border-gray-200 px-2 py-1.5 text-center font-semibold text-gray-600 tabular-nums">
+                {editable && (
+                  <td className="sticky left-0 z-20 bg-white border border-gray-200 px-1.5 py-1.5 text-center no-print">
+                    <button
+                      type="button"
+                      onClick={() => onDeleteRow?.(row.row_number)}
+                      className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                      title="행 삭제"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                )}
+                <td className={`sticky ${editable ? 'left-12' : 'left-0'} z-10 bg-slate-100 border border-gray-200 px-2 py-1.5 text-center font-semibold text-gray-600 tabular-nums`}>
                   {row.row_number}
                 </td>
                 {columns.map(column => {
@@ -254,7 +333,16 @@ function RawTable({
                         typeof cell?.value === 'number' ? 'text-right' : 'text-left'
                       } ${cell?.formula ? 'bg-amber-50/70' : ''}`}
                     >
-                      {value}
+                      {editable && onCellChange ? (
+                        <EditableWorkbookCell
+                          cell={cell}
+                          column={column}
+                          row={row}
+                          onChange={onCellChange}
+                        />
+                      ) : (
+                        value
+                      )}
                     </td>
                   );
                 })}
@@ -359,7 +447,19 @@ function ExcelPreviewDialog({
 }
 
 export default function TemplateWorkbookPage() {
-  const { templateSheets, hydrateStorage, isHydrating, storageMode, lastSyncedAt } = useReportStore();
+  const {
+    templateSheets,
+    hydrateStorage,
+    isHydrating,
+    storageMode,
+    lastSyncedAt,
+    getCurrentUser,
+    updateTemplateWorkbookCell,
+    deleteTemplateWorkbookRow,
+    addTemplateWorkbookRow,
+  } = useReportStore();
+  const currentUser = getCurrentUser();
+  const canManageWorkbook = currentUser?.role === 'admin' || Boolean(currentUser?.can_edit);
   const [selectedSheetId, setSelectedSheetId] = React.useState<string>('');
   const [viewMode, setViewMode] = React.useState<ViewMode>('summary');
   const [isExcelPreviewOpen, setIsExcelPreviewOpen] = React.useState(false);
@@ -407,6 +507,23 @@ export default function TemplateWorkbookPage() {
   const handlePreviewDownload = () => {
     void handleTemplateDownload();
     setIsExcelPreviewOpen(false);
+  };
+
+  const handleWorkbookCellChange = (rowNumber: number, column: string, value: string | number | null) => {
+    if (!selectedSheet || !canManageWorkbook) return;
+    updateTemplateWorkbookCell(selectedSheet.id, rowNumber, column, value);
+  };
+
+  const handleWorkbookRowDelete = (rowNumber: number) => {
+    if (!selectedSheet || !canManageWorkbook) return;
+    const confirmed = window.confirm(`${selectedSheet.sheet_name} ${rowNumber}행을 삭제할까요?`);
+    if (!confirmed) return;
+    deleteTemplateWorkbookRow(selectedSheet.id, rowNumber);
+  };
+
+  const handleWorkbookRowAdd = () => {
+    if (!selectedSheet || !canManageWorkbook) return;
+    addTemplateWorkbookRow(selectedSheet.id);
   };
 
   const handlePrint = () => {
@@ -512,7 +629,7 @@ export default function TemplateWorkbookPage() {
       )}
 
       {templateSheets.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 no-print">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 no-print">
           <SummaryMetricCard
             label="2026 상반기 제품"
             value={formatNumber(appSummary.total.productActual)}
@@ -532,6 +649,11 @@ export default function TemplateWorkbookPage() {
             label="2026 상반기 황지"
             value={formatNumber(appSummary.total.billetActual)}
             accentClass="text-orange-700"
+          />
+          <SummaryMetricCard
+            label="2026 상반기 코깅"
+            value={formatNumber(appSummary.total.coggingActual)}
+            accentClass="text-fuchsia-700"
           />
         </div>
       )}
@@ -555,6 +677,16 @@ export default function TemplateWorkbookPage() {
               <span className="badge badge-blue">
                 요약 {summaryRows.length.toLocaleString('ko-KR')}행
               </span>
+              {canManageWorkbook && viewMode !== 'summary' && (
+                <button
+                  type="button"
+                  onClick={handleWorkbookRowAdd}
+                  className="btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1 no-print"
+                >
+                  <Plus size={14} />
+                  행 추가
+                </button>
+              )}
               {summaryRows.some(hasWarningValue) && (
                 <span className="badge badge-warning">수식 확인</span>
               )}
@@ -564,7 +696,13 @@ export default function TemplateWorkbookPage() {
           {viewMode === 'summary' ? (
             <SummaryTable rows={summaryRows} />
           ) : (
-            <RawTable sheet={selectedSheet} columns={visibleColumns} />
+            <RawTable
+              sheet={selectedSheet}
+              columns={visibleColumns}
+              editable={canManageWorkbook}
+              onCellChange={handleWorkbookCellChange}
+              onDeleteRow={handleWorkbookRowDelete}
+            />
           )}
         </div>
       )}

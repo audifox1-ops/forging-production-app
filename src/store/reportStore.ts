@@ -28,6 +28,12 @@ import {
   TARGET_EQUIPMENT_LIST,
   TargetEquipment,
 } from '../utils/targetConfig';
+import {
+  addTemplateWorkbookRow,
+  deleteTemplateWorkbookRow,
+  syncTemplateSheetsWithReportEntries,
+  updateTemplateWorkbookCell,
+} from '../utils/templateWorkbook';
 
 interface CreateReportOptions {
   sourceReportDate?: string;
@@ -65,6 +71,9 @@ interface ReportStore {
   getPeriodTargets: () => ProductionPeriodTarget[];
   updatePeriodTarget: (period: PeriodTargetType, productTarget: number, billetTarget: number) => void;
   getTemplateSheets: () => TemplateWorkbookSheet[];
+  updateTemplateWorkbookCell: (sheetId: string, rowNumber: number, column: string, value: string | number | null) => void;
+  deleteTemplateWorkbookRow: (sheetId: string, rowNumber: number) => void;
+  addTemplateWorkbookRow: (sheetId: string) => void;
 
   // 유저 관련
   setCurrentUserId: (userId: string) => void;
@@ -378,11 +387,21 @@ export const useReportStore = create<ReportStore>((set, get) => {
           : 'saved',
         updated_at: now,
       };
-      set(state => ({
-        entries: state.entries.map(e =>
+      set(state => {
+        const nextEntries = state.entries.map(e =>
           e.id === existing.id ? savedEntry : e
-        ),
-      }));
+        );
+
+        return {
+          entries: nextEntries,
+          templateSheets: syncTemplateSheetsWithReportEntries(
+            state.templateSheets,
+            state.reports,
+            nextEntries,
+            savedEntry.report_id
+          ),
+        };
+      });
     } else {
       const newEntry: ProductionEntry = {
         id: genId(),
@@ -398,9 +417,21 @@ export const useReportStore = create<ReportStore>((set, get) => {
         ...entryData,
       };
       savedEntry = newEntry;
-      set(state => ({ entries: [...state.entries, newEntry] }));
+      set(state => {
+        const nextEntries = [...state.entries, newEntry];
+
+        return {
+          entries: nextEntries,
+          templateSheets: syncTemplateSheetsWithReportEntries(
+            state.templateSheets,
+            state.reports,
+            nextEntries,
+            savedEntry.report_id
+          ),
+        };
+      });
     }
-    persistCurrentState(true, () => upsertSupabaseRows('production_entries', savedEntry));
+    persistCurrentState(true, () => saveSupabaseReportState(getPersistedState()));
   },
 
   submitEntry: (entryId) => {
@@ -501,6 +532,27 @@ export const useReportStore = create<ReportStore>((set, get) => {
   },
 
   getTemplateSheets: () => get().templateSheets,
+
+  updateTemplateWorkbookCell: (sheetId, rowNumber, column, value) => {
+    set(state => ({
+      templateSheets: updateTemplateWorkbookCell(state.templateSheets, sheetId, rowNumber, column, value),
+    }));
+    persistCurrentState(true, () => saveSupabaseReportState(getPersistedState()));
+  },
+
+  deleteTemplateWorkbookRow: (sheetId, rowNumber) => {
+    set(state => ({
+      templateSheets: deleteTemplateWorkbookRow(state.templateSheets, sheetId, rowNumber),
+    }));
+    persistCurrentState(true, () => saveSupabaseReportState(getPersistedState()));
+  },
+
+  addTemplateWorkbookRow: (sheetId) => {
+    set(state => ({
+      templateSheets: addTemplateWorkbookRow(state.templateSheets, sheetId),
+    }));
+    persistCurrentState(true, () => saveSupabaseReportState(getPersistedState()));
+  },
 
   setCurrentUserId: (userId) => {
     set({ currentUserId: userId });
