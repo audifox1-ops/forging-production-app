@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, Download, Grid2X2, Printer, RefreshCw, Table2 } from 'lucide-react';
+import { BarChart3, Download, Eye, Grid2X2, Printer, RefreshCw, Table2, X } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { downloadExcelTemplate } from '../utils/excelTemplate';
 import {
@@ -267,10 +267,102 @@ function RawTable({
   );
 }
 
+function ExcelPreviewDialog({
+  sheets,
+  initialSheetId,
+  onClose,
+  onDownload,
+}: {
+  sheets: TemplateWorkbookSheet[];
+  initialSheetId: string;
+  onClose: () => void;
+  onDownload: () => void;
+}) {
+  const [previewSheetId, setPreviewSheetId] = React.useState(initialSheetId);
+  const previewSheet = sheets.find(sheet => sheet.id === previewSheetId) ?? sheets[0];
+  const previewRows = React.useMemo(() => extractTemplateSummaryRows(previewSheet), [previewSheet]);
+  const previewColumns = React.useMemo(() => getCompactSheetColumns(previewSheet), [previewSheet]);
+
+  React.useEffect(() => {
+    if (!sheets.length) return;
+    if (!previewSheetId || !sheets.some(sheet => sheet.id === previewSheetId)) {
+      setPreviewSheetId(sheets[0].id);
+    }
+  }, [previewSheetId, sheets]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/55 flex items-center justify-center p-4 no-print">
+      <div className="bg-white rounded-lg shadow-xl border border-gray-200 w-[min(1180px,96vw)] max-h-[92vh] flex flex-col overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-gray-900">엑셀 미리보기</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {previewSheet?.sheet_name ?? '-'} · {previewRows.length.toLocaleString('ko-KR')}행
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-auto p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+            title="닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-5 py-3 border-b border-gray-100 flex gap-2 overflow-x-auto">
+          {sheets.map(sheet => (
+            <button
+              key={sheet.id}
+              type="button"
+              onClick={() => setPreviewSheetId(sheet.id)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap border transition-colors ${
+                previewSheet?.id === sheet.id
+                  ? 'bg-blue-700 text-white border-blue-700'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              {sheet.sheet_name}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-auto p-5 bg-slate-50">
+          {previewSheet ? (
+            previewRows.length > 0 ? (
+              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <SummaryTable rows={previewRows} />
+              </div>
+            ) : (
+              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <RawTable sheet={previewSheet} columns={previewColumns} />
+              </div>
+            )
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-lg px-4 py-10 text-center text-sm text-gray-500">
+              미리볼 생산량집계 데이터가 없습니다.
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+          <button onClick={onClose} className="btn-secondary">
+            닫기
+          </button>
+          <button onClick={onDownload} disabled={sheets.length === 0} className="btn-primary flex items-center gap-2">
+            <Download size={16} />
+            엑셀 다운로드
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TemplateWorkbookPage() {
   const { templateSheets, hydrateStorage, isHydrating, storageMode, lastSyncedAt } = useReportStore();
   const [selectedSheetId, setSelectedSheetId] = React.useState<string>('');
   const [viewMode, setViewMode] = React.useState<ViewMode>('summary');
+  const [isExcelPreviewOpen, setIsExcelPreviewOpen] = React.useState(false);
   const selectedSheet = templateSheets.find(sheet => sheet.id === selectedSheetId) ?? templateSheets[0];
   const appSummary = React.useMemo(() => buildTemplateWorkbookAppSummary(templateSheets), [templateSheets]);
   const summaryRows = React.useMemo(() => extractTemplateSummaryRows(selectedSheet), [selectedSheet]);
@@ -308,8 +400,13 @@ export default function TemplateWorkbookPage() {
     try {
       await downloadExcelTemplate();
     } catch {
-      window.alert('템플릿 엑셀 파일을 다운로드할 수 없습니다.');
+      window.alert('생산량집계 엑셀 파일을 다운로드할 수 없습니다.');
     }
+  };
+
+  const handlePreviewDownload = () => {
+    void handleTemplateDownload();
+    setIsExcelPreviewOpen(false);
   };
 
   const handlePrint = () => {
@@ -321,8 +418,8 @@ export default function TemplateWorkbookPage() {
     <div className="template-print-page space-y-5 fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3 no-print">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">템플릿 집계</h1>
-          <p className="text-sm text-gray-500 mt-0.5">월별·연간 템플릿 값을 앱 기준 집계로 정리</p>
+          <h1 className="text-2xl font-bold text-gray-900">생산량집계</h1>
+          <p className="text-sm text-gray-500 mt-0.5">월별·연간 생산량 값을 앱 기준 집계로 정리</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -333,9 +430,13 @@ export default function TemplateWorkbookPage() {
             <RefreshCw size={16} className={isHydrating ? 'animate-spin' : ''} />
             새로고침
           </button>
-          <button onClick={handleTemplateDownload} className="btn-secondary flex items-center gap-2">
-            <Download size={16} />
-            원본 엑셀
+          <button
+            onClick={() => setIsExcelPreviewOpen(true)}
+            disabled={templateSheets.length === 0}
+            className="btn-secondary flex items-center gap-2"
+          >
+            <Eye size={16} />
+            엑셀 미리보기
           </button>
           <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
             <Printer size={16} />
@@ -438,7 +539,7 @@ export default function TemplateWorkbookPage() {
       {!selectedSheet ? (
         <div className="card">
           <div className="card-body text-center text-gray-500 py-12">
-            서버에 저장된 템플릿 시트 데이터가 없습니다.
+            서버에 저장된 생산량집계 데이터가 없습니다.
           </div>
         </div>
       ) : (
@@ -466,6 +567,15 @@ export default function TemplateWorkbookPage() {
             <RawTable sheet={selectedSheet} columns={visibleColumns} />
           )}
         </div>
+      )}
+
+      {isExcelPreviewOpen && (
+        <ExcelPreviewDialog
+          sheets={templateSheets}
+          initialSheetId={selectedSheet?.id ?? templateSheets[0]?.id ?? ''}
+          onClose={() => setIsExcelPreviewOpen(false)}
+          onDownload={handlePreviewDownload}
+        />
       )}
     </div>
   );
