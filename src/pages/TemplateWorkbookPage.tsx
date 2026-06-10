@@ -15,6 +15,8 @@ import type { TemplateWorkbookCell, TemplateWorkbookRow, TemplateWorkbookSheet }
 
 type ViewMode = 'summary' | 'compact' | 'raw';
 
+const PRINT_DOCUMENT_CLASS = 'template-workbook-print-document';
+const PRINT_PAGE_STYLE_ID = 'template-workbook-landscape-print-style';
 const PERCENT_COLUMNS = new Set(['D', 'R', 'AF', 'AR']);
 const EQUIPMENT_COLUMNS: Array<{ key: TemplateEquipmentKey; label: string; colorClass: string }> = [
   { key: 'P15', label: 'P15', colorClass: 'text-blue-700' },
@@ -73,6 +75,21 @@ function formatImportedAt(value: string | undefined) {
   });
 }
 
+function ensureLandscapePrintStyle() {
+  if (typeof document === 'undefined') return null;
+
+  let printStyle = document.getElementById(PRINT_PAGE_STYLE_ID) as HTMLStyleElement | null;
+  if (!printStyle) {
+    printStyle = document.createElement('style');
+    printStyle.id = PRINT_PAGE_STYLE_ID;
+    printStyle.media = 'print';
+    printStyle.textContent = '@page { size: A4 landscape; margin: 5mm; }';
+    document.head.appendChild(printStyle);
+  }
+
+  return printStyle;
+}
+
 function formatPeriodLabel(row: TemplateSummaryRow) {
   if (row.date) return row.date.slice(5).replace('-', '.');
   return row.label;
@@ -111,8 +128,8 @@ function SummaryTable({ rows }: { rows: TemplateSummaryRow[] }) {
   }
 
   return (
-    <div className="overflow-auto max-h-[calc(100vh-360px)] print-sheet">
-      <table className="min-w-[1120px] w-full border-collapse text-xs">
+    <div className="template-print-sheet overflow-auto max-h-[calc(100vh-360px)] print-sheet">
+      <table className="template-summary-print-table min-w-[1120px] w-full border-collapse text-xs">
         <thead>
           <tr>
             <th rowSpan={2} className="sticky top-0 left-0 z-30 bg-slate-900 text-white border border-slate-700 px-3 py-2 text-left min-w-[86px]">
@@ -199,8 +216,8 @@ function RawTable({
   columns: string[];
 }) {
   return (
-    <div className="overflow-auto max-h-[calc(100vh-360px)] print-sheet">
-      <table className="min-w-max w-full border-collapse text-xs">
+    <div className="template-print-sheet overflow-auto max-h-[calc(100vh-360px)] print-sheet">
+      <table className="template-raw-print-table min-w-max w-full border-collapse text-xs">
         <thead>
           <tr>
             <th className="sticky top-0 left-0 z-30 bg-slate-900 text-white border border-slate-700 px-2 py-2 text-center w-14">
@@ -267,6 +284,20 @@ export default function TemplateWorkbookPage() {
   );
 
   React.useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+
+    document.documentElement.classList.add(PRINT_DOCUMENT_CLASS);
+    document.body.classList.add(PRINT_DOCUMENT_CLASS);
+    ensureLandscapePrintStyle();
+
+    return () => {
+      document.documentElement.classList.remove(PRINT_DOCUMENT_CLASS);
+      document.body.classList.remove(PRINT_DOCUMENT_CLASS);
+      document.getElementById(PRINT_PAGE_STYLE_ID)?.remove();
+    };
+  }, []);
+
+  React.useEffect(() => {
     if (!templateSheets.length) return;
     if (!selectedSheetId || !templateSheets.some(sheet => sheet.id === selectedSheetId)) {
       setSelectedSheetId(templateSheets[0].id);
@@ -281,8 +312,13 @@ export default function TemplateWorkbookPage() {
     }
   };
 
+  const handlePrint = () => {
+    ensureLandscapePrintStyle();
+    window.setTimeout(() => window.print(), 0);
+  };
+
   return (
-    <div className="space-y-5 fade-in">
+    <div className="template-print-page space-y-5 fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3 no-print">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">템플릿 집계</h1>
@@ -301,7 +337,7 @@ export default function TemplateWorkbookPage() {
             <Download size={16} />
             원본 엑셀
           </button>
-          <button onClick={() => window.print()} className="btn-primary flex items-center gap-2">
+          <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
             <Printer size={16} />
             출력
           </button>
@@ -406,8 +442,8 @@ export default function TemplateWorkbookPage() {
           </div>
         </div>
       ) : (
-        <div className="card print-area">
-          <div className="card-header flex-wrap gap-3">
+        <div className="card print-area template-print-area">
+          <div className="card-header flex-wrap gap-3 template-print-header">
             <div>
               <h2 className="font-semibold text-gray-900">{selectedSheet.sheet_name}</h2>
               <p className="text-xs text-gray-500 mt-0.5">
