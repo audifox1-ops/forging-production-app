@@ -4,8 +4,8 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Save, Send, AlertCircle, CheckCircle, Info, ChevronDown, ChevronUp, CalendarDays } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { Equipment, EquipmentTarget, EQUIPMENT_LIST, REASON_CATEGORIES, ReasonCategory, SHIFT_LIST } from '../types';
-import { formatNumber } from '../utils/calculations';
+import { Equipment, EquipmentTarget, EQUIPMENT_LIST, ProductionEntry, REASON_CATEGORIES, ReasonCategory, SHIFT_LIST } from '../types';
+import { calcEquipmentDailyShortfall, formatNumber } from '../utils/calculations';
 import {
   getActualDateFromPlanDate,
   getPlanDateFromActualDate,
@@ -112,7 +112,8 @@ export default function UserInputPage() {
     .filter(entry => entry.equipment === selectedEquipment)
     .sort((a, b) => SHIFT_LIST.indexOf(a.shift) - SHIFT_LIST.indexOf(b.shift));
   const selectedReasonSource = selectedEntries.find(hasReasonContent) ?? selectedEntries[0];
-  const selectedHasShortfall = selectedEntries.some(entry => getEntryShortfall(entry).hasShortfall);
+  const selectedDailyShortfall = calcEquipmentDailyShortfall(selectedEntries);
+  const selectedHasShortfall = selectedDailyShortfall.hasShortfall;
   const [sharedReasons, setSharedReasons] = useState<Partial<Record<Equipment, ReasonFormData>>>({});
   const [sharedReasonErrors, setSharedReasonErrors] = useState<string[]>([]);
   const [sharedReasonSaved, setSharedReasonSaved] = useState(false);
@@ -181,8 +182,8 @@ export default function UserInputPage() {
     setTimeout(() => setSharedReasonSaved(false), 2000);
   };
 
-  const validateSharedReason = () => {
-    if (!selectedHasShortfall) {
+  const validateSharedReason = (requiresReason = selectedHasShortfall) => {
+    if (!requiresReason) {
       setSharedReasonErrors([]);
       return true;
     }
@@ -333,7 +334,7 @@ export default function UserInputPage() {
                 canWrite={canWrite}
                 canEdit={canEdit}
                 sharedReason={sharedReason}
-                hasEquipmentShortfall={selectedHasShortfall}
+                equipmentEntries={selectedEntries}
                 validateSharedReason={validateSharedReason}
                 onSave={saveEntry}
                 onSaveSharedReason={saveSharedReasonForEntries}
@@ -366,7 +367,7 @@ function EntryInputCard({
   canWrite,
   canEdit,
   sharedReason,
-  hasEquipmentShortfall,
+  equipmentEntries,
   validateSharedReason,
   onSave,
   onSaveSharedReason,
@@ -378,8 +379,8 @@ function EntryInputCard({
   canWrite: boolean;
   canEdit: boolean;
   sharedReason: ReasonFormData;
-  hasEquipmentShortfall: boolean;
-  validateSharedReason: () => boolean;
+  equipmentEntries: ProductionEntry[];
+  validateSharedReason: (requiresReason?: boolean) => boolean;
   onSave: (data: any) => void;
   onSaveSharedReason: (skipEntryId?: string) => void;
   onSubmit: (id: string) => void;
@@ -407,6 +408,12 @@ function EntryInputCard({
   const productShortfall = Math.max(0, (formData.product_plan || 0) - (formData.product_actual || 0));
   const billetShortfall = Math.max(0, (formData.billet_plan || 0) - (formData.billet_actual || 0));
   const hasShortfall = productShortfall > 0 || billetShortfall > 0;
+  const equipmentDailyShortfall = calcEquipmentDailyShortfall(
+    equipmentEntries.map(equipmentEntry =>
+      equipmentEntry.id === entry.id ? { ...equipmentEntry, ...formData } : equipmentEntry
+    )
+  );
+  const hasEquipmentShortfall = equipmentDailyShortfall.hasShortfall;
   const todayPlanTotal = (formData.next_product_plan || 0) + (formData.next_billet_plan || 0);
   const shiftTarget = targets.find(target => target.equipment === entry.equipment && target.shift === entry.shift);
   const equipmentTargets = targets.filter(target => target.equipment === entry.equipment);
@@ -450,7 +457,7 @@ function EntryInputCard({
   const handleSubmit = () => {
     if (!canModify) return;
     if (!validate()) return;
-    if (hasEquipmentShortfall && !validateSharedReason()) {
+    if (hasEquipmentShortfall && !validateSharedReason(hasEquipmentShortfall)) {
       setErrors(['미달성 사유는 하단의 설비 공통 입력란에 작성해주세요.']);
       return;
     }
@@ -759,7 +766,7 @@ function SharedReasonSection({
             <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
               <div>
-                <div>주간/야간 중 미달이 발생했습니다. 사유와 만회대책은 이 공통 입력란에 한 번만 작성합니다.</div>
+                <div>주야합산 설비 일일 목표 기준 미달이 발생했습니다. 사유와 만회대책은 이 공통 입력란에 한 번만 작성합니다.</div>
                 <div className="mt-1 text-xs">
                   {shortfallRows.map(row => (
                     <span key={row.entry.id} className="mr-3">
@@ -771,7 +778,7 @@ function SharedReasonSection({
             </div>
           ) : (
             <div className="text-sm text-gray-500">
-              현재 선택한 설비의 주간/야간 입력에는 미달이 없습니다. 필요 시 공통 메모로 작성할 수 있습니다.
+              현재 선택한 설비는 주야합산 일일 목표 기준 미달이 없습니다. 필요 시 공통 메모로 작성할 수 있습니다.
             </div>
           )}
 

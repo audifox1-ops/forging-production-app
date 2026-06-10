@@ -333,11 +333,18 @@ export default function DashboardPage() {
     const unsubmittedRows = detailRows.filter(row =>
       row.entry.submit_status !== 'submitted' && row.entry.submit_status !== 'approved'
     );
-    const missingReasonRows = detailRows.filter(row =>
-      row.hasShortfall &&
-      (!row.entry.reason_category || !row.entry.reason_detail?.trim() || !row.entry.recovery_plan?.trim())
-    );
-    const missingReasonEquipments = Array.from(new Set(missingReasonRows.map(row => row.entry.equipment)));
+    const missingReasonGroups = detailGroups.filter(group => {
+      const hasDailyShortfall = group.total.productShortfall > 0 || group.total.billetShortfall > 0;
+      const hasCompleteReason = group.rows.some(row =>
+        row.entry.reason_category &&
+        row.entry.reason_detail?.trim() &&
+        row.entry.action_today?.trim() &&
+        row.entry.recovery_plan?.trim()
+      );
+
+      return hasDailyShortfall && !hasCompleteReason;
+    });
+    const missingReasonEquipments = missingReasonGroups.map(group => group.equipment);
     const alerts: { title: string; message: string; tone: 'danger' | 'warning' | 'normal' | 'success' }[] = [];
 
     if (notStartedRows.length > 0) {
@@ -370,7 +377,7 @@ export default function DashboardPage() {
     }
 
     return alerts;
-  }, [detailRows]);
+  }, [detailGroups, detailRows]);
   const reasonGroups = React.useMemo(() => getEquipmentReasonGroups(entries), [entries]);
   const reasonGroupsByEquipment = React.useMemo(
     () => new Map(reasonGroups.map(group => [group.equipment, group])),

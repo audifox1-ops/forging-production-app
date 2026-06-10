@@ -21,6 +21,29 @@ export function calcShortfall(plan: number, actual: number): number {
   return Math.max(0, plan - actual);
 }
 
+export function calcEquipmentDailyShortfall(
+  entries: Array<Pick<ProductionEntry, 'product_plan' | 'product_actual' | 'billet_plan' | 'billet_actual'>>
+) {
+  const productPlan = entries.reduce((sum, entry) => sum + (entry.product_plan || 0), 0);
+  const productActual = entries.reduce((sum, entry) => sum + (entry.product_actual || 0), 0);
+  const billetPlan = entries.reduce((sum, entry) => sum + (entry.billet_plan || 0), 0);
+  const billetActual = entries.reduce((sum, entry) => sum + (entry.billet_actual || 0), 0);
+  const productShortfall = calcShortfall(productPlan, productActual);
+  const billetShortfall = calcShortfall(billetPlan, billetActual);
+
+  return {
+    productPlan,
+    productActual,
+    productShortfall,
+    billetPlan,
+    billetActual,
+    billetShortfall,
+    totalPlan: productPlan + billetPlan,
+    totalActual: productActual + billetActual,
+    hasShortfall: productShortfall > 0 || billetShortfall > 0,
+  };
+}
+
 // 달성율 상태 (색상 분류용)
 export function getAchievementStatus(rate: number | null): 'normal' | 'warning' | 'danger' | 'none' {
   if (rate === null) return 'none';
