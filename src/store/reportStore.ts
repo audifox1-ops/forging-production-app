@@ -73,6 +73,7 @@ interface ReportStore {
 
 let nextId = 100;
 const genId = () => globalThis.crypto?.randomUUID?.() ?? `gen-${++nextId}`;
+let remoteWriteQueue: Promise<void> = Promise.resolve();
 
 const LOCAL_STATE = loadLocalReportState();
 
@@ -170,7 +171,13 @@ export const useReportStore = create<ReportStore>((set, get) => {
 
     if (!syncRemote || !remoteOperation || get().storageMode !== 'supabase') return;
 
-    void remoteOperation()
+    const queuedOperation = remoteWriteQueue
+      .catch(() => undefined)
+      .then(remoteOperation);
+
+    remoteWriteQueue = queuedOperation;
+
+    void queuedOperation
       .then(() => {
         set({ lastSyncedAt: new Date().toISOString(), syncError: undefined });
       })
@@ -522,6 +529,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
 
     set({ isHydrating: true, syncError: undefined });
     try {
+      await remoteWriteQueue.catch(() => undefined);
       const remoteState = await loadSupabaseReportState();
       const hasRemoteData = Boolean(
         remoteState.users?.length ||
