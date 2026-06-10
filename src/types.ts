@@ -101,6 +101,30 @@ export interface ReportComment {
   updated_at: string;
 }
 
+export type TemplateWorkbookSheetKind = 'monthly' | 'annual';
+
+export interface TemplateWorkbookCell {
+  column: string;
+  value: string | number | null;
+  formula?: string;
+}
+
+export interface TemplateWorkbookRow {
+  row_number: number;
+  row_date?: string;
+  row_label?: string;
+  cells: TemplateWorkbookCell[];
+}
+
+export interface TemplateWorkbookSheet {
+  id: string;
+  sheet_name: string;
+  kind: TemplateWorkbookSheetKind;
+  year: number;
+  rows: TemplateWorkbookRow[];
+  imported_at: string;
+}
+
 export interface ReportStatusLog {
   id: string;
   report_id: string;

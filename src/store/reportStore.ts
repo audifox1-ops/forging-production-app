@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ProductionReport, ProductionEntry, EquipmentTarget, User, ProductionPeriodTarget, PeriodTargetType, Equipment, Shift, EQUIPMENT_LIST, SHIFT_LIST } from '../types';
+import { ProductionReport, ProductionEntry, EquipmentTarget, User, ProductionPeriodTarget, PeriodTargetType, Equipment, Shift, EQUIPMENT_LIST, SHIFT_LIST, TemplateWorkbookSheet } from '../types';
 import {
   DEMO_REPORTS,
   DEMO_ENTRIES,
@@ -12,6 +12,7 @@ import {
   deleteSupabaseRows,
   getInitialStorageMode,
   getStorageErrorMessage,
+  isTemplateWorkbookAnchorReport,
   loadLocalReportState,
   loadSupabaseReportState,
   PersistedReportState,
@@ -37,6 +38,7 @@ interface ReportStore {
   entries: ProductionEntry[];
   targets: EquipmentTarget[];
   periodTargets: ProductionPeriodTarget[];
+  templateSheets: TemplateWorkbookSheet[];
   users: User[];
   currentUserId: string;
   storageMode: StorageMode;
@@ -62,6 +64,7 @@ interface ReportStore {
   updateTarget: (equipment: string, shift: string, productTarget: number, billetTarget: number) => void;
   getPeriodTargets: () => ProductionPeriodTarget[];
   updatePeriodTarget: (period: PeriodTargetType, productTarget: number, billetTarget: number) => void;
+  getTemplateSheets: () => TemplateWorkbookSheet[];
 
   // 유저 관련
   setCurrentUserId: (userId: string) => void;
@@ -83,11 +86,13 @@ const getInitialArray = <T>(localValue: T[] | undefined, fallback: T[]) =>
   Array.isArray(localValue) ? localValue : [...fallback];
 
 const normalizeReports = (reports: ProductionReport[]) =>
-  reports.map(report =>
-    (report as { status: string }).status === 'closed'
-      ? { ...report, status: 'reviewed' as const }
-      : report
-  );
+  reports
+    .filter(report => !isTemplateWorkbookAnchorReport(report))
+    .map(report =>
+      (report as { status: string }).status === 'closed'
+        ? { ...report, status: 'reviewed' as const }
+        : report
+    );
 
 const PREVIOUS_2026_TARGETS_BY_EQUIPMENT: Record<TargetEquipment, { product: number; billet: number }> = {
   P15: { product: 17545, billet: 18150 },
@@ -193,6 +198,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
       entries: state.entries,
       targets: state.targets,
       periodTargets: state.periodTargets,
+      templateSheets: state.templateSheets,
       users: state.users,
       currentUserId: state.currentUserId,
     };
@@ -290,6 +296,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
   entries: getInitialArray(LOCAL_STATE?.entries, DEMO_ENTRIES),
   targets: initialTargets,
   periodTargets: initialPeriodTargets,
+  templateSheets: getInitialArray(LOCAL_STATE?.templateSheets, []),
   users: initialUsers,
   currentUserId: LOCAL_STATE?.currentUserId || 'user-admin',
   storageMode: getInitialStorageMode(),
@@ -493,6 +500,8 @@ export const useReportStore = create<ReportStore>((set, get) => {
     );
   },
 
+  getTemplateSheets: () => get().templateSheets,
+
   setCurrentUserId: (userId) => {
     set({ currentUserId: userId });
     persistCurrentState(false);
@@ -574,6 +583,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
           entries: getInitialArray(localState.entries, state.entries),
           targets: normalizedTargets.value,
           periodTargets: normalizedPeriodTargets.value,
+          templateSheets: getInitialArray(localState.templateSheets, state.templateSheets),
           users: normalizedUsers.value,
           currentUserId: resolveCurrentUserId(normalizedUsers.value, localState.currentUserId || state.currentUserId),
         };
@@ -595,7 +605,8 @@ export const useReportStore = create<ReportStore>((set, get) => {
         remoteState.reports?.length ||
         remoteState.entries?.length ||
         remoteState.targets?.length ||
-        remoteState.periodTargets?.length
+        remoteState.periodTargets?.length ||
+        remoteState.templateSheets?.length
       );
 
       if (hasRemoteData) {
@@ -613,6 +624,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
             entries: getInitialArray(remoteState.entries, state.entries),
             targets: normalizedTargets.value,
             periodTargets: normalizedPeriodTargets.value,
+            templateSheets: getInitialArray(remoteState.templateSheets, state.templateSheets),
             users: normalizedUsers.value,
             currentUserId: resolveCurrentUserId(normalizedUsers.value, state.currentUserId),
           };

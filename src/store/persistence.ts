@@ -5,6 +5,7 @@ import {
   ProductionPeriodTarget,
   ReportComment,
   ProductionReport,
+  TemplateWorkbookSheet,
   User,
 } from '../types';
 
@@ -15,6 +16,7 @@ export interface PersistedReportState {
   entries: ProductionEntry[];
   targets: EquipmentTarget[];
   periodTargets: ProductionPeriodTarget[];
+  templateSheets: TemplateWorkbookSheet[];
   users: User[];
   currentUserId: string;
 }
@@ -37,6 +39,9 @@ type SupabaseRow =
 
 const STORAGE_KEY = 'forging-production-app:report-state:v1';
 const P8_COMMENT_TYPE = 'p8-production-entry';
+const TEMPLATE_WORKBOOK_COMMENT_TYPE = 'template-workbook-sheet';
+
+export const TEMPLATE_WORKBOOK_ANCHOR_REPORT_ID = 'template-workbook-anchor';
 
 function getLocalStorage() {
   if (typeof window === 'undefined') return null;
@@ -111,6 +116,49 @@ function toP8EntryComment(entry: ProductionEntry): ReportComment {
   };
 }
 
+export function isTemplateWorkbookAnchorReport(report: Pick<ProductionReport, 'id'>) {
+  return report.id === TEMPLATE_WORKBOOK_ANCHOR_REPORT_ID;
+}
+
+function serializeTemplateWorkbookSheet(sheet: TemplateWorkbookSheet) {
+  return JSON.stringify({ type: TEMPLATE_WORKBOOK_COMMENT_TYPE, sheet });
+}
+
+function parseTemplateWorkbookSheetComment(comment: ReportComment): TemplateWorkbookSheet | null {
+  try {
+    const payload = JSON.parse(comment.summary);
+    if (payload?.type !== TEMPLATE_WORKBOOK_COMMENT_TYPE || !payload.sheet?.sheet_name) return null;
+    return payload.sheet as TemplateWorkbookSheet;
+  } catch {
+    return null;
+  }
+}
+
+function getTemplateWorkbookSheetOrder(sheet: TemplateWorkbookSheet) {
+  const monthlyMatch = /^(\d{2})(\d{2})월$/.exec(sheet.sheet_name);
+  if (monthlyMatch) return Number(monthlyMatch[1]) * 100 + Number(monthlyMatch[2]);
+  if (sheet.sheet_name === '2025년 전체') return 202500;
+  if (sheet.sheet_name === '2026년 전체') return 202600;
+  return 999999;
+}
+
+function parseTemplateWorkbookSheets(comments: ReportComment[]) {
+  return comments
+    .map(parseTemplateWorkbookSheetComment)
+    .filter((sheet): sheet is TemplateWorkbookSheet => Boolean(sheet))
+    .sort((a, b) => getTemplateWorkbookSheetOrder(a) - getTemplateWorkbookSheetOrder(b));
+}
+
+function toTemplateWorkbookSheetComment(sheet: TemplateWorkbookSheet): ReportComment {
+  return {
+    id: `template-workbook-sheet-${sheet.id}`,
+    report_id: TEMPLATE_WORKBOOK_ANCHOR_REPORT_ID,
+    summary: serializeTemplateWorkbookSheet(sheet),
+    created_at: sheet.imported_at,
+    updated_at: sheet.imported_at,
+  };
+}
+
 function splitP8Entries(rows: SupabaseRow[]) {
   const p8Entries: ProductionEntry[] = [];
   const regularRows: SupabaseRow[] = [];
@@ -167,13 +215,14 @@ export async function loadSupabaseReportState(): Promise<Partial<PersistedReport
 
   return {
     users: (users.data ?? []) as User[],
-    reports: (reports.data ?? []) as ProductionReport[],
+    reports: ((reports.data ?? []) as ProductionReport[]).filter(report => !isTemplateWorkbookAnchorReport(report)),
     entries: mergeP8Entries(
       (entries.data ?? []) as ProductionEntry[],
       (comments.data ?? []) as ReportComment[]
     ),
     targets: (targets.data ?? []) as EquipmentTarget[],
     periodTargets: (periodTargets.data ?? []) as ProductionPeriodTarget[],
+    templateSheets: parseTemplateWorkbookSheets((comments.data ?? []) as ReportComment[]),
   };
 }
 
@@ -184,6 +233,7 @@ export async function saveSupabaseReportState(state: PersistedReportState) {
   await ensureSupabaseSession(client);
   const { regularRows: regularEntries, p8Entries } = splitP8Entries(state.entries);
   const p8Comments = p8Entries.map(toP8EntryComment);
+  const templateSheetComments = state.templateSheets.map(toTemplateWorkbookSheetComment);
   const operations = [
     state.users.length > 0
       ? client.from('users').upsert(state.users, { onConflict: 'id' })
@@ -202,6 +252,9 @@ export async function saveSupabaseReportState(state: PersistedReportState) {
       : Promise.resolve({ error: null }),
     p8Comments.length > 0
       ? client.from('report_comments').upsert(p8Comments, { onConflict: 'id' })
+      : Promise.resolve({ error: null }),
+    templateSheetComments.length > 0
+      ? client.from('report_comments').upsert(templateSheetComments, { onConflict: 'id' })
       : Promise.resolve({ error: null }),
   ];
 

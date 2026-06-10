@@ -5,6 +5,7 @@ import {
   FileText,
   Users,
   Target,
+  Table2,
   History,
   ChevronRight,
   Factory,
@@ -41,6 +42,7 @@ export default function Layout() {
   const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: '대시보드' },
     { to: '/reports', icon: FileText, label: '보고서' },
+    { to: '/template-workbook', icon: Table2, label: '템플릿 집계' },
     { to: '/admin/users', icon: Users, label: '담당자 관리' },
     { to: '/admin/targets', icon: Target, label: '목표값 관리' },
     { to: '/admin/history', icon: History, label: '보고 이력' },

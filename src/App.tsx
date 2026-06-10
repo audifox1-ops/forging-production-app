@@ -5,6 +5,7 @@ import UserInputPage from './pages/UserInputPage';
 import AdminReportPage from './pages/AdminReportPage';
 import PrintReportPage from './pages/PrintReportPage';
 import ReportHistoryPage from './pages/ReportHistoryPage';
+import TemplateWorkbookPage from './pages/TemplateWorkbookPage';
 import UserManagementPage from './pages/UserManagementPage';
 import TargetManagementPage from './pages/TargetManagementPage';
 import Layout from './components/Layout';
@@ -50,6 +51,8 @@ function App() {
           <Route path="/admin/targets" element={<TargetManagementPage />} />
 
           <Route path="/admin/history" element={<ReportHistoryPage />} />
+
+          <Route path="/template-workbook" element={<TemplateWorkbookPage />} />
         </Route>
 
         <Route path="/reports/:reportDate/print" element={<PrintReportPage />} />
