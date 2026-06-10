@@ -172,9 +172,9 @@ body {
     margin: 4mm;
   }
 
-  @page daily-report-landscape {
-    size: A4 landscape;
-    margin: 5mm;
+  @page daily-report-portrait {
+    size: A4 portrait;
+    margin: 4mm;
   }
 
   .print-area {
@@ -336,9 +336,9 @@ body {
   html.daily-report-print-document,
   html.daily-report-print-document body,
   html.daily-report-print-document #root {
-    width: 287mm !important;
-    min-width: 287mm !important;
-    min-height: 200mm !important;
+    width: 202mm !important;
+    min-width: 202mm !important;
+    min-height: 289mm !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
@@ -346,92 +346,93 @@ body {
   }
 
   html.daily-report-print-document body {
-    font-size: 9pt !important;
-    line-height: 1.24 !important;
+    font-size: 9.4pt !important;
+    line-height: 1.18 !important;
   }
 
   html.daily-report-print-document .daily-report-print-area {
-    page: daily-report-landscape;
-    width: 287mm !important;
-    min-width: 287mm !important;
-    min-height: 200mm !important;
+    page: daily-report-portrait;
+    width: 202mm !important;
+    min-width: 202mm !important;
+    min-height: 289mm !important;
+    max-height: 289mm !important;
     box-sizing: border-box !important;
     margin: 0 !important;
-    padding: 5mm 5mm 4mm 5mm !important;
+    padding: 2mm 0 0 0 !important;
     background: white !important;
     overflow: visible !important;
   }
 
   html.daily-report-print-document .daily-report-print-sheet {
-    width: 277mm !important;
-    max-width: 277mm !important;
-    margin: 0 auto !important;
-    zoom: 1 !important;
+    width: 270mm !important;
+    max-width: 270mm !important;
+    margin: 0 0 0 2.5mm !important;
+    zoom: 0.74 !important;
   }
 
   html.daily-report-print-document .print-section {
-    margin-bottom: 2.2mm !important;
+    margin-bottom: 1.35mm !important;
   }
 
   html.daily-report-print-document .print-header {
-    margin-bottom: 2.4mm !important;
-    padding-bottom: 1.8mm !important;
+    margin-bottom: 1.45mm !important;
+    padding-bottom: 1mm !important;
   }
 
   html.daily-report-print-document .print-header h1 {
-    font-size: 18pt !important;
-    line-height: 1.12 !important;
+    font-size: 19pt !important;
+    line-height: 1.05 !important;
   }
 
   html.daily-report-print-document .print-header div {
-    font-size: 9.2pt !important;
-    line-height: 1.2 !important;
-    margin-top: 1.2mm !important;
+    font-size: 9.6pt !important;
+    line-height: 1.12 !important;
+    margin-top: 0.7mm !important;
   }
 
   html.daily-report-print-document .print-section-title {
-    font-size: 10.5pt !important;
-    line-height: 1.2 !important;
-    padding: 1.35mm 2mm !important;
-    margin-bottom: 1.3mm !important;
+    font-size: 11pt !important;
+    line-height: 1.12 !important;
+    padding: 0.95mm 1.6mm !important;
+    margin-bottom: 0.8mm !important;
   }
 
   html.daily-report-print-document .print-kpi-grid {
-    gap: 2.2mm !important;
-    margin-bottom: 1.8mm !important;
+    gap: 1.4mm !important;
+    margin-bottom: 1mm !important;
   }
 
   html.daily-report-print-document .print-kpi-card {
-    padding: 2mm 1.8mm !important;
+    padding: 1.25mm 1.3mm !important;
   }
 
   html.daily-report-print-document .print-kpi-card .text-xs {
-    font-size: 9pt !important;
-    line-height: 1.2 !important;
+    font-size: 9.4pt !important;
+    line-height: 1.1 !important;
   }
 
   html.daily-report-print-document .print-kpi-value {
-    font-size: 17pt !important;
-    line-height: 1.08 !important;
-    margin-top: 0.8mm !important;
+    font-size: 18pt !important;
+    line-height: 1 !important;
+    margin-top: 0.35mm !important;
   }
 
   html.daily-report-print-document .print-summary-box,
   html.daily-report-print-document .print-opinion {
-    padding: 2mm !important;
-    font-size: 9.6pt !important;
-    line-height: 1.35 !important;
+    padding: 1.15mm 1.4mm !important;
+    font-size: 9.8pt !important;
+    line-height: 1.2 !important;
   }
 
   html.daily-report-print-document .print-table {
     width: 100% !important;
-    font-size: 9pt !important;
-    line-height: 1.18 !important;
+    font-size: 9.4pt !important;
+    line-height: 1.1 !important;
   }
 
   html.daily-report-print-document .print-table th,
   html.daily-report-print-document .print-table td {
-    padding: 1.15mm 1.2mm !important;
+    padding: 0.75mm 0.9mm !important;
     border-width: 0.25mm !important;
     overflow-wrap: normal !important;
     word-break: keep-all !important;
@@ -463,8 +464,8 @@ body {
   html.daily-report-print-document .reason-content,
   html.daily-report-print-document .reason-text,
   html.daily-report-print-document .reason-content-row {
-    font-size: 9.6pt !important;
-    line-height: 1.32 !important;
+    font-size: 9.8pt !important;
+    line-height: 1.18 !important;
   }
 
   @page template-workbook-landscape {
