@@ -60,6 +60,8 @@ export default function AdminReportPage() {
     const productActual = rows.reduce((sum, row) => sum + (row.entry.product_actual || 0), 0);
     const billetPlan = rows.reduce((sum, row) => sum + (row.entry.billet_plan || 0), 0);
     const billetActual = rows.reduce((sum, row) => sum + (row.entry.billet_actual || 0), 0);
+    const nextProductPlan = rows.reduce((sum, row) => sum + (row.entry.next_product_plan || 0), 0);
+    const nextBilletPlan = rows.reduce((sum, row) => sum + (row.entry.next_billet_plan || 0), 0);
 
     return {
       equipment,
@@ -73,6 +75,8 @@ export default function AdminReportPage() {
         billetActual,
         billetRate: calcNullableRate(billetActual, billetPlan),
         billetShortfall: Math.max(0, billetPlan - billetActual),
+        nextProductPlan,
+        nextBilletPlan,
       },
     };
   }).filter(group => group.rows.length > 0);
@@ -308,9 +312,14 @@ export default function AdminReportPage() {
               <tr>
                 <th>설비</th>
                 <th>근무조</th>
-                <th>제품 계획</th>
-                <th>황지 계획</th>
-                <th>합계</th>
+                <th>전일 제품 계획</th>
+                <th>제품 실적</th>
+                <th>제품 미달량</th>
+                <th>금일 제품 계획</th>
+                <th>전일 황지 계획</th>
+                <th>황지 실적</th>
+                <th>황지 미달량</th>
+                <th>금일 황지 계획</th>
                 <th>만회계획</th>
               </tr>
             </thead>
@@ -318,32 +327,71 @@ export default function AdminReportPage() {
               {equipmentGroups.map(group => {
                 const recoveryPlans = reasonGroupsByEquipment.get(group.equipment)?.recoveryPlans ?? [];
 
-                return group.rows.map((row, rowIndex) => {
-                  const entry = row.entry;
-                  const nextProductPlan = entry.next_product_plan || 0;
-                  const nextBilletPlan = entry.next_billet_plan || 0;
+                return (
+                  <React.Fragment key={group.equipment}>
+                    {group.rows.map((row, rowIndex) => {
+                      const entry = row.entry;
+                      const nextProductPlan = entry.next_product_plan || 0;
+                      const nextBilletPlan = entry.next_billet_plan || 0;
 
-                  return (
-                    <tr key={entry.id}>
-                      <td className="text-center-cell font-bold">{entry.equipment}</td>
-                      <td className="text-center-cell">{entry.shift}</td>
-                      <td>{formatNumber(nextProductPlan)}</td>
-                      <td>{formatNumber(nextBilletPlan)}</td>
-                      <td className="font-medium">{formatNumber(nextProductPlan + nextBilletPlan)}</td>
-                      {rowIndex === 0 && (
-                        <td rowSpan={group.rows.length} className="text-left text-xs align-middle">
-                          <ReasonTextList values={recoveryPlans} fallback="-" />
-                        </td>
-                      )}
+                      return (
+                        <tr key={entry.id}>
+                          <td className="text-center-cell font-bold">{entry.equipment}</td>
+                          <td className="text-center-cell">{entry.shift}</td>
+                          <td>{formatNumber(entry.product_plan)}</td>
+                          <td className="font-medium">{formatNumber(entry.product_actual)}</td>
+                          <td className={row.productShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
+                            {row.productShortfall > 0 ? formatNumber(row.productShortfall) : '-'}
+                          </td>
+                          <td className="font-medium">{formatNumber(nextProductPlan)}</td>
+                          <td>{formatNumber(entry.billet_plan)}</td>
+                          <td className="font-medium">{formatNumber(entry.billet_actual)}</td>
+                          <td className={row.billetShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
+                            {row.billetShortfall > 0 ? formatNumber(row.billetShortfall) : '-'}
+                          </td>
+                          <td className="font-medium">{formatNumber(nextBilletPlan)}</td>
+                          {rowIndex === 0 && (
+                            <td rowSpan={group.rows.length + 1} className="text-left text-xs align-middle">
+                              <ReasonTextList values={recoveryPlans} fallback="-" />
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                    <tr className="bg-slate-50 font-semibold border-t border-slate-200">
+                      <td colSpan={2} className="text-center-cell">{group.equipment} 합계</td>
+                      <td>{formatNumber(group.total.productPlan)}</td>
+                      <td>{formatNumber(group.total.productActual)}</td>
+                      <td className={group.total.productShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
+                        {group.total.productShortfall > 0 ? formatNumber(group.total.productShortfall) : '-'}
+                      </td>
+                      <td>{formatNumber(group.total.nextProductPlan)}</td>
+                      <td>{formatNumber(group.total.billetPlan)}</td>
+                      <td>{formatNumber(group.total.billetActual)}</td>
+                      <td className={group.total.billetShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
+                        {group.total.billetShortfall > 0 ? formatNumber(group.total.billetShortfall) : '-'}
+                      </td>
+                      <td>{formatNumber(group.total.nextBilletPlan)}</td>
                     </tr>
-                  );
-                });
+                  </React.Fragment>
+                );
               })}
               <tr className="bg-green-50 font-bold border-t-2 border-green-200">
                 <td colSpan={2} className="text-center-cell">합 계</td>
+                <td>{formatNumber(summary.total_product_plan)}</td>
+                <td>{formatNumber(summary.total_product_actual)}</td>
+                <td className="text-red-600">
+                  {summary.total_product_plan - summary.total_product_actual > 0
+                    ? formatNumber(summary.total_product_plan - summary.total_product_actual) : '-'}
+                </td>
                 <td>{formatNumber(summary.total_next_product_plan)}</td>
+                <td>{formatNumber(summary.total_billet_plan)}</td>
+                <td>{formatNumber(summary.total_billet_actual)}</td>
+                <td className="text-red-600">
+                  {summary.total_billet_plan - summary.total_billet_actual > 0
+                    ? formatNumber(summary.total_billet_plan - summary.total_billet_actual) : '-'}
+                </td>
                 <td>{formatNumber(summary.total_next_billet_plan)}</td>
-                <td>{formatNumber(summary.total_next_plan)}</td>
                 <td></td>
               </tr>
             </tbody>

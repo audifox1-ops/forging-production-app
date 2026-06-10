@@ -66,6 +66,8 @@ export default function PrintReportPage() {
     const productActual = rows.reduce((sum, row) => sum + (row.entry.product_actual || 0), 0);
     const billetPlan = rows.reduce((sum, row) => sum + (row.entry.billet_plan || 0), 0);
     const billetActual = rows.reduce((sum, row) => sum + (row.entry.billet_actual || 0), 0);
+    const nextProductPlan = rows.reduce((sum, row) => sum + (row.entry.next_product_plan || 0), 0);
+    const nextBilletPlan = rows.reduce((sum, row) => sum + (row.entry.next_billet_plan || 0), 0);
 
     return {
       equipment,
@@ -79,6 +81,8 @@ export default function PrintReportPage() {
         billetActual,
         billetRate: calcNullableRate(billetActual, billetPlan),
         billetShortfall: Math.max(0, billetPlan - billetActual),
+        nextProductPlan,
+        nextBilletPlan,
       },
     };
   }).filter(group => group.rows.length > 0);
@@ -341,49 +345,97 @@ export default function PrintReportPage() {
           {/* 4. 금일 생산계획 */}
           <div className="print-section mb-5">
             <div className="print-section-title bg-blue-100 px-3 py-2 font-bold text-blue-900 text-sm mb-2 border-l-4 border-blue-700">
-              4. 금일 생산계획 보고 (계획일: {formattedPlanDate})
+              4. 금일 생산계획 보고 (단위: KG, 계획일: {formattedPlanDate})
             </div>
             <table className="print-table print-table-plan w-full text-xs">
               <thead>
                 <tr>
-                  <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">설비</th>
-                  <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">근무조</th>
-                  <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">제품 계획 (KG)</th>
-                  <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">황지 계획 (KG)</th>
-                  <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">합계 (KG)</th>
-                  <th className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">비고</th>
+                  <th rowSpan={2} className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">설비</th>
+                  <th rowSpan={2} className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">근무조</th>
+                  <th colSpan={4} className="bg-blue-600 text-white px-2 py-1.5 text-center border border-gray-400">제품 (KG)</th>
+                  <th colSpan={4} className="bg-blue-600 text-white px-2 py-1.5 text-center border border-gray-400">황지 (KG)</th>
+                  <th rowSpan={2} className="bg-blue-800 text-white px-2 py-1.5 text-center border border-gray-400">만회계획</th>
+                </tr>
+                <tr>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">전일계획</th>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">전일실적</th>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">미달량</th>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">금일계획</th>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">전일계획</th>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">전일실적</th>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">미달량</th>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">금일계획</th>
                 </tr>
               </thead>
               <tbody>
                 {equipmentGroups.map(group => {
                   const recoveryPlans = reasonGroupsByEquipment.get(group.equipment)?.recoveryPlans ?? [];
 
-                  return group.rows.map((row, rowIndex) => {
-                    const entry = row.entry;
-                    const nextProductPlan = entry.next_product_plan || 0;
-                    const nextBilletPlan = entry.next_billet_plan || 0;
+                  return (
+                    <React.Fragment key={group.equipment}>
+                      {group.rows.map((row, rowIndex) => {
+                        const entry = row.entry;
+                        const nextProductPlan = entry.next_product_plan || 0;
+                        const nextBilletPlan = entry.next_billet_plan || 0;
 
-                    return (
-                      <tr key={entry.id}>
-                        <td className="px-2 py-1.5 text-center font-bold border border-gray-300">{entry.equipment}</td>
-                        <td className="px-2 py-1.5 text-center border border-gray-300">{entry.shift}</td>
-                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(nextProductPlan)}</td>
-                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(nextBilletPlan)}</td>
-                        <td className="px-2 py-1.5 text-right border border-gray-300 font-medium">{formatNumber(nextProductPlan + nextBilletPlan)}</td>
-                        {rowIndex === 0 && (
-                          <td rowSpan={group.rows.length} className="px-2 py-1.5 text-left border border-gray-300 text-gray-500 align-middle">
-                            <ReasonTextList values={recoveryPlans} fallback="-" />
-                          </td>
-                        )}
+                        return (
+                          <tr key={entry.id}>
+                            <td className="px-2 py-1.5 text-center font-bold border border-gray-300">{entry.equipment}</td>
+                            <td className="px-2 py-1.5 text-center border border-gray-300">{entry.shift}</td>
+                            <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(entry.product_plan)}</td>
+                            <td className="px-2 py-1.5 text-right font-medium border border-gray-300">{formatNumber(entry.product_actual)}</td>
+                            <td className={`px-2 py-1.5 text-right border border-gray-300 ${row.productShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
+                              {row.productShortfall > 0 ? formatNumber(row.productShortfall) : '-'}
+                            </td>
+                            <td className="px-2 py-1.5 text-right border border-gray-300 font-medium">{formatNumber(nextProductPlan)}</td>
+                            <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(entry.billet_plan)}</td>
+                            <td className="px-2 py-1.5 text-right font-medium border border-gray-300">{formatNumber(entry.billet_actual)}</td>
+                            <td className={`px-2 py-1.5 text-right border border-gray-300 ${row.billetShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
+                              {row.billetShortfall > 0 ? formatNumber(row.billetShortfall) : '-'}
+                            </td>
+                            <td className="px-2 py-1.5 text-right border border-gray-300 font-medium">{formatNumber(nextBilletPlan)}</td>
+                            {rowIndex === 0 && (
+                              <td rowSpan={group.rows.length + 1} className="px-2 py-1.5 text-left border border-gray-300 text-gray-500 align-middle">
+                                <ReasonTextList values={recoveryPlans} fallback="-" />
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                      <tr style={{ backgroundColor: '#f8fafc', fontWeight: 'bold' }}>
+                        <td colSpan={2} className="px-2 py-1.5 text-center border border-gray-300">{group.equipment} 합계</td>
+                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.productPlan)}</td>
+                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.productActual)}</td>
+                        <td className={`px-2 py-1.5 text-right border border-gray-300 ${group.total.productShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
+                          {group.total.productShortfall > 0 ? formatNumber(group.total.productShortfall) : '-'}
+                        </td>
+                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.nextProductPlan)}</td>
+                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.billetPlan)}</td>
+                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.billetActual)}</td>
+                        <td className={`px-2 py-1.5 text-right border border-gray-300 ${group.total.billetShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
+                          {group.total.billetShortfall > 0 ? formatNumber(group.total.billetShortfall) : '-'}
+                        </td>
+                        <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.nextBilletPlan)}</td>
                       </tr>
-                    );
-                  });
+                    </React.Fragment>
+                  );
                 })}
                 <tr style={{ backgroundColor: '#dbeafe', fontWeight: 'bold' }}>
                   <td colSpan={2} className="px-2 py-1.5 text-center border border-gray-400">합 계</td>
+                  <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_product_plan)}</td>
+                  <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_product_actual)}</td>
+                  <td className="px-2 py-1.5 text-right text-red-700 border border-gray-400">
+                    {summary.total_product_plan - summary.total_product_actual > 0
+                      ? formatNumber(summary.total_product_plan - summary.total_product_actual) : '-'}
+                  </td>
                   <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_next_product_plan)}</td>
+                  <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_billet_plan)}</td>
+                  <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_billet_actual)}</td>
+                  <td className="px-2 py-1.5 text-right text-red-700 border border-gray-400">
+                    {summary.total_billet_plan - summary.total_billet_actual > 0
+                      ? formatNumber(summary.total_billet_plan - summary.total_billet_actual) : '-'}
+                  </td>
                   <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_next_billet_plan)}</td>
-                  <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_next_plan)}</td>
                   <td className="border border-gray-400"></td>
                 </tr>
               </tbody>
