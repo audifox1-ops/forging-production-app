@@ -386,7 +386,6 @@ function EntryInputCard({
 }) {
   const isSubmitted = entry.submit_status === 'submitted' || entry.submit_status === 'approved';
   const canModify = canWrite || canEdit;
-  const isActualOnly = entry.equipment === 'P8';
   const [formData, setFormData] = useState({
     product_plan: entry.product_plan,
     product_actual: entry.product_actual,
@@ -425,7 +424,7 @@ function EntryInputCard({
     if (formData.product_actual === 0 && formData.billet_actual === 0) {
       errs.push('전일 제품 또는 황지 실적 중 하나 이상 입력해주세요.');
     }
-    if (!isActualOnly && formData.next_product_plan === 0 && formData.next_billet_plan === 0) {
+    if (formData.next_product_plan === 0 && formData.next_billet_plan === 0) {
       errs.push('금일 제품 또는 황지 생산계획 중 하나 이상 입력해주세요.');
     }
     setErrors(errs);
@@ -434,22 +433,13 @@ function EntryInputCard({
 
   const handleSave = () => {
     if (!canModify) return;
-    const entryFormData = isActualOnly
-      ? {
-          ...formData,
-          product_plan: 0,
-          billet_plan: 0,
-          next_product_plan: 0,
-          next_billet_plan: 0,
-        }
-      : formData;
     onSave({
       id: entry.id,
       report_id: reportId,
       user_id: entry.user_id,
       equipment: entry.equipment,
       shift: entry.shift,
-      ...entryFormData,
+      ...formData,
       ...getReasonPayload(sharedReason),
     });
     onSaveSharedReason(entry.id);
@@ -583,7 +573,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.product_plan}
                       onChange={e => handleChange('product_plan', Number(e.target.value))}
-                      disabled={!canModify || isActualOnly}
+                      disabled={!canModify}
                       min={0}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded text-right text-sm bg-gray-50 disabled:bg-gray-100"
                     />
@@ -609,7 +599,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.next_product_plan}
                       onChange={e => handleChange('next_product_plan', Number(e.target.value))}
-                      disabled={!canModify || isActualOnly}
+                      disabled={!canModify}
                       min={0}
                       className="w-full px-2 py-1.5 border border-green-300 rounded text-right text-sm bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-100"
                     />
@@ -625,7 +615,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.billet_plan}
                       onChange={e => handleChange('billet_plan', Number(e.target.value))}
-                      disabled={!canModify || isActualOnly}
+                      disabled={!canModify}
                       min={0}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded text-right text-sm bg-gray-50 disabled:bg-gray-100"
                     />
@@ -651,7 +641,7 @@ function EntryInputCard({
                       type="number"
                       value={formData.next_billet_plan}
                       onChange={e => handleChange('next_billet_plan', Number(e.target.value))}
-                      disabled={!canModify || isActualOnly}
+                      disabled={!canModify}
                       min={0}
                       className="w-full px-2 py-1.5 border border-green-300 rounded text-right text-sm bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-100"
                     />

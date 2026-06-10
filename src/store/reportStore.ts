@@ -95,13 +95,8 @@ const PREVIOUS_2026_TARGETS_BY_EQUIPMENT: Record<TargetEquipment, { product: num
   'R/M': { product: 23985, billet: 0 },
 };
 
-const ACTUAL_ONLY_EQUIPMENT: Equipment[] = ['P8'];
-
 const isTargetEquipment = (equipment: Equipment): equipment is TargetEquipment =>
   TARGET_EQUIPMENT_LIST.includes(equipment as TargetEquipment);
-
-const isActualOnlyEquipment = (equipment: Equipment) =>
-  ACTUAL_ONLY_EQUIPMENT.includes(equipment);
 
 const PREVIOUS_2026_ANNUAL_TARGETS = {
   product: 24200000,
@@ -249,8 +244,6 @@ export const useReportStore = create<ReportStore>((set, get) => {
     const sourceEntry = sourceEntries.find(entry => entry.equipment === equipment && entry.shift === shift);
     const initialAssignee = INITIAL_ASSIGNEES_BY_EQUIPMENT[equipment];
     const assignedUser = get().users.find(user => user.email === initialAssignee.email);
-    const actualOnly = isActualOnlyEquipment(equipment);
-
     return {
       id: genId(),
       report_id: reportId,
@@ -258,9 +251,9 @@ export const useReportStore = create<ReportStore>((set, get) => {
       user_name: assignedUser?.name ?? initialAssignee.userName,
       equipment,
       shift,
-      product_plan: actualOnly ? 0 : sourceEntry?.next_product_plan ?? currentTarget?.product_target ?? 0,
+      product_plan: sourceEntry?.next_product_plan ?? currentTarget?.product_target ?? 0,
       product_actual: 0,
-      billet_plan: actualOnly ? 0 : sourceEntry?.next_billet_plan ?? currentTarget?.billet_target ?? 0,
+      billet_plan: sourceEntry?.next_billet_plan ?? currentTarget?.billet_target ?? 0,
       billet_actual: 0,
       next_product_plan: 0,
       next_billet_plan: 0,
