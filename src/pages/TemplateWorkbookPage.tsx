@@ -1,7 +1,7 @@
 import React from 'react';
 import { BarChart3, Download, Eye, Grid2X2, Plus, Printer, RefreshCw, Table2, Trash2, X } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { downloadExcelTemplate } from '../utils/excelTemplate';
+import { downloadTemplateWorkbook } from '../utils/excelTemplate';
 import {
   buildTemplateWorkbookAppSummary,
   extractTemplateSummaryRows,
@@ -60,9 +60,17 @@ function formatCellValue(cell: TemplateWorkbookCell | undefined, column: string,
   return cell.value.replace(/\s+/g, ' ').trim();
 }
 
-function getCellTitle(cell: TemplateWorkbookCell | undefined) {
-  if (!cell?.formula) return undefined;
-  return `=${cell.formula}`;
+function getCellAddress(rowNumber: number, column: string) {
+  return `${column}${rowNumber}`;
+}
+
+function getCellTitle(cell: TemplateWorkbookCell | undefined, address?: string) {
+  const details = [
+    address ? `셀 ${address}` : null,
+    cell?.formula ? `수식 =${cell.formula}` : null,
+  ].filter(Boolean);
+
+  return details.length > 0 ? details.join('\n') : undefined;
 }
 
 function parseWorkbookInputValue(value: string, cell: TemplateWorkbookCell | undefined, column: string) {
@@ -257,11 +265,13 @@ function EditableWorkbookCell({
   cell,
   column,
   row,
+  address,
   onChange,
 }: {
   cell: TemplateWorkbookCell | undefined;
   column: string;
   row: TemplateWorkbookRow;
+  address: string;
   onChange: (rowNumber: number, column: string, value: string | number | null) => void;
 }) {
   const displayValue = formatCellValue(cell, column, row);
@@ -288,7 +298,7 @@ function EditableWorkbookCell({
           event.currentTarget.blur();
         }
       }}
-      title={getCellTitle(cell)}
+      title={getCellTitle(cell, address)}
       className={`w-full h-7 px-1.5 rounded border text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-400 ${
         typeof cell?.value === 'number' ? 'text-right' : 'text-left'
       } ${cell?.formula ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200'}`}
@@ -300,45 +310,51 @@ function RawTable({
   sheet,
   columns,
   editable = false,
+  showCoordinates = false,
+  showGridHeaders = true,
   onCellChange,
   onDeleteRow,
 }: {
   sheet: TemplateWorkbookSheet;
   columns: string[];
   editable?: boolean;
+  showCoordinates?: boolean;
+  showGridHeaders?: boolean;
   onCellChange?: (rowNumber: number, column: string, value: string | number | null) => void;
   onDeleteRow?: (rowNumber: number) => void;
 }) {
   return (
     <div className="template-print-sheet overflow-auto max-h-[calc(100vh-360px)] print-sheet">
       <table className="template-raw-print-table min-w-max w-full border-collapse text-xs">
-        <thead>
-          <tr>
-            {editable && (
-              <th className="sticky top-0 left-0 z-40 bg-slate-900 text-white border border-slate-700 px-2 py-2 text-center w-12 no-print">
-                삭제
+        {showGridHeaders && (
+          <thead>
+            <tr>
+              {editable && (
+                <th className="sticky top-0 left-0 z-40 bg-slate-900 text-white border border-slate-700 px-2 py-2 text-center w-12 no-print">
+                  삭제
+                </th>
+              )}
+              <th className={`sticky top-0 ${editable ? 'left-12' : 'left-0'} z-30 bg-slate-900 text-white border border-slate-700 px-2 py-2 text-center w-14`}>
+                {showCoordinates ? '행 \\ 열' : '행'}
               </th>
-            )}
-            <th className={`sticky top-0 ${editable ? 'left-12' : 'left-0'} z-30 bg-slate-900 text-white border border-slate-700 px-2 py-2 text-center w-14`}>
-              행
-            </th>
-            {columns.map(column => (
-              <th
-                key={column}
-                className="sticky top-0 z-20 bg-blue-800 text-white border border-blue-700 px-2 py-2 text-center min-w-[76px]"
-              >
-                {column}
-              </th>
-            ))}
-          </tr>
-        </thead>
+              {columns.map(column => (
+                <th
+                  key={column}
+                  className="sticky top-0 z-20 bg-blue-800 text-white border border-blue-700 px-2 py-2 text-center min-w-[86px]"
+                >
+                  <div className="font-semibold">{showCoordinates ? `열 ${column}` : column}</div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+        )}
         <tbody>
           {sheet.rows.map(row => {
             const cellMap = getCellMap(row);
 
             return (
               <tr key={row.row_number} className="odd:bg-white even:bg-slate-50 hover:bg-blue-50">
-                {editable && (
+                {showGridHeaders && editable && (
                   <td className="sticky left-0 z-20 bg-white border border-gray-200 px-1.5 py-1.5 text-center no-print">
                     <button
                       type="button"
@@ -350,30 +366,55 @@ function RawTable({
                     </button>
                   </td>
                 )}
-                <td className={`sticky ${editable ? 'left-12' : 'left-0'} z-10 bg-slate-100 border border-gray-200 px-2 py-1.5 text-center font-semibold text-gray-600 tabular-nums`}>
-                  {row.row_number}
-                </td>
+                {showGridHeaders && (
+                  <td className={`sticky ${editable ? 'left-12' : 'left-0'} z-10 bg-slate-100 border border-gray-200 px-2 py-1.5 text-center font-semibold text-gray-600 tabular-nums`}>
+                    {showCoordinates ? `행 ${row.row_number}` : row.row_number}
+                  </td>
+                )}
                 {columns.map(column => {
                   const cell = cellMap[column];
                   const value = formatCellValue(cell, column, row);
+                  const address = getCellAddress(row.row_number, column);
+                  const formula = cell?.formula ? `=${cell.formula}` : null;
+                  const canEditCell = editable && onCellChange && !cell?.formula;
 
                   return (
                     <td
                       key={`${row.row_number}-${column}`}
-                      title={getCellTitle(cell)}
-                      className={`border border-gray-200 px-2 py-1.5 h-8 tabular-nums ${
+                      title={getCellTitle(cell, address)}
+                      className={`border border-gray-200 px-2 py-1.5 min-h-8 tabular-nums align-top ${
                         typeof cell?.value === 'number' ? 'text-right' : 'text-left'
                       } ${cell?.formula ? 'bg-amber-50/70' : ''}`}
                     >
-                      {editable && onCellChange ? (
+                      {showCoordinates && (
+                        <div className="mb-1 flex items-center justify-between gap-1 text-[10px] leading-none">
+                          <span className="rounded bg-slate-100 px-1 py-0.5 font-semibold text-slate-500">
+                            {address}
+                          </span>
+                          {formula && (
+                            <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-700">
+                              수식
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {canEditCell ? (
                         <EditableWorkbookCell
                           cell={cell}
                           column={column}
                           row={row}
+                          address={address}
                           onChange={onCellChange}
                         />
                       ) : (
-                        value
+                        <div className={cell?.formula ? 'font-semibold text-slate-800' : ''}>
+                          {value}
+                        </div>
+                      )}
+                      {showCoordinates && formula && (
+                        <div className="mt-1 max-w-[140px] truncate text-left text-[10px] leading-tight text-amber-700" title={formula}>
+                          {formula}
+                        </div>
                       )}
                     </td>
                   );
@@ -402,8 +443,8 @@ function ExcelPreviewDialog({
 }) {
   const [previewSheetId, setPreviewSheetId] = React.useState(initialSheetId);
   const previewSheet = sheets.find(sheet => sheet.id === previewSheetId) ?? sheets[0];
-  const previewRows = React.useMemo(() => extractTemplateSummaryRows(previewSheet), [previewSheet]);
-  const previewColumns = React.useMemo(() => getCompactSheetColumns(previewSheet), [previewSheet]);
+  const previewRows = React.useMemo(() => previewSheet?.rows ?? [], [previewSheet]);
+  const previewColumns = React.useMemo(() => getSheetColumns(previewSheet), [previewSheet]);
 
   React.useEffect(() => {
     if (!sheets.length) return;
@@ -450,27 +491,15 @@ function ExcelPreviewDialog({
 
         <div className="flex-1 overflow-auto p-5 bg-slate-50">
           {previewSheet ? (
-            previewRows.length > 0 ? (
-              <div className="template-preview-print-area bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div className="template-preview-print-header template-print-header hidden">
-                  <h2 className="font-semibold text-gray-900">{previewSheet.sheet_name}</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {previewSheet.year}년 · {previewSheet.kind === 'monthly' ? '월별' : '연간'}
-                  </p>
-                </div>
-                <SummaryTable rows={previewRows} />
+            <div className="template-preview-print-area bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div className="template-preview-print-header template-print-header hidden">
+                <h2 className="font-semibold text-gray-900">{previewSheet.sheet_name}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {previewSheet.year}년 · {previewSheet.kind === 'monthly' ? '월별' : '연간'}
+                </p>
               </div>
-            ) : (
-              <div className="template-preview-print-area bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div className="template-preview-print-header template-print-header hidden">
-                  <h2 className="font-semibold text-gray-900">{previewSheet.sheet_name}</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {previewSheet.year}년 · {previewSheet.kind === 'monthly' ? '월별' : '연간'}
-                  </p>
-                </div>
-                <RawTable sheet={previewSheet} columns={previewColumns} />
-              </div>
-            )
+              <RawTable sheet={previewSheet} columns={previewColumns} showGridHeaders={false} />
+            </div>
           ) : (
             <div className="bg-white border border-gray-200 rounded-lg px-4 py-10 text-center text-sm text-gray-500">
               미리볼 생산량집계 데이터가 없습니다.
@@ -550,7 +579,7 @@ export default function TemplateWorkbookPage() {
 
   const handleTemplateDownload = async () => {
     try {
-      await downloadExcelTemplate();
+      await downloadTemplateWorkbook(templateSheets);
     } catch {
       window.alert('생산량집계 엑셀 파일을 다운로드할 수 없습니다.');
     }
@@ -748,17 +777,23 @@ export default function TemplateWorkbookPage() {
             </div>
           </div>
 
-          {viewMode === 'summary' ? (
-            <SummaryTable rows={summaryRows} />
-          ) : (
-            <RawTable
-              sheet={selectedSheet}
-              columns={visibleColumns}
-              editable={canManageWorkbook}
-              onCellChange={handleWorkbookCellChange}
-              onDeleteRow={handleWorkbookRowDelete}
-            />
-          )}
+          <div className="template-screen-workbook-content">
+            {viewMode === 'summary' ? (
+              <SummaryTable rows={summaryRows} />
+            ) : (
+              <RawTable
+                sheet={selectedSheet}
+                columns={visibleColumns}
+                editable={canManageWorkbook}
+                showCoordinates={viewMode === 'raw'}
+                onCellChange={handleWorkbookCellChange}
+                onDeleteRow={handleWorkbookRowDelete}
+              />
+            )}
+          </div>
+          <div className="template-print-workbook-content">
+            <RawTable sheet={selectedSheet} columns={rawColumns} showGridHeaders={false} />
+          </div>
         </div>
       )}
 

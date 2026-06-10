@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import type { Equipment, ProductionEntry, ProductionReport } from '../types';
+import type { Equipment, ProductionEntry, ProductionReport, TemplateWorkbookCell, TemplateWorkbookSheet } from '../types';
 
 const APP_BASE_URL = import.meta.env.BASE_URL || '/';
 const NORMALIZED_BASE_URL = APP_BASE_URL.endsWith('/') ? APP_BASE_URL : `${APP_BASE_URL}/`;
@@ -72,6 +72,19 @@ function getFirstElement(parent: XmlParent, tagName: string): Element | null {
 
 function columnToNumber(column: string) {
   return column.split('').reduce((value, char) => value * 26 + char.charCodeAt(0) - 64, 0);
+}
+
+function numberToColumn(value: number) {
+  let column = '';
+  let current = value;
+
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    column = String.fromCharCode(65 + remainder) + column;
+    current = Math.floor((current - 1) / 26);
+  }
+
+  return column || 'A';
 }
 
 function cellColumn(cellRef: string) {
@@ -152,6 +165,13 @@ function setTextCell(worksheet: Document, row: Element, column: string, value: s
   cell.appendChild(inlineString);
 }
 
+function clearCell(worksheet: Document, row: Element, column: string) {
+  const cell = getOrCreateCell(worksheet, row, column);
+
+  cell.removeAttribute('t');
+  removeChildren(cell, ['f', 'v', 'is']);
+}
+
 function findOrCreateRow(worksheet: Document, rowNumber: number) {
   const sheetData = getFirstElement(worksheet, 'sheetData');
 
@@ -172,6 +192,36 @@ function findOrCreateRow(worksheet: Document, rowNumber: number) {
 
   sheetData.insertBefore(row, nextRow ?? null);
   return row;
+}
+
+function updateWorksheetDimension(worksheet: Document) {
+  const cells = getElements(worksheet, 'c');
+  if (cells.length === 0) return;
+
+  const bounds = cells.reduce(
+    (acc, cell) => {
+      const ref = cell.getAttribute('r') ?? '';
+      const column = cellColumn(ref);
+      const row = Number(ref.replace(/\D+/g, ''));
+      const columnNumber = columnToNumber(column);
+
+      if (Number.isFinite(row) && columnNumber > 0) {
+        acc.maxColumn = Math.max(acc.maxColumn, columnNumber);
+        acc.maxRow = Math.max(acc.maxRow, row);
+      }
+
+      return acc;
+    },
+    { maxColumn: 1, maxRow: 1 }
+  );
+
+  let dimension = getFirstElement(worksheet, 'dimension');
+  if (!dimension) {
+    dimension = worksheet.createElementNS(SPREADSHEET_NS, 'dimension');
+    worksheet.documentElement.insertBefore(dimension, worksheet.documentElement.firstChild);
+  }
+
+  dimension.setAttribute('ref', `A1:${numberToColumn(bounds.maxColumn)}${bounds.maxRow}`);
 }
 
 function excelSerialFromDate(dateString: string) {
@@ -343,6 +393,38 @@ function applyReportValues(worksheet: Document, row: Element, entries: Productio
   });
 }
 
+function applyTemplateWorkbookCell(
+  worksheet: Document,
+  row: Element,
+  cell: TemplateWorkbookCell
+) {
+  if (typeof cell.value === 'number') {
+    setNumericCell(worksheet, row, cell.column, cell.value, cell.formula);
+    return;
+  }
+
+  if (cell.formula) {
+    setNumericCell(worksheet, row, cell.column, 0, cell.formula);
+    return;
+  }
+
+  if (cell.value === null || cell.value === undefined || cell.value === '') {
+    clearCell(worksheet, row, cell.column);
+    return;
+  }
+
+  setTextCell(worksheet, row, cell.column, String(cell.value));
+}
+
+function applyTemplateWorkbookSheet(worksheet: Document, sheet: TemplateWorkbookSheet) {
+  sheet.rows.forEach(rowData => {
+    const row = findOrCreateRow(worksheet, rowData.row_number);
+    rowData.cells.forEach(cell => applyTemplateWorkbookCell(worksheet, row, cell));
+  });
+
+  updateWorksheetDimension(worksheet);
+}
+
 function updateIssueDate(worksheet: Document, reportDate: string) {
   const [year, month, day] = reportDate.split('-').map(Number);
   const date = new Date(year, month - 1, day);
@@ -394,6 +476,10 @@ export function buildReportExcelFileName(reportDate: string) {
   return `forging-production-report_${reportDate}.xlsx`;
 }
 
+export function buildTemplateWorkbookFileName() {
+  return 'forging-production-summary.xlsx';
+}
+
 export async function generateReportExcelBlob(report: ProductionReport, entries: ProductionEntry[]) {
   const response = await fetch(EXCEL_TEMPLATE_URL);
 
@@ -434,6 +520,46 @@ export async function downloadExcelTemplate(reportDate?: string) {
   }
 
   triggerDownload(await response.blob(), buildExcelTemplateFileName(reportDate));
+}
+
+export async function generateTemplateWorkbookBlob(sheets: TemplateWorkbookSheet[]) {
+  const response = await fetch(EXCEL_TEMPLATE_URL);
+
+  if (!response.ok) {
+    throw new Error(`Excel template download failed: ${response.status}`);
+  }
+
+  const zip = await JSZip.loadAsync(await response.arrayBuffer());
+
+  for (const sheet of sheets) {
+    const sheetPath = await getWorksheetPath(zip, sheet.sheet_name);
+    const worksheetXml = await zip.file(sheetPath)?.async('string');
+
+    if (!worksheetXml) {
+      throw new Error(`Worksheet "${sheetPath}" is missing`);
+    }
+
+    const worksheet = parseXml(worksheetXml);
+    applyTemplateWorkbookSheet(worksheet, sheet);
+    zip.file(sheetPath, serializeXml(worksheet));
+  }
+
+  await updateWorkbookCalculation(zip);
+
+  return zip.generateAsync({
+    type: 'blob',
+    mimeType: XLSX_CONTENT_TYPE,
+    compression: 'DEFLATE',
+  });
+}
+
+export async function downloadTemplateWorkbook(sheets: TemplateWorkbookSheet[]) {
+  if (sheets.length === 0) {
+    throw new Error('No production summary workbook data to download');
+  }
+
+  const blob = await generateTemplateWorkbookBlob(sheets);
+  triggerDownload(blob, buildTemplateWorkbookFileName());
 }
 
 export async function downloadReportExcel(report: ProductionReport, entries: ProductionEntry[]) {

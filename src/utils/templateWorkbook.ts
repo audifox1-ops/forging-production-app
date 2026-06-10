@@ -325,15 +325,47 @@ function sumRows(rows: TemplateWorkbookRow[], column: string) {
   return rows.reduce((sum, row) => sum + getNumericCell(row, column), 0);
 }
 
+function getCellReference(row: TemplateWorkbookRow, column: string) {
+  return `${column}${row.row_number}`;
+}
+
+function buildRowSumFormula(row: TemplateWorkbookRow, columns: string[]) {
+  const references = columns.map(column => getCellReference(row, column));
+  return references.length === 1 ? references[0] : `SUM(${references.join(',')})`;
+}
+
+function buildRateFormula(row: TemplateWorkbookRow, actualColumn: string, planColumn: string) {
+  return `IFERROR(${getCellReference(row, actualColumn)}/${getCellReference(row, planColumn)},0)`;
+}
+
+function buildMonthlySumFormula(column: string, startRow: number, endRow: number) {
+  return `SUM(${column}${startRow}:${column}${endRow})`;
+}
+
 function recalculateTemplateRow(row: TemplateWorkbookRow) {
   (Object.values(SYNC_EQUIPMENT_COLUMNS)).forEach(columns => {
     const productActual = getNumericCell(row, columns.productActual);
     const productPlan = getNumericCell(row, columns.productPlan);
     const billetActual = getNumericCell(row, columns.billetActual ?? '');
     const coggingActual = getNumericCell(row, columns.coggingActual ?? '');
+    const grossColumns = [
+      columns.productActual,
+      columns.billetActual,
+      columns.coggingActual,
+    ].filter((column): column is string => Boolean(column));
 
-    setRowCell(row, columns.achievementRate, safeRate(productActual, productPlan));
-    setRowCell(row, columns.grossTotal, productActual + billetActual + coggingActual);
+    setRowCell(
+      row,
+      columns.achievementRate,
+      safeRate(productActual, productPlan),
+      buildRateFormula(row, columns.productActual, columns.productPlan)
+    );
+    setRowCell(
+      row,
+      columns.grossTotal,
+      productActual + billetActual + coggingActual,
+      buildRowSumFormula(row, grossColumns)
+    );
   });
 
   const totalProductActual = getNumericCell(row, 'B') + getNumericCell(row, 'P') + getNumericCell(row, 'AD');
@@ -341,12 +373,46 @@ function recalculateTemplateRow(row: TemplateWorkbookRow) {
   const totalBilletActual = getNumericCell(row, 'E') + getNumericCell(row, 'S');
   const totalCoggingActual = getNumericCell(row, 'F') + getNumericCell(row, 'T');
 
-  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.productActual, totalProductActual);
-  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.productPlan, totalProductPlan);
-  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.achievementRate, safeRate(totalProductActual, totalProductPlan));
-  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.billetActual!, totalBilletActual);
-  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.coggingActual!, totalCoggingActual);
-  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.grossTotal, totalProductActual + totalBilletActual + totalCoggingActual);
+  setRowCell(
+    row,
+    TEMPLATE_SUMMARY_COLUMNS.TOTAL.productActual,
+    totalProductActual,
+    buildRowSumFormula(row, ['B', 'P', 'AD'])
+  );
+  setRowCell(
+    row,
+    TEMPLATE_SUMMARY_COLUMNS.TOTAL.productPlan,
+    totalProductPlan,
+    buildRowSumFormula(row, ['C', 'Q', 'AE'])
+  );
+  setRowCell(
+    row,
+    TEMPLATE_SUMMARY_COLUMNS.TOTAL.achievementRate,
+    safeRate(totalProductActual, totalProductPlan),
+    buildRateFormula(row, TEMPLATE_SUMMARY_COLUMNS.TOTAL.productActual, TEMPLATE_SUMMARY_COLUMNS.TOTAL.productPlan)
+  );
+  setRowCell(
+    row,
+    TEMPLATE_SUMMARY_COLUMNS.TOTAL.billetActual!,
+    totalBilletActual,
+    buildRowSumFormula(row, ['E', 'S'])
+  );
+  setRowCell(
+    row,
+    TEMPLATE_SUMMARY_COLUMNS.TOTAL.coggingActual!,
+    totalCoggingActual,
+    buildRowSumFormula(row, ['F', 'T'])
+  );
+  setRowCell(
+    row,
+    TEMPLATE_SUMMARY_COLUMNS.TOTAL.grossTotal,
+    totalProductActual + totalBilletActual + totalCoggingActual,
+    buildRowSumFormula(row, [
+      TEMPLATE_SUMMARY_COLUMNS.TOTAL.productActual,
+      TEMPLATE_SUMMARY_COLUMNS.TOTAL.billetActual!,
+      TEMPLATE_SUMMARY_COLUMNS.TOTAL.coggingActual!,
+    ])
+  );
 }
 
 function recalculateMonthlyTotal(sheet: TemplateWorkbookSheet) {
@@ -368,7 +434,16 @@ function recalculateMonthlyTotal(sheet: TemplateWorkbookSheet) {
     ].filter((column): column is string => Boolean(column)))
   ));
 
-  totalColumns.forEach(column => setRowCell(totalRow, column, sumRows(dailyRows, column)));
+  const firstDailyRowNumber = 8;
+  const lastDailyRowNumber = meta.daysInMonth + 7;
+  totalColumns.forEach(column =>
+    setRowCell(
+      totalRow,
+      column,
+      sumRows(dailyRows, column),
+      buildMonthlySumFormula(column, firstDailyRowNumber, lastDailyRowNumber)
+    )
+  );
   recalculateTemplateRow(totalRow);
 }
 

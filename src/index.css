@@ -392,6 +392,29 @@ body {
     overflow: visible !important;
   }
 
+  html.template-workbook-print-document .template-screen-workbook-content {
+    display: none !important;
+  }
+
+  html.template-workbook-print-document .template-print-workbook-content {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  html.template-workbook-print-document .template-print-workbook-content * {
+    visibility: visible !important;
+  }
+
+  html.template-workbook-print-document .template-print-workbook-content .template-raw-print-table td {
+    background: white !important;
+    color: #111827 !important;
+    font-weight: 400 !important;
+  }
+
+  html.template-workbook-print-document .template-print-area > .template-print-header {
+    display: none !important;
+  }
+
   html.template-workbook-print-document.template-workbook-preview-printing .template-print-area,
   html.template-workbook-print-document.template-workbook-preview-printing .template-print-area * {
     visibility: hidden !important;
@@ -578,6 +601,10 @@ input[type="number"] {
 
 .fade-in {
   animation: fadeIn 0.2s ease-out;
+}
+
+.template-print-workbook-content {
+  display: none;
 }
 
 /* 미달성 강조 */
