@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, Download, Printer } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
 import { generateReportText } from '../utils/reportTextGenerator';
@@ -14,6 +14,7 @@ import {
   getPlanDateFromActualDate,
   getTodayPlanDate,
 } from '../utils/reportDates';
+import { downloadReportExcel } from '../utils/excelTemplate';
 
 function calcNullableRate(actual: number, plan: number) {
   return plan > 0 ? (actual / plan) * 100 : null;
@@ -104,6 +105,15 @@ export default function AdminReportPage() {
   ];
 
   const handlePrint = () => navigate(`/reports/${actualDate}/print`);
+  const handleExcelDownload = async () => {
+    if (!report) return;
+
+    try {
+      await downloadReportExcel(report, entries);
+    } catch {
+      window.alert('엑셀 보고서 파일을 다운로드할 수 없습니다.');
+    }
+  };
 
   if (!report) {
     return (
@@ -128,10 +138,16 @@ export default function AdminReportPage() {
             </p>
           </div>
         </div>
-        <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
-          <Printer size={16} />
-          인쇄 / PDF 저장
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleExcelDownload} className="btn-secondary flex items-center gap-2">
+            <Download size={16} />
+            엑셀 다운로드
+          </button>
+          <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
+            <Printer size={16} />
+            인쇄 / PDF 저장
+          </button>
+        </div>
       </div>
 
       {/* 자동 생성 보고문 */}

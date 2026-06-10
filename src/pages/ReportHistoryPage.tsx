@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Plus, FileText, Calendar, Eye, Printer, Copy } from 'lucide-react';
+import { Plus, FileText, Calendar, Eye, Printer, Copy, Download } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary } from '../utils/calculations';
 import { STATUS_LABELS } from '../types';
@@ -12,6 +12,8 @@ import {
   getReportPlanDate,
   getTodayPlanDate,
 } from '../utils/reportDates';
+import { downloadReportExcel } from '../utils/excelTemplate';
+import type { ProductionReport } from '../types';
 
 export default function ReportHistoryPage() {
   const navigate = useNavigate();
@@ -37,6 +39,14 @@ export default function ReportHistoryPage() {
     const newDate = getActualDateFromPlanDate(getTodayPlanDate());
     const report = createReport(newDate, { sourceReportDate: reportDate });
     navigate(`/reports/${report.report_date}/input`);
+  };
+
+  const handleExcelDownload = async (report: ProductionReport) => {
+    try {
+      await downloadReportExcel(report, getEntriesByReport(report.id));
+    } catch {
+      window.alert('엑셀 보고서 파일을 다운로드할 수 없습니다.');
+    }
   };
 
   return (
@@ -132,6 +142,13 @@ export default function ReportHistoryPage() {
                           title="출력"
                         >
                           <Printer size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleExcelDownload(report)}
+                          className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                          title="엑셀 다운로드"
+                        >
+                          <Download size={15} />
                         </button>
                         <button
                           onClick={() => handleCopy(report.report_date)}

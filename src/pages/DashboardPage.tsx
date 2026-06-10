@@ -23,7 +23,7 @@ import {
 } from 'recharts';
 import {
   AlertTriangle, CalendarRange, Clock,
-  ChevronLeft, ChevronRight, ClipboardCheck, Printer, PlusCircle, RefreshCw, Users,
+  ChevronLeft, ChevronRight, ClipboardCheck, Download, Printer, PlusCircle, RefreshCw, Users,
 } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../utils/calculations';
@@ -39,6 +39,7 @@ import {
   getTodayPlanDate,
 } from '../utils/reportDates';
 import { get2026PeriodTargetForDate } from '../utils/targetConfig';
+import { downloadReportExcel } from '../utils/excelTemplate';
 
 type SummaryPeriod = 'day' | 'week' | 'month' | 'year';
 
@@ -496,6 +497,16 @@ export default function DashboardPage() {
     navigate(`/reports/${selectedActualDate}/print`);
   };
 
+  const handleExcelDownload = async () => {
+    if (!report) return;
+
+    try {
+      await downloadReportExcel(report, getEntriesByReport(report.id));
+    } catch {
+      window.alert('엑셀 보고서 파일을 다운로드할 수 없습니다.');
+    }
+  };
+
   const handleMoveDate = (direction: -1 | 1) => {
     setSelectedPlanDate(current => shiftPlanDate(current, selectedPeriod, direction));
   };
@@ -625,6 +636,10 @@ export default function DashboardPage() {
                 <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
                   <Printer size={16} />
                   보고서 출력
+                </button>
+                <button onClick={handleExcelDownload} className="btn-secondary flex items-center gap-2">
+                  <Download size={16} />
+                  엑셀 다운로드
                 </button>
               </>
             ) : null}
@@ -1103,10 +1118,16 @@ export default function DashboardPage() {
               <h3 className="font-semibold text-gray-800">설비별 상세 실적</h3>
               <div className="flex gap-2">
                 {selectedPeriod === 'day' && (
-                  <button onClick={handlePrint} className="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5">
-                    <Printer size={14} />
-                    출력
-                  </button>
+                  <>
+                    <button onClick={handleExcelDownload} className="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5">
+                      <Download size={14} />
+                      엑셀
+                    </button>
+                    <button onClick={handlePrint} className="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5">
+                      <Printer size={14} />
+                      출력
+                    </button>
+                  </>
                 )}
               </div>
             </div>
