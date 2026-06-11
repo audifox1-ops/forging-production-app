@@ -16,8 +16,8 @@ import {
 } from '../utils/reportDates';
 import { downloadReportExcel } from '../utils/excelTemplate';
 
-function calcNullableRate(actual: number, plan: number) {
-  return plan > 0 ? (actual / plan) * 100 : null;
+function calcNullableRate(actual: number, target: number) {
+  return target > 0 ? (actual / target) * 100 : null;
 }
 
 function getRateClass(rate: number | null) {
@@ -30,7 +30,7 @@ function getRateClass(rate: number | null) {
 export default function AdminReportPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
   const navigate = useNavigate();
-  const { reports, getEntriesByReport } = useReportStore();
+  const { reports, getEntriesByReport, targets } = useReportStore();
 
   const actualDate = reportDate || getActualDateFromPlanDate(getTodayPlanDate());
   const planDate = getPlanDateFromActualDate(actualDate);
@@ -38,21 +38,48 @@ export default function AdminReportPage() {
   const reportPlanDate = report?.next_plan_date || planDate;
   const entries = report ? getEntriesByReport(report.id) : [];
   const summary = calcDashboardSummary(entries);
-  const reportText = report ? generateReportText(summary, entries, actualDate) : '';
-  const productShortfall = Math.max(0, summary.total_product_plan - summary.total_product_actual);
-  const billetShortfall = Math.max(0, summary.total_billet_plan - summary.total_billet_actual);
+  const dailyTargetSummary = targets.reduce(
+    (acc, target) => ({
+      product: acc.product + (target.product_target || 0),
+      billet: acc.billet + (target.billet_target || 0),
+    }),
+    { product: 0, billet: 0 }
+  );
+  const targetSummary = {
+    productRate: calcNullableRate(summary.total_product_actual, dailyTargetSummary.product) ?? 0,
+    billetRate: calcNullableRate(summary.total_billet_actual, dailyTargetSummary.billet) ?? 0,
+    totalRate: calcNullableRate(
+      summary.total_product_actual + summary.total_billet_actual,
+      dailyTargetSummary.product + dailyTargetSummary.billet
+    ) ?? 0,
+    productShortfall: Math.max(0, dailyTargetSummary.product - summary.total_product_actual),
+    billetShortfall: Math.max(0, dailyTargetSummary.billet - summary.total_billet_actual),
+  };
+  const targetBasedSummary = {
+    ...summary,
+    total_product_plan: dailyTargetSummary.product,
+    total_billet_plan: dailyTargetSummary.billet,
+    total_plan: dailyTargetSummary.product + dailyTargetSummary.billet,
+    total_achievement_rate: targetSummary.totalRate,
+    product_achievement_rate: targetSummary.productRate,
+    billet_achievement_rate: targetSummary.billetRate,
+    total_shortfall: targetSummary.productShortfall + targetSummary.billetShortfall,
+  };
+  const reportText = report ? generateReportText(targetBasedSummary, entries, actualDate) : '';
   const equipmentGroups = EQUIPMENT_LIST.map(equipment => {
+    const equipmentTargets = targets.filter(target => target.equipment === equipment);
     const rows = entries
       .filter(entry => entry.equipment === equipment)
       .sort((a, b) => SHIFT_LIST.indexOf(a.shift) - SHIFT_LIST.indexOf(b.shift))
       .map(entry => {
+        const shiftTarget = equipmentTargets.find(target => target.shift === entry.shift);
         const productShortfall = Math.max(0, (entry.product_plan || 0) - (entry.product_actual || 0));
         const billetShortfall = Math.max(0, (entry.billet_plan || 0) - (entry.billet_actual || 0));
 
         return {
           entry,
-          productRate: calcNullableRate(entry.product_actual, entry.product_plan),
-          billetRate: calcNullableRate(entry.billet_actual, entry.billet_plan),
+          productRate: calcNullableRate(entry.product_actual, shiftTarget?.product_target || 0),
+          billetRate: calcNullableRate(entry.billet_actual, shiftTarget?.billet_target || 0),
           productShortfall,
           billetShortfall,
         };
@@ -63,6 +90,8 @@ export default function AdminReportPage() {
     const billetActual = rows.reduce((sum, row) => sum + (row.entry.billet_actual || 0), 0);
     const nextProductPlan = rows.reduce((sum, row) => sum + (row.entry.next_product_plan || 0), 0);
     const nextBilletPlan = rows.reduce((sum, row) => sum + (row.entry.next_billet_plan || 0), 0);
+    const productTarget = equipmentTargets.reduce((sum, target) => sum + (target.product_target || 0), 0);
+    const billetTarget = equipmentTargets.reduce((sum, target) => sum + (target.billet_target || 0), 0);
 
     return {
       equipment,
@@ -70,11 +99,11 @@ export default function AdminReportPage() {
       total: {
         productPlan,
         productActual,
-        productRate: calcNullableRate(productActual, productPlan),
+        productRate: calcNullableRate(productActual, productTarget),
         productShortfall: Math.max(0, productPlan - productActual),
         billetPlan,
         billetActual,
-        billetRate: calcNullableRate(billetActual, billetPlan),
+        billetRate: calcNullableRate(billetActual, billetTarget),
         billetShortfall: Math.max(0, billetPlan - billetActual),
         nextProductPlan,
         nextBilletPlan,
@@ -86,19 +115,19 @@ export default function AdminReportPage() {
   const summaryItems = [
     {
       label: '제품',
-      plan: summary.total_product_plan,
+      plan: targetBasedSummary.total_product_plan,
       actual: summary.total_product_actual,
-      rate: summary.product_achievement_rate,
-      shortfall: productShortfall,
+      rate: targetBasedSummary.product_achievement_rate,
+      shortfall: targetSummary.productShortfall,
       panelClass: 'border-blue-200 bg-blue-50',
       labelClass: 'text-blue-800',
     },
     {
       label: '황지',
-      plan: summary.total_billet_plan,
+      plan: targetBasedSummary.total_billet_plan,
       actual: summary.total_billet_actual,
-      rate: summary.billet_achievement_rate,
-      shortfall: billetShortfall,
+      rate: targetBasedSummary.billet_achievement_rate,
+      shortfall: targetSummary.billetShortfall,
       panelClass: 'border-amber-200 bg-amber-50',
       labelClass: 'text-amber-800',
     },
@@ -174,7 +203,7 @@ export default function AdminReportPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className={`text-sm font-bold ${item.labelClass}`}>{item.label}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">계획 대비 실적</div>
+                    <div className="text-xs text-gray-500 mt-0.5">일일 목표 대비 실적</div>
                   </div>
                   <div className={`text-2xl font-bold ${
                     item.rate >= 100 ? 'text-green-700' :
@@ -185,7 +214,7 @@ export default function AdminReportPage() {
                 </div>
                 <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
                   <div>
-                    <div className="text-xs text-gray-500">계획</div>
+                    <div className="text-xs text-gray-500">일일 목표</div>
                     <div className="font-semibold text-gray-800">{formatNumber(item.plan)} KG</div>
                   </div>
                   <div>
@@ -218,11 +247,11 @@ export default function AdminReportPage() {
                 <th>근무조</th>
                 <th>전일 제품 계획</th>
                 <th>제품 실적</th>
-                <th>제품 달성율</th>
+                <th>제품 목표달성율</th>
                 <th>제품 미달량</th>
                 <th>전일 황지 계획</th>
                 <th>황지 실적</th>
-                <th>황지 달성율</th>
+                <th>황지 목표달성율</th>
                 <th>황지 미달량</th>
                 <th>주요 사유</th>
               </tr>
@@ -289,10 +318,10 @@ export default function AdminReportPage() {
                 <td>{formatNumber(summary.total_product_plan)}</td>
                 <td>{formatNumber(summary.total_product_actual)}</td>
                 <td className={`text-center-cell ${
-                  summary.product_achievement_rate >= 100 ? 'text-green-600' :
-                    summary.product_achievement_rate >= 90 ? 'text-yellow-600' : 'text-red-600'
+                  targetBasedSummary.product_achievement_rate >= 100 ? 'text-green-600' :
+                    targetBasedSummary.product_achievement_rate >= 90 ? 'text-yellow-600' : 'text-red-600'
                 }`}>
-                  {summary.product_achievement_rate.toFixed(1)}%
+                  {targetBasedSummary.product_achievement_rate.toFixed(1)}%
                 </td>
                 <td className="text-red-600">
                   {summary.total_product_plan - summary.total_product_actual > 0
@@ -301,10 +330,10 @@ export default function AdminReportPage() {
                 <td>{formatNumber(summary.total_billet_plan)}</td>
                 <td>{formatNumber(summary.total_billet_actual)}</td>
                 <td className={`text-center-cell ${
-                  summary.billet_achievement_rate >= 100 ? 'text-green-600' :
-                    summary.billet_achievement_rate >= 90 ? 'text-yellow-600' : 'text-red-600'
+                  targetBasedSummary.billet_achievement_rate >= 100 ? 'text-green-600' :
+                    targetBasedSummary.billet_achievement_rate >= 90 ? 'text-yellow-600' : 'text-red-600'
                 }`}>
-                  {summary.billet_achievement_rate.toFixed(1)}%
+                  {targetBasedSummary.billet_achievement_rate.toFixed(1)}%
                 </td>
                 <td className="text-red-600">
                   {summary.total_billet_plan - summary.total_billet_actual > 0

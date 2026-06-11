@@ -16,8 +16,8 @@ import {
 } from '../utils/reportDates';
 import { downloadReportExcel } from '../utils/excelTemplate';
 
-function calcNullableRate(actual: number, plan: number) {
-  return plan > 0 ? (actual / plan) * 100 : null;
+function calcNullableRate(actual: number, target: number) {
+  return target > 0 ? (actual / target) * 100 : null;
 }
 
 function getPrintRateClass(rate: number | null) {
@@ -39,7 +39,7 @@ function getOrderIndex<T>(order: readonly T[], value: T) {
 export default function PrintReportPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
   const navigate = useNavigate();
-  const { reports, getEntriesByReport } = useReportStore();
+  const { reports, getEntriesByReport, targets } = useReportStore();
 
   React.useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -59,18 +59,47 @@ export default function PrintReportPage() {
   const reportPlanDate = report?.next_plan_date || planDate;
   const entries = report ? getEntriesByReport(report.id) : [];
   const summary = calcDashboardSummary(entries);
+  const dailyTargetSummary = targets.reduce(
+    (acc, target) => ({
+      product: acc.product + (target.product_target || 0),
+      billet: acc.billet + (target.billet_target || 0),
+    }),
+    { product: 0, billet: 0 }
+  );
+  const targetSummary = {
+    productRate: calcNullableRate(summary.total_product_actual, dailyTargetSummary.product) ?? 0,
+    billetRate: calcNullableRate(summary.total_billet_actual, dailyTargetSummary.billet) ?? 0,
+    totalRate: calcNullableRate(
+      summary.total_product_actual + summary.total_billet_actual,
+      dailyTargetSummary.product + dailyTargetSummary.billet
+    ) ?? 0,
+    productShortfall: Math.max(0, dailyTargetSummary.product - summary.total_product_actual),
+    billetShortfall: Math.max(0, dailyTargetSummary.billet - summary.total_billet_actual),
+  };
+  const targetBasedSummary = {
+    ...summary,
+    total_product_plan: dailyTargetSummary.product,
+    total_billet_plan: dailyTargetSummary.billet,
+    total_plan: dailyTargetSummary.product + dailyTargetSummary.billet,
+    total_achievement_rate: targetSummary.totalRate,
+    product_achievement_rate: targetSummary.productRate,
+    billet_achievement_rate: targetSummary.billetRate,
+    total_shortfall: targetSummary.productShortfall + targetSummary.billetShortfall,
+  };
   const equipmentGroups = PRINT_EQUIPMENT_ORDER.map(equipment => {
+    const equipmentTargets = targets.filter(target => target.equipment === equipment);
     const rows = entries
       .filter(entry => entry.equipment === equipment)
       .sort((a, b) => getOrderIndex(PRINT_SHIFT_ORDER, a.shift) - getOrderIndex(PRINT_SHIFT_ORDER, b.shift))
       .map(entry => {
+        const shiftTarget = equipmentTargets.find(target => target.shift === entry.shift);
         const productShortfall = Math.max(0, (entry.product_plan || 0) - (entry.product_actual || 0));
         const billetShortfall = Math.max(0, (entry.billet_plan || 0) - (entry.billet_actual || 0));
 
         return {
           entry,
-          productRate: calcNullableRate(entry.product_actual, entry.product_plan),
-          billetRate: calcNullableRate(entry.billet_actual, entry.billet_plan),
+          productRate: calcNullableRate(entry.product_actual, shiftTarget?.product_target || 0),
+          billetRate: calcNullableRate(entry.billet_actual, shiftTarget?.billet_target || 0),
           productShortfall,
           billetShortfall,
           hasShortfall: productShortfall > 0 || billetShortfall > 0,
@@ -82,6 +111,8 @@ export default function PrintReportPage() {
     const billetActual = rows.reduce((sum, row) => sum + (row.entry.billet_actual || 0), 0);
     const nextProductPlan = rows.reduce((sum, row) => sum + (row.entry.next_product_plan || 0), 0);
     const nextBilletPlan = rows.reduce((sum, row) => sum + (row.entry.next_billet_plan || 0), 0);
+    const productTarget = equipmentTargets.reduce((sum, target) => sum + (target.product_target || 0), 0);
+    const billetTarget = equipmentTargets.reduce((sum, target) => sum + (target.billet_target || 0), 0);
 
     return {
       equipment,
@@ -89,11 +120,11 @@ export default function PrintReportPage() {
       total: {
         productPlan,
         productActual,
-        productRate: calcNullableRate(productActual, productPlan),
+        productRate: calcNullableRate(productActual, productTarget),
         productShortfall: Math.max(0, productPlan - productActual),
         billetPlan,
         billetActual,
-        billetRate: calcNullableRate(billetActual, billetPlan),
+        billetRate: calcNullableRate(billetActual, billetTarget),
         billetShortfall: Math.max(0, billetPlan - billetActual),
         nextProductPlan,
         nextBilletPlan,
@@ -124,7 +155,7 @@ export default function PrintReportPage() {
 
   const formattedActualDate = format(new Date(actualDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko });
   const formattedPlanDate = format(new Date(reportPlanDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko });
-  const overallSummary = generateOverallSummary(summary);
+  const overallSummary = generateOverallSummary(targetBasedSummary);
 
   return (
     <>
@@ -175,36 +206,36 @@ export default function PrintReportPage() {
             </div>
             <div className="print-kpi-grid grid grid-cols-4 gap-3 mb-3">
               <div className={`print-kpi-card p-3 rounded-lg text-center border-2 ${
-                summary.total_achievement_rate >= 100 ? 'bg-green-50 border-green-300' :
-                  summary.total_achievement_rate >= 90 ? 'bg-yellow-50 border-yellow-300' : 'bg-red-50 border-red-300'
+                targetBasedSummary.total_achievement_rate >= 100 ? 'bg-green-50 border-green-300' :
+                  targetBasedSummary.total_achievement_rate >= 90 ? 'bg-yellow-50 border-yellow-300' : 'bg-red-50 border-red-300'
               }`}>
                 <div className="text-xs text-gray-500">전체 달성율</div>
                 <div className={`print-kpi-value text-2xl font-bold mt-1 ${
-                  summary.total_achievement_rate >= 100 ? 'text-green-700' :
-                    summary.total_achievement_rate >= 90 ? 'text-yellow-700' : 'text-red-700'
+                  targetBasedSummary.total_achievement_rate >= 100 ? 'text-green-700' :
+                    targetBasedSummary.total_achievement_rate >= 90 ? 'text-yellow-700' : 'text-red-700'
                 }`}>
-                  {summary.total_achievement_rate.toFixed(1)}%
+                  {targetBasedSummary.total_achievement_rate.toFixed(1)}%
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  {formatNumber(summary.total_actual)} / {formatNumber(summary.total_plan)} KG
+                  {formatNumber(summary.total_actual)} / {formatNumber(targetBasedSummary.total_plan)} KG
                 </div>
               </div>
               <div className="print-kpi-card p-3 rounded-lg text-center border bg-blue-50 border-blue-200">
                 <div className="text-xs text-gray-500">제품 달성율</div>
                 <div className="print-kpi-value text-2xl font-bold mt-1 text-blue-700">
-                  {summary.product_achievement_rate.toFixed(1)}%
+                  {targetBasedSummary.product_achievement_rate.toFixed(1)}%
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  {formatNumber(summary.total_product_actual)} / {formatNumber(summary.total_product_plan)} KG
+                  {formatNumber(summary.total_product_actual)} / {formatNumber(targetBasedSummary.total_product_plan)} KG
                 </div>
               </div>
               <div className="print-kpi-card p-3 rounded-lg text-center border bg-amber-50 border-amber-200">
                 <div className="text-xs text-gray-500">황지 달성율</div>
                 <div className="print-kpi-value text-2xl font-bold mt-1 text-amber-700">
-                  {summary.billet_achievement_rate.toFixed(1)}%
+                  {targetBasedSummary.billet_achievement_rate.toFixed(1)}%
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  {formatNumber(summary.total_billet_actual)} / {formatNumber(summary.total_billet_plan)} KG
+                  {formatNumber(summary.total_billet_actual)} / {formatNumber(targetBasedSummary.total_billet_plan)} KG
                 </div>
               </div>
               <div className="print-kpi-card p-3 rounded-lg text-center border bg-green-50 border-green-200">
@@ -239,11 +270,11 @@ export default function PrintReportPage() {
                 <tr>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">전일계획</th>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">실적</th>
-                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">달성율</th>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">목표달성율</th>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">미달량</th>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">전일계획</th>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">실적</th>
-                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">달성율</th>
+                  <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">목표달성율</th>
                   <th className="bg-blue-700 text-white px-2 py-1 text-center border border-gray-400">미달량</th>
                 </tr>
               </thead>
@@ -312,10 +343,10 @@ export default function PrintReportPage() {
                   <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_product_plan)}</td>
                   <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_product_actual)}</td>
                   <td className={`px-2 py-1.5 text-center border border-gray-400 ${
-                    summary.product_achievement_rate >= 100 ? 'text-green-700' :
-                      summary.product_achievement_rate >= 90 ? 'text-yellow-700' : 'text-red-700'
+                    targetBasedSummary.product_achievement_rate >= 100 ? 'text-green-700' :
+                      targetBasedSummary.product_achievement_rate >= 90 ? 'text-yellow-700' : 'text-red-700'
                   }`}>
-                    {summary.product_achievement_rate.toFixed(1)}%
+                    {targetBasedSummary.product_achievement_rate.toFixed(1)}%
                   </td>
                   <td className="px-2 py-1.5 text-right text-red-700 border border-gray-400">
                     {summary.total_product_plan - summary.total_product_actual > 0
@@ -324,10 +355,10 @@ export default function PrintReportPage() {
                   <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_billet_plan)}</td>
                   <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_billet_actual)}</td>
                   <td className={`px-2 py-1.5 text-center border border-gray-400 ${
-                    summary.billet_achievement_rate >= 100 ? 'text-green-700' :
-                      summary.billet_achievement_rate >= 90 ? 'text-yellow-700' : 'text-red-700'
+                    targetBasedSummary.billet_achievement_rate >= 100 ? 'text-green-700' :
+                      targetBasedSummary.billet_achievement_rate >= 90 ? 'text-yellow-700' : 'text-red-700'
                   }`}>
-                    {summary.billet_achievement_rate.toFixed(1)}%
+                    {targetBasedSummary.billet_achievement_rate.toFixed(1)}%
                   </td>
                   <td className="px-2 py-1.5 text-right text-red-700 border border-gray-400">
                     {summary.total_billet_plan - summary.total_billet_actual > 0
@@ -479,9 +510,9 @@ export default function PrintReportPage() {
             </div>
             <div className="print-opinion border border-gray-300 rounded-lg p-4 text-sm text-gray-700 leading-relaxed min-h-[80px] bg-white">
               {overallSummary}
-              {summary.total_shortfall > 0 && (
+              {targetBasedSummary.total_shortfall > 0 && (
                 <div className="mt-2 text-red-700">
-                  ※ 총 미달량 {formatNumber(summary.total_shortfall)} KG — 금일 계획에 만회분 반영 검토 요망
+                  ※ 일일 목표 기준 총 미달량 {formatNumber(targetBasedSummary.total_shortfall)} KG — 금일 계획에 만회분 반영 검토 요망
                 </div>
               )}
             </div>
