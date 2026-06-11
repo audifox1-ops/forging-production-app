@@ -12,6 +12,7 @@ import {
   getTemplateMergedCells,
   getVisibleSheetColumns,
   getVisibleTemplateRows,
+  TEMPLATE_QUALITY_COLUMNS,
   TemplateEquipmentKey,
   TemplateSummaryRow,
 } from '../utils/templateWorkbook';
@@ -144,6 +145,18 @@ function getCellTitle(cell: TemplateWorkbookCell | undefined, address?: string) 
   ].filter(Boolean);
 
   return details.length > 0 ? details.join('\n') : undefined;
+}
+
+function getNumericWorkbookCell(row: TemplateWorkbookRow, column: string) {
+  const value = getCellMap(row)[column]?.value;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function parseQualityInputValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
 }
 
 function parseWorkbookInputValue(value: string, cell: TemplateWorkbookCell | undefined, column: string) {
@@ -590,6 +603,102 @@ function RawTable({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function QualityInputPanel({
+  sheet,
+  rows,
+  editable,
+  onChange,
+}: {
+  sheet: TemplateWorkbookSheet;
+  rows: TemplateWorkbookRow[];
+  editable: boolean;
+  onChange: (rowNumber: number, column: string, value: string | number | null) => void;
+}) {
+  if (sheet.kind !== 'monthly') return null;
+
+  const inputRows = rows.filter(row => {
+    const label = formatMonthlyOutputDate(row);
+    return row.row_number >= 8 && row.row_number <= 38 && label !== '합계';
+  });
+  const reworkTotal = inputRows.reduce(
+    (sum, row) => sum + (getNumericWorkbookCell(row, TEMPLATE_QUALITY_COLUMNS.rework) ?? 0),
+    0
+  );
+  const correctionTotal = inputRows.reduce(
+    (sum, row) => sum + (getNumericWorkbookCell(row, TEMPLATE_QUALITY_COLUMNS.correction) ?? 0),
+    0
+  );
+
+  if (inputRows.length === 0) return null;
+
+  return (
+    <div className="card no-print">
+      <div className="card-header flex-wrap gap-3">
+        <div>
+          <h3 className="font-semibold text-gray-800">재제작/수정 입력</h3>
+          <p className="text-xs text-gray-500 mt-0.5">{sheet.sheet_name} · 품질 재제작 수량</p>
+        </div>
+        <div className="flex gap-2 text-xs">
+          <span className="badge badge-blue">재제작 {formatNumber(reworkTotal)}</span>
+          <span className="badge badge-gray">수정 {formatNumber(correctionTotal)}</span>
+        </div>
+      </div>
+      <div className="table-wrapper">
+        <table className="production-table">
+          <thead>
+            <tr>
+              <th>일자</th>
+              <th>재제작</th>
+              <th>수정</th>
+            </tr>
+          </thead>
+          <tbody>
+            {inputRows.map(row => {
+              const reworkValue = getNumericWorkbookCell(row, TEMPLATE_QUALITY_COLUMNS.rework);
+              const correctionValue = getNumericWorkbookCell(row, TEMPLATE_QUALITY_COLUMNS.correction);
+
+              return (
+                <tr key={row.row_number}>
+                  <td className="text-center-cell font-medium">{formatMonthlyOutputDate(row)}</td>
+                  <td className="input-cell">
+                    <input
+                      type="number"
+                      min={0}
+                      value={reworkValue ?? ''}
+                      onChange={event =>
+                        onChange(row.row_number, TEMPLATE_QUALITY_COLUMNS.rework, parseQualityInputValue(event.target.value))
+                      }
+                      disabled={!editable}
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-right text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-100"
+                    />
+                  </td>
+                  <td className="input-cell">
+                    <input
+                      type="number"
+                      min={0}
+                      value={correctionValue ?? ''}
+                      onChange={event =>
+                        onChange(row.row_number, TEMPLATE_QUALITY_COLUMNS.correction, parseQualityInputValue(event.target.value))
+                      }
+                      disabled={!editable}
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-right text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-100"
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="bg-slate-50 font-semibold">
+              <td className="text-center-cell">합계</td>
+              <td>{formatNumber(reworkTotal)}</td>
+              <td>{formatNumber(correctionTotal)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -1050,6 +1159,15 @@ export default function TemplateWorkbookPage() {
             accentClass="text-fuchsia-700"
           />
         </div>
+      )}
+
+      {selectedSheet?.kind === 'monthly' && (
+        <QualityInputPanel
+          sheet={selectedSheet}
+          rows={printRows}
+          editable={canManageWorkbook}
+          onChange={handleWorkbookCellChange}
+        />
       )}
 
       {!selectedSheet ? (

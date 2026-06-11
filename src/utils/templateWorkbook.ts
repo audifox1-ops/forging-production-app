@@ -10,6 +10,11 @@ import type {
 
 export type TemplateEquipmentKey = 'P15' | 'P5' | 'R/M' | 'TOTAL';
 
+export const TEMPLATE_QUALITY_COLUMNS = {
+  rework: 'AX',
+  correction: 'AY',
+} as const;
+
 export interface TemplateEquipmentSummary {
   productActual: number | null;
   productPlan: number | null;
@@ -581,13 +586,16 @@ function recalculateMonthlyTotal(sheet: TemplateWorkbookSheet) {
   ).filter((row): row is TemplateWorkbookRow => Boolean(row));
 
   const totalColumns = Array.from(new Set(
-    Object.values(TEMPLATE_SUMMARY_COLUMNS).flatMap(columns => [
-      columns.productActual,
-      columns.productPlan,
-      columns.billetActual,
-      columns.coggingActual,
-      columns.grossTotal,
-    ].filter((column): column is string => Boolean(column)))
+    [
+      ...Object.values(TEMPLATE_SUMMARY_COLUMNS).flatMap(columns => [
+        columns.productActual,
+        columns.productPlan,
+        columns.billetActual,
+        columns.coggingActual,
+        columns.grossTotal,
+      ].filter((column): column is string => Boolean(column))),
+      ...Object.values(TEMPLATE_QUALITY_COLUMNS),
+    ]
   ));
 
   const firstDailyRowNumber = 8;
