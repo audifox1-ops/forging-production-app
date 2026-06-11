@@ -505,13 +505,6 @@ function EntryInputCard({
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
 
-  // 전일 계획 대비 참고 비율
-  const productRate = formData.product_plan > 0
-    ? (formData.product_actual / formData.product_plan * 100)
-    : null;
-  const billetRate = formData.billet_plan > 0
-    ? (formData.billet_actual / formData.billet_plan * 100)
-    : null;
   const productShortfall = Math.max(0, (formData.product_plan || 0) - (formData.product_actual || 0));
   const billetShortfall = Math.max(0, (formData.billet_plan || 0) - (formData.billet_actual || 0));
   const equipmentTargetShortfall = calcEquipmentTargetShortfall(
@@ -575,13 +568,6 @@ function EntryInputCard({
     onSubmit(entry.id);
   };
 
-  const rateColor = (rate: number | null) => {
-    if (rate === null) return 'text-gray-400';
-    if (rate >= 100) return 'text-green-600';
-    if (rate >= 90) return 'text-yellow-600';
-    return 'text-red-600 font-bold';
-  };
-
   return (
     <div className={`card ${hasEquipmentShortfall && !isSubmitted ? 'border-orange-200' : ''}`}>
       {/* 카드 헤더 */}
@@ -638,7 +624,7 @@ function EntryInputCard({
             <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
               <div className="text-sm font-bold text-blue-900">전일 실적 입력</div>
               <div className="text-xs text-blue-700 mt-0.5">
-                전일 계획과 전일 실적을 입력하고 계획 대비 비율·미달량을 확인합니다.
+                전일 계획과 전일 실적을 입력하고 미달량을 확인합니다.
               </div>
             </div>
             <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
@@ -662,7 +648,7 @@ function EntryInputCard({
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr>
-                  <th colSpan={6} className="px-3 py-2 bg-blue-800 text-white text-left rounded-tl-lg">
+                  <th colSpan={5} className="px-3 py-2 bg-blue-800 text-white text-left rounded-tl-lg">
                     전일 실적 입력
                   </th>
                   <th className="px-3 py-2 bg-green-800 text-white text-left rounded-tr-lg border-l-4 border-green-300">
@@ -674,7 +660,6 @@ function EntryInputCard({
                   <th className="px-3 py-2 bg-gray-700 text-white text-right">기준 목표 (KG)</th>
                   <th className="px-3 py-2 bg-gray-700 text-white text-right">전일 계획 (KG)</th>
                   <th className="px-3 py-2 bg-blue-600 text-white text-right">전일 실적 (KG)</th>
-                  <th className="px-3 py-2 bg-gray-700 text-white text-center">계획 대비</th>
                   <th className="px-3 py-2 bg-gray-700 text-white text-right">미달량 (KG)</th>
                   <th className="px-3 py-2 bg-green-700 text-white text-right border-l-4 border-green-300">금일 계획 (KG)</th>
                 </tr>
@@ -704,9 +689,6 @@ function EntryInputCard({
                       min={0}
                       className="w-full px-2 py-1.5 border border-blue-300 rounded text-right text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-100"
                     />
-                  </td>
-                  <td className={`px-3 py-3 text-center font-bold text-base ${rateColor(productRate)}`}>
-                    {productRate !== null ? `${productRate.toFixed(1)}%` : '-'}
                   </td>
                   <td className={`px-3 py-3 text-right font-medium ${productShortfall > 0 ? 'text-red-600' : 'text-gray-300'}`}>
                     {productShortfall > 0 ? `▼ ${formatNumber(productShortfall)}` : '-'}
@@ -746,9 +728,6 @@ function EntryInputCard({
                       min={0}
                       className="w-full px-2 py-1.5 border border-blue-300 rounded text-right text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-100"
                     />
-                  </td>
-                  <td className={`px-3 py-3 text-center font-bold text-base ${rateColor(billetRate)}`}>
-                    {billetRate !== null ? `${billetRate.toFixed(1)}%` : '-'}
                   </td>
                   <td className={`px-3 py-3 text-right font-medium ${billetShortfall > 0 ? 'text-red-600' : 'text-gray-300'}`}>
                     {billetShortfall > 0 ? `▼ ${formatNumber(billetShortfall)}` : '-'}
