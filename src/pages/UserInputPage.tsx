@@ -17,6 +17,11 @@ type ReasonFormData = {
   reason_detail: string;
 };
 
+type EntryQuantityDraft = Pick<
+  ProductionEntry,
+  'product_plan' | 'product_actual' | 'billet_plan' | 'billet_actual' | 'next_product_plan' | 'next_billet_plan'
+>;
+
 function calcEquipmentTargetShortfall(
   entries: Array<Pick<ProductionEntry, 'product_actual' | 'billet_actual'>>,
   targets: EquipmentTarget[],
@@ -39,6 +44,22 @@ function calcEquipmentTargetShortfall(
     billetShortfall,
     hasShortfall: productShortfall > 0 || billetShortfall > 0,
   };
+}
+
+function calcTargetAchievementRate(actual: number, target: number): number | null {
+  if (!target) return null;
+  return Math.round((actual / target) * 1000) / 10;
+}
+
+function formatAchievementRate(rate: number | null) {
+  return rate === null ? '-' : `${rate.toFixed(1)}%`;
+}
+
+function getAchievementRateClass(rate: number | null) {
+  if (rate === null) return 'text-gray-400';
+  if (rate >= 100) return 'text-green-700';
+  if (rate >= 90) return 'text-yellow-700';
+  return 'text-red-700';
 }
 
 function getReasonFromEntry(entry?: Partial<ReasonFormData>): ReasonFormData {
@@ -65,6 +86,84 @@ function getReasonPayload(reason: ReasonFormData) {
   } as any;
 }
 
+function DailyTargetAchievementPanel({
+  equipment,
+  targetShortfall,
+}: {
+  equipment: Equipment;
+  targetShortfall: ReturnType<typeof calcEquipmentTargetShortfall>;
+}) {
+  const productRate = calcTargetAchievementRate(targetShortfall.productActual, targetShortfall.productTarget);
+  const billetRate = calcTargetAchievementRate(targetShortfall.billetActual, targetShortfall.billetTarget);
+  const items = [
+    {
+      label: '제품',
+      target: targetShortfall.productTarget,
+      actual: targetShortfall.productActual,
+      shortfall: targetShortfall.productShortfall,
+      rate: productRate,
+      tone: 'blue',
+    },
+    {
+      label: '황지',
+      target: targetShortfall.billetTarget,
+      actual: targetShortfall.billetActual,
+      shortfall: targetShortfall.billetShortfall,
+      rate: billetRate,
+      tone: 'amber',
+    },
+  ];
+
+  return (
+    <div className="card border-blue-200">
+      <div className="card-header bg-blue-50">
+        <div>
+          <h3 className="font-semibold text-blue-900">{equipment} 일일 기준 목표 달성율</h3>
+          <p className="text-xs text-blue-700 mt-0.5">주간·야간 구분 없이 실적 합계를 설비 일일 목표와 비교합니다.</p>
+        </div>
+        <span className={`badge ${targetShortfall.hasShortfall ? 'badge-warning' : 'badge-normal'}`}>
+          {targetShortfall.hasShortfall ? '미달' : '달성'}
+        </span>
+      </div>
+      <div className="card-body">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {items.map(item => (
+            <div
+              key={item.label}
+              className={`rounded-lg border p-4 ${
+                item.tone === 'blue' ? 'border-blue-200 bg-blue-50' : 'border-amber-200 bg-amber-50'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className={`text-sm font-bold ${item.tone === 'blue' ? 'text-blue-800' : 'text-amber-800'}`}>
+                    {item.label}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    목표 {formatNumber(item.target)} KG / 실적 {formatNumber(item.actual)} KG
+                  </div>
+                </div>
+                <div className={`text-2xl font-bold tabular-nums ${getAchievementRateClass(item.rate)}`}>
+                  {formatAchievementRate(item.rate)}
+                </div>
+              </div>
+              <div className={`mt-3 text-xs font-medium ${
+                item.shortfall > 0 ? 'text-red-700' : 'text-green-700'
+              }`}>
+                {item.target > 0
+                  ? item.shortfall > 0
+                    ? `부족 ${formatNumber(item.shortfall)} KG`
+                    : '일일 기준 목표 달성'
+                  : '일일 기준 목표 없음'}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function UserInputPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
   const navigate = useNavigate();
@@ -75,6 +174,7 @@ export default function UserInputPage() {
   const canEdit = isAdmin || Boolean(currentUser?.can_edit);
   const canCreateReport = canWrite || canEdit;
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment>('P15');
+  const [entryDrafts, setEntryDrafts] = useState<Record<string, EntryQuantityDraft>>({});
 
   const actualDate = reportDate || getActualDateFromPlanDate(getTodayPlanDate());
   const planDate = getPlanDateFromActualDate(actualDate);
@@ -103,8 +203,12 @@ export default function UserInputPage() {
   const selectedEntries = entries
     .filter(entry => entry.equipment === selectedEquipment)
     .sort((a, b) => SHIFT_LIST.indexOf(a.shift) - SHIFT_LIST.indexOf(b.shift));
+  const selectedEntriesWithDrafts = selectedEntries.map(entry => ({
+    ...entry,
+    ...entryDrafts[entry.id],
+  }));
   const selectedReasonSource = selectedEntries.find(hasReasonContent) ?? selectedEntries[0];
-  const selectedTargetShortfall = calcEquipmentTargetShortfall(selectedEntries, targets, selectedEquipment);
+  const selectedTargetShortfall = calcEquipmentTargetShortfall(selectedEntriesWithDrafts, targets, selectedEquipment);
   const selectedHasShortfall = selectedTargetShortfall.hasShortfall;
   const [sharedReasons, setSharedReasons] = useState<Partial<Record<Equipment, ReasonFormData>>>({});
   const [sharedReasonErrors, setSharedReasonErrors] = useState<string[]>([]);
@@ -136,6 +240,10 @@ export default function UserInputPage() {
     selectedReasonSource?.reason_category,
     selectedReasonSource?.reason_detail,
   ]);
+
+  useEffect(() => {
+    setEntryDrafts({});
+  }, [report?.id]);
 
   const handlePlanDateChange = (value: string) => {
     if (!value) return;
@@ -312,6 +420,10 @@ export default function UserInputPage() {
           </div>
         ) : (
           <div className="space-y-4">
+            <DailyTargetAchievementPanel
+              equipment={selectedEquipment}
+              targetShortfall={selectedTargetShortfall}
+            />
             {selectedEntries.map(entry => (
               <EntryInputCard
                 key={entry.id}
@@ -323,6 +435,9 @@ export default function UserInputPage() {
                 sharedReason={sharedReason}
                 equipmentEntries={selectedEntries}
                 equipment={selectedEquipment}
+                onDraftChange={(entryId, draft) =>
+                  setEntryDrafts(prev => ({ ...prev, [entryId]: draft }))
+                }
                 validateSharedReason={validateSharedReason}
                 onSave={saveEntry}
                 onSaveSharedReason={saveSharedReasonForEntries}
@@ -357,6 +472,7 @@ function EntryInputCard({
   sharedReason,
   equipmentEntries,
   equipment,
+  onDraftChange,
   validateSharedReason,
   onSave,
   onSaveSharedReason,
@@ -370,6 +486,7 @@ function EntryInputCard({
   sharedReason: ReasonFormData;
   equipmentEntries: ProductionEntry[];
   equipment: Equipment;
+  onDraftChange: (entryId: string, draft: EntryQuantityDraft) => void;
   validateSharedReason: (requiresReason?: boolean) => boolean;
   onSave: (data: any) => void;
   onSaveSharedReason: (skipEntryId?: string) => void;
@@ -388,7 +505,7 @@ function EntryInputCard({
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
 
-  // 달성율 계산
+  // 전일 계획 대비 참고 비율
   const productRate = formData.product_plan > 0
     ? (formData.product_actual / formData.product_plan * 100)
     : null;
@@ -412,7 +529,9 @@ function EntryInputCard({
   const equipmentBilletTarget = equipmentTargets.reduce((sum, target) => sum + (target.billet_target || 0), 0);
 
   const handleChange = (field: string, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    const nextFormData = { ...formData, [field]: value };
+    setFormData(nextFormData);
+    onDraftChange(entry.id, nextFormData);
     setErrors([]);
     setSaved(false);
   };
@@ -519,7 +638,7 @@ function EntryInputCard({
             <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
               <div className="text-sm font-bold text-blue-900">전일 실적 입력</div>
               <div className="text-xs text-blue-700 mt-0.5">
-                전일 계획과 전일 실적을 입력하고 달성율·미달량을 확인합니다.
+                전일 계획과 전일 실적을 입력하고 계획 대비 비율·미달량을 확인합니다.
               </div>
             </div>
             <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
@@ -555,7 +674,7 @@ function EntryInputCard({
                   <th className="px-3 py-2 bg-gray-700 text-white text-right">기준 목표 (KG)</th>
                   <th className="px-3 py-2 bg-gray-700 text-white text-right">전일 계획 (KG)</th>
                   <th className="px-3 py-2 bg-blue-600 text-white text-right">전일 실적 (KG)</th>
-                  <th className="px-3 py-2 bg-gray-700 text-white text-center">달성율</th>
+                  <th className="px-3 py-2 bg-gray-700 text-white text-center">계획 대비</th>
                   <th className="px-3 py-2 bg-gray-700 text-white text-right">미달량 (KG)</th>
                   <th className="px-3 py-2 bg-green-700 text-white text-right border-l-4 border-green-300">금일 계획 (KG)</th>
                 </tr>
