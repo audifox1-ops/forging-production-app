@@ -11,6 +11,7 @@ import type {
 export type TemplateEquipmentKey = 'P15' | 'P5' | 'R/M' | 'TOTAL';
 
 export const TEMPLATE_QUALITY_COLUMNS = {
+  cogging: 'AT',
   rework: 'AX',
   correction: 'AY',
 } as const;
@@ -532,7 +533,13 @@ function recalculateTemplateRow(row: TemplateWorkbookRow) {
   const totalProductActual = getNumericCell(row, 'B') + getNumericCell(row, 'P') + getNumericCell(row, 'AD');
   const totalProductPlan = getNumericCell(row, 'C') + getNumericCell(row, 'Q') + getNumericCell(row, 'AE');
   const totalBilletActual = getNumericCell(row, 'E') + getNumericCell(row, 'S');
-  const totalCoggingActual = getNumericCell(row, 'F') + getNumericCell(row, 'T');
+  const totalCoggingColumn = TEMPLATE_SUMMARY_COLUMNS.TOTAL.coggingActual!;
+  const equipmentCoggingFormula = buildRowSumFormula(row, ['F', 'T']);
+  const totalCoggingCell = row.cells.find(cell => cell.column === totalCoggingColumn);
+  const shouldDeriveTotalCogging = !totalCoggingCell || totalCoggingCell.formula === equipmentCoggingFormula;
+  const totalCoggingActual = shouldDeriveTotalCogging
+    ? getNumericCell(row, 'F') + getNumericCell(row, 'T')
+    : getNumericCell(row, totalCoggingColumn);
 
   setRowCell(
     row,
@@ -560,9 +567,9 @@ function recalculateTemplateRow(row: TemplateWorkbookRow) {
   );
   setRowCell(
     row,
-    TEMPLATE_SUMMARY_COLUMNS.TOTAL.coggingActual!,
+    totalCoggingColumn,
     totalCoggingActual,
-    buildRowSumFormula(row, ['F', 'T'])
+    shouldDeriveTotalCogging ? equipmentCoggingFormula : totalCoggingCell.formula
   );
   setRowCell(
     row,
