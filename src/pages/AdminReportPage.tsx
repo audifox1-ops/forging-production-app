@@ -55,6 +55,10 @@ export default function AdminReportPage() {
     productShortfall: Math.max(0, dailyTargetSummary.product - summary.total_product_actual),
     billetShortfall: Math.max(0, dailyTargetSummary.billet - summary.total_billet_actual),
   };
+  const nextPlanTargetSummary = {
+    productRate: calcNullableRate(summary.total_next_product_plan, dailyTargetSummary.product) ?? 0,
+    billetRate: calcNullableRate(summary.total_next_billet_plan, dailyTargetSummary.billet) ?? 0,
+  };
   const targetBasedSummary = {
     ...summary,
     total_product_plan: dailyTargetSummary.product,
@@ -73,13 +77,19 @@ export default function AdminReportPage() {
       .sort((a, b) => SHIFT_LIST.indexOf(a.shift) - SHIFT_LIST.indexOf(b.shift))
       .map(entry => {
         const shiftTarget = equipmentTargets.find(target => target.shift === entry.shift);
-        const productShortfall = Math.max(0, (entry.product_plan || 0) - (entry.product_actual || 0));
-        const billetShortfall = Math.max(0, (entry.billet_plan || 0) - (entry.billet_actual || 0));
+        const productTarget = shiftTarget?.product_target || 0;
+        const billetTarget = shiftTarget?.billet_target || 0;
+        const productShortfall = Math.max(0, productTarget - (entry.product_actual || 0));
+        const billetShortfall = Math.max(0, billetTarget - (entry.billet_actual || 0));
 
         return {
           entry,
-          productRate: calcNullableRate(entry.product_actual, shiftTarget?.product_target || 0),
-          billetRate: calcNullableRate(entry.billet_actual, shiftTarget?.billet_target || 0),
+          productTarget,
+          billetTarget,
+          productRate: calcNullableRate(entry.product_actual, productTarget),
+          billetRate: calcNullableRate(entry.billet_actual, billetTarget),
+          nextProductRate: calcNullableRate(entry.next_product_plan || 0, productTarget),
+          nextBilletRate: calcNullableRate(entry.next_billet_plan || 0, billetTarget),
           productShortfall,
           billetShortfall,
         };
@@ -98,15 +108,19 @@ export default function AdminReportPage() {
       rows,
       total: {
         productPlan,
+        productTarget,
         productActual,
         productRate: calcNullableRate(productActual, productTarget),
-        productShortfall: Math.max(0, productPlan - productActual),
+        productShortfall: Math.max(0, productTarget - productActual),
         billetPlan,
+        billetTarget,
         billetActual,
         billetRate: calcNullableRate(billetActual, billetTarget),
-        billetShortfall: Math.max(0, billetPlan - billetActual),
+        billetShortfall: Math.max(0, billetTarget - billetActual),
         nextProductPlan,
+        nextProductRate: calcNullableRate(nextProductPlan, productTarget),
         nextBilletPlan,
+        nextBilletRate: calcNullableRate(nextBilletPlan, billetTarget),
       },
     };
   }).filter(group => group.rows.length > 0);
@@ -214,7 +228,7 @@ export default function AdminReportPage() {
                 </div>
                 <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
                   <div>
-                    <div className="text-xs text-gray-500">일일 목표</div>
+                    <div className="text-xs text-gray-500">일일목표량</div>
                     <div className="font-semibold text-gray-800">{formatNumber(item.plan)} KG</div>
                   </div>
                   <div>
@@ -237,7 +251,7 @@ export default function AdminReportPage() {
       {/* 설비별 실적 */}
       <div className="card">
         <div className="card-header">
-          <h3 className="font-semibold text-gray-800">전일 계획 대비 실적</h3>
+          <h3 className="font-semibold text-gray-800">전일 생산실적 보고</h3>
         </div>
         <div className="table-wrapper">
           <table className="production-table">
@@ -246,13 +260,15 @@ export default function AdminReportPage() {
                 <th>설비</th>
                 <th>근무조</th>
                 <th>전일 제품 계획</th>
+                <th>제품 일일목표량</th>
                 <th>제품 실적</th>
                 <th>제품 목표달성율</th>
-                <th>제품 미달량</th>
+                <th>제품 목표미달량</th>
                 <th>전일 황지 계획</th>
+                <th>황지 일일목표량</th>
                 <th>황지 실적</th>
                 <th>황지 목표달성율</th>
-                <th>황지 미달량</th>
+                <th>황지 목표미달량</th>
                 <th>주요 사유</th>
               </tr>
             </thead>
@@ -268,6 +284,7 @@ export default function AdminReportPage() {
                       <td className="text-center-cell font-bold">{row.entry.equipment}</td>
                       <td className="text-center-cell">{row.entry.shift}</td>
                       <td>{formatNumber(row.entry.product_plan)}</td>
+                      <td>{formatNumber(row.productTarget)}</td>
                       <td className="font-medium">{formatNumber(row.entry.product_actual)}</td>
                       <td className={`text-center-cell font-semibold ${getRateClass(row.productRate)}`}>
                         {row.productRate !== null ? `${row.productRate.toFixed(1)}%` : '-'}
@@ -276,6 +293,7 @@ export default function AdminReportPage() {
                         {row.productShortfall > 0 ? formatNumber(row.productShortfall) : '-'}
                       </td>
                       <td>{formatNumber(row.entry.billet_plan)}</td>
+                      <td>{formatNumber(row.billetTarget)}</td>
                       <td className="font-medium">{formatNumber(row.entry.billet_actual)}</td>
                       <td className={`text-center-cell font-semibold ${getRateClass(row.billetRate)}`}>
                         {row.billetRate !== null ? `${row.billetRate.toFixed(1)}%` : '-'}
@@ -293,6 +311,7 @@ export default function AdminReportPage() {
                   <tr className="bg-slate-50 font-semibold border-t border-slate-200">
                     <td colSpan={2} className="text-center-cell">{group.equipment} 합계</td>
                     <td>{formatNumber(group.total.productPlan)}</td>
+                    <td>{formatNumber(group.total.productTarget)}</td>
                     <td>{formatNumber(group.total.productActual)}</td>
                     <td className={`text-center-cell ${getRateClass(group.total.productRate)}`}>
                       {group.total.productRate !== null ? `${group.total.productRate.toFixed(1)}%` : '-'}
@@ -301,6 +320,7 @@ export default function AdminReportPage() {
                       {group.total.productShortfall > 0 ? formatNumber(group.total.productShortfall) : '-'}
                     </td>
                     <td>{formatNumber(group.total.billetPlan)}</td>
+                    <td>{formatNumber(group.total.billetTarget)}</td>
                     <td>{formatNumber(group.total.billetActual)}</td>
                     <td className={`text-center-cell ${getRateClass(group.total.billetRate)}`}>
                       {group.total.billetRate !== null ? `${group.total.billetRate.toFixed(1)}%` : '-'}
@@ -316,6 +336,7 @@ export default function AdminReportPage() {
               <tr className="bg-blue-50 font-bold border-t-2 border-blue-200">
                 <td colSpan={2} className="text-center-cell">합 계</td>
                 <td>{formatNumber(summary.total_product_plan)}</td>
+                <td>{formatNumber(targetBasedSummary.total_product_plan)}</td>
                 <td>{formatNumber(summary.total_product_actual)}</td>
                 <td className={`text-center-cell ${
                   targetBasedSummary.product_achievement_rate >= 100 ? 'text-green-600' :
@@ -324,10 +345,10 @@ export default function AdminReportPage() {
                   {targetBasedSummary.product_achievement_rate.toFixed(1)}%
                 </td>
                 <td className="text-red-600">
-                  {summary.total_product_plan - summary.total_product_actual > 0
-                    ? formatNumber(summary.total_product_plan - summary.total_product_actual) : '-'}
+                  {targetSummary.productShortfall > 0 ? formatNumber(targetSummary.productShortfall) : '-'}
                 </td>
                 <td>{formatNumber(summary.total_billet_plan)}</td>
+                <td>{formatNumber(targetBasedSummary.total_billet_plan)}</td>
                 <td>{formatNumber(summary.total_billet_actual)}</td>
                 <td className={`text-center-cell ${
                   targetBasedSummary.billet_achievement_rate >= 100 ? 'text-green-600' :
@@ -336,8 +357,7 @@ export default function AdminReportPage() {
                   {targetBasedSummary.billet_achievement_rate.toFixed(1)}%
                 </td>
                 <td className="text-red-600">
-                  {summary.total_billet_plan - summary.total_billet_actual > 0
-                    ? formatNumber(summary.total_billet_plan - summary.total_billet_actual) : '-'}
+                  {targetSummary.billetShortfall > 0 ? formatNumber(targetSummary.billetShortfall) : '-'}
                 </td>
                 <td></td>
               </tr>
@@ -359,12 +379,16 @@ export default function AdminReportPage() {
                 <th>근무조</th>
                 <th>전일 제품 계획</th>
                 <th>제품 실적</th>
-                <th>제품 미달량</th>
+                <th>제품 목표미달량</th>
+                <th>제품 일일목표량</th>
                 <th>금일 제품 계획</th>
+                <th>제품 목표달성율</th>
                 <th>전일 황지 계획</th>
                 <th>황지 실적</th>
-                <th>황지 미달량</th>
+                <th>황지 목표미달량</th>
+                <th>황지 일일목표량</th>
                 <th>금일 황지 계획</th>
+                <th>황지 목표달성율</th>
                 <th>만회계획</th>
               </tr>
             </thead>
@@ -388,13 +412,21 @@ export default function AdminReportPage() {
                           <td className={row.productShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
                             {row.productShortfall > 0 ? formatNumber(row.productShortfall) : '-'}
                           </td>
+                          <td>{formatNumber(row.productTarget)}</td>
                           <td className="font-medium">{formatNumber(nextProductPlan)}</td>
+                          <td className={`text-center-cell font-semibold ${getRateClass(row.nextProductRate)}`}>
+                            {row.nextProductRate !== null ? `${row.nextProductRate.toFixed(1)}%` : '-'}
+                          </td>
                           <td>{formatNumber(entry.billet_plan)}</td>
                           <td className="font-medium">{formatNumber(entry.billet_actual)}</td>
                           <td className={row.billetShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
                             {row.billetShortfall > 0 ? formatNumber(row.billetShortfall) : '-'}
                           </td>
+                          <td>{formatNumber(row.billetTarget)}</td>
                           <td className="font-medium">{formatNumber(nextBilletPlan)}</td>
+                          <td className={`text-center-cell font-semibold ${getRateClass(row.nextBilletRate)}`}>
+                            {row.nextBilletRate !== null ? `${row.nextBilletRate.toFixed(1)}%` : '-'}
+                          </td>
                           {rowIndex === 0 && (
                             <td rowSpan={group.rows.length + 1} className="text-left text-xs align-middle">
                               <ReasonTextList values={recoveryPlans} fallback="-" />
@@ -410,13 +442,21 @@ export default function AdminReportPage() {
                       <td className={group.total.productShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
                         {group.total.productShortfall > 0 ? formatNumber(group.total.productShortfall) : '-'}
                       </td>
+                      <td>{formatNumber(group.total.productTarget)}</td>
                       <td>{formatNumber(group.total.nextProductPlan)}</td>
+                      <td className={`text-center-cell ${getRateClass(group.total.nextProductRate)}`}>
+                        {group.total.nextProductRate !== null ? `${group.total.nextProductRate.toFixed(1)}%` : '-'}
+                      </td>
                       <td>{formatNumber(group.total.billetPlan)}</td>
                       <td>{formatNumber(group.total.billetActual)}</td>
                       <td className={group.total.billetShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
                         {group.total.billetShortfall > 0 ? formatNumber(group.total.billetShortfall) : '-'}
                       </td>
+                      <td>{formatNumber(group.total.billetTarget)}</td>
                       <td>{formatNumber(group.total.nextBilletPlan)}</td>
+                      <td className={`text-center-cell ${getRateClass(group.total.nextBilletRate)}`}>
+                        {group.total.nextBilletRate !== null ? `${group.total.nextBilletRate.toFixed(1)}%` : '-'}
+                      </td>
                     </tr>
                   </React.Fragment>
                 );
@@ -426,17 +466,29 @@ export default function AdminReportPage() {
                 <td>{formatNumber(summary.total_product_plan)}</td>
                 <td>{formatNumber(summary.total_product_actual)}</td>
                 <td className="text-red-600">
-                  {summary.total_product_plan - summary.total_product_actual > 0
-                    ? formatNumber(summary.total_product_plan - summary.total_product_actual) : '-'}
+                  {targetSummary.productShortfall > 0 ? formatNumber(targetSummary.productShortfall) : '-'}
                 </td>
+                <td>{formatNumber(targetBasedSummary.total_product_plan)}</td>
                 <td>{formatNumber(summary.total_next_product_plan)}</td>
+                <td className={`text-center-cell ${
+                  nextPlanTargetSummary.productRate >= 100 ? 'text-green-600' :
+                    nextPlanTargetSummary.productRate >= 90 ? 'text-yellow-600' : 'text-red-600'
+                }`}>
+                  {nextPlanTargetSummary.productRate.toFixed(1)}%
+                </td>
                 <td>{formatNumber(summary.total_billet_plan)}</td>
                 <td>{formatNumber(summary.total_billet_actual)}</td>
                 <td className="text-red-600">
-                  {summary.total_billet_plan - summary.total_billet_actual > 0
-                    ? formatNumber(summary.total_billet_plan - summary.total_billet_actual) : '-'}
+                  {targetSummary.billetShortfall > 0 ? formatNumber(targetSummary.billetShortfall) : '-'}
                 </td>
+                <td>{formatNumber(targetBasedSummary.total_billet_plan)}</td>
                 <td>{formatNumber(summary.total_next_billet_plan)}</td>
+                <td className={`text-center-cell ${
+                  nextPlanTargetSummary.billetRate >= 100 ? 'text-green-600' :
+                    nextPlanTargetSummary.billetRate >= 90 ? 'text-yellow-600' : 'text-red-600'
+                }`}>
+                  {nextPlanTargetSummary.billetRate.toFixed(1)}%
+                </td>
                 <td></td>
               </tr>
             </tbody>
