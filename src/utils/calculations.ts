@@ -183,3 +183,29 @@ export function formatKG(num: number | null | undefined): string {
   if (num === null || num === undefined) return '-';
   return `${num.toLocaleString('ko-KR')} KG`;
 }
+
+// 달성율 계산 (계획이 0이면 null 반환)
+export function calcNullableRate(actual: number, plan: number): number | null {
+  return plan > 0 ? (actual / plan) * 100 : null;
+}
+
+// 달성율에 따른 텍스트 색상 클래스
+export function getRateColorClass(rate: number | null): string {
+  if (rate === null) return 'text-gray-400';
+  if (rate >= 100) return 'text-green-700';
+  if (rate >= 90) return 'text-yellow-700';
+  return 'text-red-700';
+}
+
+// 달성율에 따른 테이블용 색상 클래스
+export function getTableRateClass(rate: number | null): string {
+  if (rate === null) return 'text-gray-400';
+  if (rate >= 100) return 'text-green-600';
+  if (rate >= 90) return 'text-yellow-600';
+  return 'text-red-600';
+}
+
+// 간단한 달성율 계산 (plan이 0이면 0 반환)
+export function calcRate(actual: number, plan: number): number {
+  return plan > 0 ? Math.round((actual / plan) * 1000) / 10 : 0;
+}

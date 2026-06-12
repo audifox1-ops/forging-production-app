@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { ArrowLeft, Download, Printer } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { calcDashboardSummary, formatNumber } from '../utils/calculations';
+import { calcDashboardSummary, formatNumber, calcNullableRate, getTableRateClass } from '../utils/calculations';
 import { generateReportText } from '../utils/reportTextGenerator';
 import { getEquipmentReasonGroups } from '../utils/reasonGroups';
 import ReasonContent, { ReasonTextList } from '../components/ReasonContent';
@@ -15,17 +15,6 @@ import {
   getTodayPlanDate,
 } from '../utils/reportDates';
 import { downloadReportExcel } from '../utils/excelTemplate';
-
-function calcNullableRate(actual: number, target: number) {
-  return target > 0 ? (actual / target) * 100 : null;
-}
-
-function getRateClass(rate: number | null) {
-  if (rate === null) return 'text-gray-400';
-  if (rate >= 100) return 'text-green-600';
-  if (rate >= 90) return 'text-yellow-600';
-  return 'text-red-600';
-}
 
 export default function AdminReportPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
@@ -286,7 +275,7 @@ export default function AdminReportPage() {
                       <td>{formatNumber(row.entry.product_plan)}</td>
                       <td>{formatNumber(row.productTarget)}</td>
                       <td className="font-medium">{formatNumber(row.entry.product_actual)}</td>
-                      <td className={`text-center-cell font-semibold ${getRateClass(row.productRate)}`}>
+                      <td className={`text-center-cell font-semibold ${getTableRateClass(row.productRate)}`}>
                         {row.productRate !== null ? `${row.productRate.toFixed(1)}%` : '-'}
                       </td>
                       <td className={row.productShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
@@ -295,7 +284,7 @@ export default function AdminReportPage() {
                       <td>{formatNumber(row.entry.billet_plan)}</td>
                       <td>{formatNumber(row.billetTarget)}</td>
                       <td className="font-medium">{formatNumber(row.entry.billet_actual)}</td>
-                      <td className={`text-center-cell font-semibold ${getRateClass(row.billetRate)}`}>
+                      <td className={`text-center-cell font-semibold ${getTableRateClass(row.billetRate)}`}>
                         {row.billetRate !== null ? `${row.billetRate.toFixed(1)}%` : '-'}
                       </td>
                       <td className={row.billetShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
@@ -313,7 +302,7 @@ export default function AdminReportPage() {
                     <td>{formatNumber(group.total.productPlan)}</td>
                     <td>{formatNumber(group.total.productTarget)}</td>
                     <td>{formatNumber(group.total.productActual)}</td>
-                    <td className={`text-center-cell ${getRateClass(group.total.productRate)}`}>
+                    <td className={`text-center-cell ${getTableRateClass(group.total.productRate)}`}>
                       {group.total.productRate !== null ? `${group.total.productRate.toFixed(1)}%` : '-'}
                     </td>
                     <td className={group.total.productShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
@@ -322,7 +311,7 @@ export default function AdminReportPage() {
                     <td>{formatNumber(group.total.billetPlan)}</td>
                     <td>{formatNumber(group.total.billetTarget)}</td>
                     <td>{formatNumber(group.total.billetActual)}</td>
-                    <td className={`text-center-cell ${getRateClass(group.total.billetRate)}`}>
+                    <td className={`text-center-cell ${getTableRateClass(group.total.billetRate)}`}>
                       {group.total.billetRate !== null ? `${group.total.billetRate.toFixed(1)}%` : '-'}
                     </td>
                     <td className={group.total.billetShortfall > 0 ? 'text-red-600' : 'text-gray-400'}>
@@ -414,7 +403,7 @@ export default function AdminReportPage() {
                           </td>
                           <td>{formatNumber(row.productTarget)}</td>
                           <td className="font-medium">{formatNumber(nextProductPlan)}</td>
-                          <td className={`text-center-cell font-semibold ${getRateClass(row.nextProductRate)}`}>
+                          <td className={`text-center-cell font-semibold ${getTableRateClass(row.nextProductRate)}`}>
                             {row.nextProductRate !== null ? `${row.nextProductRate.toFixed(1)}%` : '-'}
                           </td>
                           <td>{formatNumber(entry.billet_plan)}</td>
@@ -424,7 +413,7 @@ export default function AdminReportPage() {
                           </td>
                           <td>{formatNumber(row.billetTarget)}</td>
                           <td className="font-medium">{formatNumber(nextBilletPlan)}</td>
-                          <td className={`text-center-cell font-semibold ${getRateClass(row.nextBilletRate)}`}>
+                          <td className={`text-center-cell font-semibold ${getTableRateClass(row.nextBilletRate)}`}>
                             {row.nextBilletRate !== null ? `${row.nextBilletRate.toFixed(1)}%` : '-'}
                           </td>
                           {rowIndex === 0 && (
@@ -444,7 +433,7 @@ export default function AdminReportPage() {
                       </td>
                       <td>{formatNumber(group.total.productTarget)}</td>
                       <td>{formatNumber(group.total.nextProductPlan)}</td>
-                      <td className={`text-center-cell ${getRateClass(group.total.nextProductRate)}`}>
+                      <td className={`text-center-cell ${getTableRateClass(group.total.nextProductRate)}`}>
                         {group.total.nextProductRate !== null ? `${group.total.nextProductRate.toFixed(1)}%` : '-'}
                       </td>
                       <td>{formatNumber(group.total.billetPlan)}</td>
@@ -454,7 +443,7 @@ export default function AdminReportPage() {
                       </td>
                       <td>{formatNumber(group.total.billetTarget)}</td>
                       <td>{formatNumber(group.total.nextBilletPlan)}</td>
-                      <td className={`text-center-cell ${getRateClass(group.total.nextBilletRate)}`}>
+                      <td className={`text-center-cell ${getTableRateClass(group.total.nextBilletRate)}`}>
                         {group.total.nextBilletRate !== null ? `${group.total.nextBilletRate.toFixed(1)}%` : '-'}
                       </td>
                     </tr>

@@ -26,7 +26,7 @@ import {
   ChevronLeft, ChevronRight, ClipboardCheck, Download, Printer, PlusCircle, RefreshCw, Users,
 } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { calcDashboardSummary, formatNumber } from '../utils/calculations';
+import { calcDashboardSummary, formatNumber, calcNullableRate, getRateColorClass, getTableRateClass, calcRate } from '../utils/calculations';
 import { getEquipmentReasonGroups } from '../utils/reasonGroups';
 import KPIStatusCard from '../components/KPIStatusCard';
 import ReasonContent from '../components/ReasonContent';
@@ -106,30 +106,9 @@ function shiftPlanDate(dateString: string, period: SummaryPeriod, direction: -1 
   return format(nextDate, 'yyyy-MM-dd');
 }
 
-function getRateColor(rate: number) {
-  if (rate >= 100) return 'text-green-700';
-  if (rate >= 90) return 'text-yellow-700';
-  return 'text-red-700';
-}
-
-function calcRate(actual: number, plan: number) {
-  return plan > 0 ? Math.round((actual / plan) * 1000) / 10 : 0;
-}
-
-function calcNullableRate(actual: number, plan: number) {
-  return plan > 0 ? (actual / plan) * 100 : null;
-}
-
-function getTableRateClass(rate: number | null) {
-  if (rate === null) return 'text-gray-400';
-  if (rate >= 100) return 'text-green-600';
-  if (rate >= 90) return 'text-yellow-600';
-  return 'text-red-600';
-}
-
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { reports, targets, periodTargets, getEntriesByReport, createReport, getCurrentUser } = useReportStore();
+  const { reports, targets, periodTargets, getEntriesByReport, createReport, getCurrentUser, isHydrating, hasHydrated } = useReportStore();
   const currentUser = getCurrentUser();
   const isAdmin = currentUser?.role === 'admin';
   const canWrite = isAdmin || Boolean(currentUser?.can_write);
@@ -905,7 +884,7 @@ export default function DashboardPage() {
                         <div className={`text-sm font-bold ${item.labelClass}`}>{item.label}</div>
                         <div className="text-xs text-gray-500 mt-0.5">계획 대비 실적</div>
                       </div>
-                      <div className={`text-2xl font-bold tabular-nums ${getRateColor(item.rate)}`}>
+                      <div className={`text-2xl font-bold tabular-nums ${getRateColorClass(item.rate)}`}>
                         {item.rate.toFixed(1)}%
                       </div>
                     </div>
@@ -1161,7 +1140,28 @@ export default function DashboardPage() {
                     const reasonGroup = reasonGroupsByEquipment.get(group.equipment);
                     const reasonLabel = reasonGroup?.categories.join(', ');
 
-                    return (
+  if (isHydrating && !hasHydrated) {
+    return (
+      <div className="space-y-6 fade-in">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="h-8 bg-slate-200 rounded w-48 animate-pulse" />
+          <div className="mt-2 h-5 bg-slate-100 rounded w-64 animate-pulse" />
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-20 bg-slate-100 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        </section>
+        <div className="card">
+          <div className="card-body">
+            <div className="h-64 bg-slate-100 rounded-lg animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
                     <React.Fragment key={group.equipment}>
                       {group.rows.map((row, rowIndex) => (
                         <tr
