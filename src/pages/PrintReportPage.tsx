@@ -228,7 +228,7 @@ export default function PrintReportPage() {
                   targetBasedSummary.total_achievement_rate >= 100 ? 'text-green-700' :
                     targetBasedSummary.total_achievement_rate >= 90 ? 'text-yellow-700' : 'text-red-700'
                 }`}>
-                  {targetBasedSummary.total_achievement_rate.toFixed(1)}%
+                  {Math.round(targetBasedSummary.total_achievement_rate)}%
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   {formatNumber(summary.total_actual)} / {formatNumber(targetBasedSummary.total_plan)} KG
@@ -237,7 +237,7 @@ export default function PrintReportPage() {
               <div className="print-kpi-card p-3 rounded-lg text-center border bg-blue-50 border-blue-200">
                 <div className="text-xs text-gray-500">제품 달성율</div>
                 <div className="print-kpi-value text-2xl font-bold mt-1 text-blue-700">
-                  {targetBasedSummary.product_achievement_rate.toFixed(1)}%
+                  {Math.round(targetBasedSummary.product_achievement_rate)}%
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   {formatNumber(summary.total_product_actual)} / {formatNumber(targetBasedSummary.total_product_plan)} KG
@@ -246,7 +246,7 @@ export default function PrintReportPage() {
               <div className="print-kpi-card p-3 rounded-lg text-center border bg-amber-50 border-amber-200">
                 <div className="text-xs text-gray-500">황지 달성율</div>
                 <div className="print-kpi-value text-2xl font-bold mt-1 text-amber-700">
-                  {targetBasedSummary.billet_achievement_rate.toFixed(1)}%
+                  {Math.round(targetBasedSummary.billet_achievement_rate)}%
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   {formatNumber(summary.total_billet_actual)} / {formatNumber(targetBasedSummary.total_billet_plan)} KG
@@ -255,7 +255,7 @@ export default function PrintReportPage() {
               <div className="print-kpi-card p-3 rounded-lg text-center border bg-green-50 border-green-200">
                 <div className="text-xs text-gray-500">금일 계획 목표율</div>
                 <div className="print-kpi-value text-2xl font-bold mt-1 text-green-700">
-                  {nextPlanTargetSummary.totalRate.toFixed(1)}%
+                  {Math.round(nextPlanTargetSummary.totalRate)}%
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   {formatNumber(summary.total_next_plan)} / {formatNumber(targetBasedSummary.total_plan)} KG
@@ -309,7 +309,7 @@ export default function PrintReportPage() {
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(row.productTarget)}</td>
                         <td className="px-2 py-1.5 text-right font-medium border border-gray-300">{formatNumber(row.entry.product_actual)}</td>
                         <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getPrintRateClass(row.productRate)}`}>
-                          {row.productRate !== null ? `${row.productRate.toFixed(1)}%` : '-'}
+                          {row.productRate !== null ? `${Math.round(row.productRate)}%` : '-'}
                         </td>
                         <td className={`px-2 py-1.5 text-right border border-gray-300 ${row.productShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
                           {row.productShortfall > 0 ? formatNumber(row.productShortfall) : '-'}
@@ -317,7 +317,7 @@ export default function PrintReportPage() {
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(row.billetTarget)}</td>
                         <td className="px-2 py-1.5 text-right font-medium border border-gray-300">{formatNumber(row.entry.billet_actual)}</td>
                         <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getPrintRateClass(row.billetRate)}`}>
-                          {row.billetRate !== null ? `${row.billetRate.toFixed(1)}%` : '-'}
+                          {row.billetRate !== null ? `${Math.round(row.billetRate)}%` : '-'}
                         </td>
                         <td className={`px-2 py-1.5 text-right border border-gray-300 ${row.billetShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
                           {row.billetShortfall > 0 ? formatNumber(row.billetShortfall) : '-'}
@@ -334,7 +334,7 @@ export default function PrintReportPage() {
                       <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.productTarget)}</td>
                       <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.productActual)}</td>
                       <td className={`px-2 py-1.5 text-center border border-gray-300 ${getPrintRateClass(group.total.productRate)}`}>
-                        {group.total.productRate !== null ? `${group.total.productRate.toFixed(1)}%` : '-'}
+                        {group.total.productRate !== null ? `${Math.round(group.total.productRate)}%` : '-'}
                       </td>
                       <td className={`px-2 py-1.5 text-right border border-gray-300 ${group.total.productShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
                         {group.total.productShortfall > 0 ? formatNumber(group.total.productShortfall) : '-'}
@@ -342,7 +342,7 @@ export default function PrintReportPage() {
                       <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.billetTarget)}</td>
                       <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.billetActual)}</td>
                       <td className={`px-2 py-1.5 text-center border border-gray-300 ${getPrintRateClass(group.total.billetRate)}`}>
-                        {group.total.billetRate !== null ? `${group.total.billetRate.toFixed(1)}%` : '-'}
+                        {group.total.billetRate !== null ? `${Math.round(group.total.billetRate)}%` : '-'}
                       </td>
                       <td className={`px-2 py-1.5 text-right border border-gray-300 ${group.total.billetShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
                         {group.total.billetShortfall > 0 ? formatNumber(group.total.billetShortfall) : '-'}
@@ -360,7 +360,7 @@ export default function PrintReportPage() {
                     targetBasedSummary.product_achievement_rate >= 100 ? 'text-green-700' :
                       targetBasedSummary.product_achievement_rate >= 90 ? 'text-yellow-700' : 'text-red-700'
                   }`}>
-                    {targetBasedSummary.product_achievement_rate.toFixed(1)}%
+                    {Math.round(targetBasedSummary.product_achievement_rate)}%
                   </td>
                   <td className="px-2 py-1.5 text-right text-red-700 border border-gray-400">
                     {targetSummary.productShortfall > 0 ? formatNumber(targetSummary.productShortfall) : '-'}
@@ -371,7 +371,7 @@ export default function PrintReportPage() {
                     targetBasedSummary.billet_achievement_rate >= 100 ? 'text-green-700' :
                       targetBasedSummary.billet_achievement_rate >= 90 ? 'text-yellow-700' : 'text-red-700'
                   }`}>
-                    {targetBasedSummary.billet_achievement_rate.toFixed(1)}%
+                    {Math.round(targetBasedSummary.billet_achievement_rate)}%
                   </td>
                   <td className="px-2 py-1.5 text-right text-red-700 border border-gray-400">
                     {targetSummary.billetShortfall > 0 ? formatNumber(targetSummary.billetShortfall) : '-'}
@@ -456,12 +456,12 @@ export default function PrintReportPage() {
                             <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(row.productTarget)}</td>
                             <td className="px-2 py-1.5 text-right border border-gray-300 font-medium">{formatNumber(nextProductPlan)}</td>
                             <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getPrintRateClass(row.nextProductRate)}`}>
-                              {row.nextProductRate !== null ? `${row.nextProductRate.toFixed(1)}%` : '-'}
+                              {row.nextProductRate !== null ? `${Math.round(row.nextProductRate)}%` : '-'}
                             </td>
                             <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(row.billetTarget)}</td>
                             <td className="px-2 py-1.5 text-right border border-gray-300 font-medium">{formatNumber(nextBilletPlan)}</td>
                             <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getPrintRateClass(row.nextBilletRate)}`}>
-                              {row.nextBilletRate !== null ? `${row.nextBilletRate.toFixed(1)}%` : '-'}
+                              {row.nextBilletRate !== null ? `${Math.round(row.nextBilletRate)}%` : '-'}
                             </td>
                             {rowIndex === 0 && (
                               <td rowSpan={group.rows.length + 1} className="px-2 py-1.5 text-left border border-gray-300 text-gray-500 align-middle">
@@ -476,12 +476,12 @@ export default function PrintReportPage() {
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.productTarget)}</td>
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.nextProductPlan)}</td>
                         <td className={`px-2 py-1.5 text-center border border-gray-300 ${getPrintRateClass(group.total.nextProductRate)}`}>
-                          {group.total.nextProductRate !== null ? `${group.total.nextProductRate.toFixed(1)}%` : '-'}
+                          {group.total.nextProductRate !== null ? `${Math.round(group.total.nextProductRate)}%` : '-'}
                         </td>
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.billetTarget)}</td>
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.nextBilletPlan)}</td>
                         <td className={`px-2 py-1.5 text-center border border-gray-300 ${getPrintRateClass(group.total.nextBilletRate)}`}>
-                          {group.total.nextBilletRate !== null ? `${group.total.nextBilletRate.toFixed(1)}%` : '-'}
+                          {group.total.nextBilletRate !== null ? `${Math.round(group.total.nextBilletRate)}%` : '-'}
                         </td>
                       </tr>
                     </React.Fragment>
@@ -495,7 +495,7 @@ export default function PrintReportPage() {
                     nextPlanTargetSummary.productRate >= 100 ? 'text-green-700' :
                       nextPlanTargetSummary.productRate >= 90 ? 'text-yellow-700' : 'text-red-700'
                   }`}>
-                    {nextPlanTargetSummary.productRate.toFixed(1)}%
+                    {Math.round(nextPlanTargetSummary.productRate)}%
                   </td>
                   <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(targetBasedSummary.total_billet_plan)}</td>
                   <td className="px-2 py-1.5 text-right border border-gray-400">{formatNumber(summary.total_next_billet_plan)}</td>
@@ -503,7 +503,7 @@ export default function PrintReportPage() {
                     nextPlanTargetSummary.billetRate >= 100 ? 'text-green-700' :
                       nextPlanTargetSummary.billetRate >= 90 ? 'text-yellow-700' : 'text-red-700'
                   }`}>
-                    {nextPlanTargetSummary.billetRate.toFixed(1)}%
+                    {Math.round(nextPlanTargetSummary.billetRate)}%
                   </td>
                   <td className="border border-gray-400"></td>
                 </tr>

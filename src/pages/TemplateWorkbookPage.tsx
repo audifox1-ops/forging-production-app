@@ -69,7 +69,7 @@ function formatNumber(value: number | null | undefined) {
 
 function formatRate(value: number | null | undefined) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '-';
-  return `${(value * 100).toLocaleString('ko-KR', { maximumFractionDigits: 1 })}%`;
+  return `${Math.round(value * 100).toLocaleString('ko-KR')}%`;
 }
 
 function formatCellValue(cell: TemplateWorkbookCell | undefined, column: string, row: TemplateWorkbookRow) {

@@ -476,8 +476,8 @@ body {
   html.template-workbook-print-document,
   html.template-workbook-print-document body,
   html.template-workbook-print-document #root {
-    width: 287mm !important;
-    min-width: 287mm !important;
+    width: 100% !important;
+    min-width: 0 !important;
     min-height: 200mm !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -508,8 +508,8 @@ body {
   html.template-workbook-print-document main,
   html.template-workbook-print-document .template-print-page {
     display: block !important;
-    width: 287mm !important;
-    min-width: 287mm !important;
+    width: 100% !important;
+    min-width: 0 !important;
     height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -519,10 +519,10 @@ body {
 
   html.template-workbook-print-document .template-print-area {
     page: template-workbook-landscape;
-    position: absolute !important;
-    inset: 0 auto auto 0 !important;
-    width: 287mm !important;
-    max-width: 287mm !important;
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -569,8 +569,8 @@ body {
     display: block !important;
     position: static !important;
     inset: auto !important;
-    width: 287mm !important;
-    min-width: 287mm !important;
+    width: 100% !important;
+    min-width: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
@@ -579,8 +579,8 @@ body {
 
   html.template-workbook-print-document.template-workbook-preview-printing .template-preview-dialog {
     display: block !important;
-    width: 287mm !important;
-    max-width: 287mm !important;
+    width: 100% !important;
+    max-width: 100% !important;
     max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -596,10 +596,10 @@ body {
 
   html.template-workbook-print-document.template-workbook-preview-printing .template-preview-print-area {
     page: template-workbook-landscape;
-    position: absolute !important;
-    inset: 0 auto auto 0 !important;
-    width: 287mm !important;
-    max-width: 287mm !important;
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -638,8 +638,8 @@ body {
   }
 
   html.template-workbook-print-document .template-print-sheet {
-    width: 287mm !important;
-    max-width: 287mm !important;
+    width: 100% !important;
+    max-width: 100% !important;
     max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -648,9 +648,9 @@ body {
   }
 
   html.template-workbook-print-document .template-print-sheet table {
-    width: 287mm !important;
+    width: 100% !important;
     min-width: 0 !important;
-    max-width: 287mm !important;
+    max-width: 100% !important;
     table-layout: fixed !important;
     border-collapse: collapse !important;
     font-size: 5.2pt !important;
@@ -690,9 +690,9 @@ body {
   }
 
   html.template-workbook-print-document .sample-output-sheet {
-    width: 287mm !important;
-    min-width: 287mm !important;
-    max-width: 287mm !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
     min-height: 200mm !important;
     box-sizing: border-box !important;
     display: flex !important;
@@ -703,8 +703,8 @@ body {
   }
 
   html.template-workbook-print-document .sample-output-table {
-    width: 287mm !important;
-    max-width: 287mm !important;
+    width: 100% !important;
+    max-width: 100% !important;
     table-layout: fixed !important;
     border-collapse: collapse !important;
     font-size: 7.4pt !important;
@@ -765,7 +765,7 @@ body {
   }
 
   html.template-workbook-print-document .sample-output-footer {
-    width: 287mm !important;
+    width: 100% !important;
     margin-top: auto !important;
     padding: 0 15mm !important;
     font-size: 10.5pt !important;

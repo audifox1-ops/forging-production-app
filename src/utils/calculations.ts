@@ -1,5 +1,6 @@
 import { ProductionEntry, CalculatedEntry, DashboardSummaryData, EquipmentSummary, ShiftSummary, EQUIPMENT_LIST, SHIFT_LIST } from '../types';
 
+
 // 달성율 계산 (계획이 0이면 null 반환)
 export function calcAchievementRate(actual: number, plan: number): number | null {
   if (!plan || plan === 0) return null;
@@ -13,7 +14,7 @@ export function formatAchievementRate(actual: number, plan: number): string {
     if (actual > 0) return '-';
     return '-';
   }
-  return `${rate.toFixed(1)}%`;
+  return `${Math.round(rate)}%`;
 }
 
 // 미달량 계산
