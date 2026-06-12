@@ -221,10 +221,10 @@ const normalizeUserDefaults = (users: User[]) => {
 };
 
 const INITIAL_ASSIGNEES_BY_EQUIPMENT: Record<Equipment, { email: string; fallbackUserId: string; userName: string }> = {
-  P15: { email: 'hyun.kim@forging.com', fallbackUserId: 'user-kim-hyun', userName: '김현 차장' },
-  P5: { email: 'byeongjun.koo@forging.com', fallbackUserId: 'user-koo-byeongjun', userName: '구병준 차장' },
-  'R/M': { email: 'jaehan.woo@forging.com', fallbackUserId: 'user-woo-jaehan', userName: '우재한 과장' },
-  P8: { email: 'jaehan.woo@forging.com', fallbackUserId: 'user-woo-jaehan', userName: '우재한 과장' },
+  P15: { email: 'hyun.kim@forging.com', fallbackUserId: '33333333-3333-3333-3333-333333333333', userName: '김현 차장' },
+  P5: { email: 'byeongjun.koo@forging.com', fallbackUserId: '44444444-4444-4444-4444-444444444444', userName: '구병준 차장' },
+  'R/M': { email: 'jaehan.woo@forging.com', fallbackUserId: '55555555-5555-5555-5555-555555555555', userName: '우재한 과장' },
+  P8: { email: 'jaehan.woo@forging.com', fallbackUserId: '55555555-5555-5555-5555-555555555555', userName: '우재한 과장' },
 };
 
 export const useReportStore = create<ReportStore>((set, get) => {
