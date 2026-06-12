@@ -1,4 +1,5 @@
 import supabase, { isDemoMode } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import {
   EquipmentTarget,
   ProductionEntry,
@@ -61,7 +62,7 @@ export function loadLocalReportState(): Partial<PersistedReportState> | null {
     if (!raw) return null;
     return JSON.parse(raw) as Partial<PersistedReportState>;
   } catch (error) {
-    console.warn('Failed to load local report state', error);
+    logger.warn('localStorage 로드 실패', { error: String(error) });
     return null;
   }
 }
@@ -75,9 +76,9 @@ export function saveLocalReportState(state: PersistedReportState) {
   } catch (error) {
     const isQuotaError = error instanceof DOMException && error.name === 'QuotaExceededError';
     if (isQuotaError) {
-      console.warn('localStorage 용량이 초과되었습니다. 브라우저 저장 공간을 확보해주세요.', error);
+      logger.warn('localStorage 용량 초과', { error: String(error) });
     } else {
-      console.warn('Failed to save local report state', error);
+      logger.warn('localStorage 저장 실패', { error: String(error) });
     }
   }
 }
@@ -199,7 +200,7 @@ async function ensureSupabaseSession(client: NonNullable<typeof supabase>) {
 
   const { error } = await client.auth.signInAnonymously();
   if (error) {
-    console.warn('Supabase anonymous sign-in failed. Falling back to existing access policy.', error);
+    logger.warn('Supabase 익명 인증 실패', { error: String(error) });
   }
 }
 
