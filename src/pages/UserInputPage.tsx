@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Save, Send, AlertCircle, CheckCircle, Info, ChevronDown, ChevronUp, CalendarDays } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
+import { useToast } from '../components/Toast';
 import { Equipment, EquipmentTarget, EQUIPMENT_LIST, ProductionEntry, REASON_CATEGORIES, ReasonCategory, SHIFT_LIST } from '../types';
 import { formatNumber, calcNullableRate, getRateColorClass } from '../utils/calculations';
 import {
@@ -207,7 +208,6 @@ export default function UserInputPage() {
   const selectedHasShortfall = selectedTargetShortfall.hasShortfall;
   const [sharedReasons, setSharedReasons] = useState<Partial<Record<Equipment, ReasonFormData>>>({});
   const [sharedReasonErrors, setSharedReasonErrors] = useState<string[]>([]);
-  const [sharedReasonSaved, setSharedReasonSaved] = useState(false);
   const sharedReason = sharedReasons[selectedEquipment] ?? getReasonFromEntry(selectedReasonSource);
 
   // 자동 탭 선택: useEffect 없이 useMemo로 계산
@@ -220,7 +220,6 @@ export default function UserInputPage() {
       [selectedEquipment]: getReasonFromEntry(selectedReasonSource),
     }));
     setSharedReasonErrors([]);
-    setSharedReasonSaved(false);
   }, [
     selectedEquipment,
     selectedReasonSource?.id,
@@ -230,12 +229,25 @@ export default function UserInputPage() {
 
   const prevReportIdRef = React.useRef<string | undefined>(undefined);
   useEffect(() => {
-    // report.id가 실제로 다른 보고서로 바뀌었을 때만 draft 초기화 (새 보고서 생성 시 createReport가 재호출되어 id가 바뀌는 문제 방지)
     if (report?.id && prevReportIdRef.current && prevReportIdRef.current !== report.id) {
       setEntryDrafts({});
     }
     prevReportIdRef.current = report?.id;
   }, [report?.id]);
+
+  const hasUnsavedChanges = Object.keys(entryDrafts).length > 0;
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   const handlePlanDateChange = (value: string) => {
     if (!value) return;
@@ -251,7 +263,6 @@ export default function UserInputPage() {
       },
     }));
     setSharedReasonErrors([]);
-    setSharedReasonSaved(false);
   };
 
   const saveSharedReasonForEntries = (skipEntryId?: string) => {
@@ -267,8 +278,6 @@ export default function UserInputPage() {
           ...getReasonPayload(sharedReason),
         });
       });
-    setSharedReasonSaved(true);
-    setTimeout(() => setSharedReasonSaved(false), 2000);
   };
 
   const validateSharedReason = (requiresReason = selectedHasShortfall) => {
@@ -463,7 +472,6 @@ export default function UserInputPage() {
               equipment={selectedEquipment}
               reason={sharedReason}
               errors={sharedReasonErrors}
-              saved={sharedReasonSaved}
               canModify={canWrite || canEdit}
               hasShortfall={selectedHasShortfall}
               targetShortfall={selectedTargetShortfall}
@@ -507,6 +515,7 @@ function EntryInputCard({
   onSaveSharedReason: (skipEntryId?: string) => void;
   onSubmit: (id: string) => void;
 }) {
+  const { showToast } = useToast();
   const isSubmitted = entry.submit_status === 'submitted' || entry.submit_status === 'approved';
   const canModify = canWrite || canEdit;
   const [formData, setFormData] = useState({
@@ -518,8 +527,7 @@ function EntryInputCard({
     next_billet_plan: entry.next_billet_plan || 0,
   });
   const [errors, setErrors] = useState<string[]>([]);
-  const [saved, setSaved] = useState(false);
-  const isDirtyRef = React.useRef(false); // 사용자가 현재 편집 중인지 추적
+  const isDirtyRef = React.useRef(false);
 
   // 임시저장 후 entry props가 업데이트될 때 formData 동기화
   // 단, 사용자가 현재 편집 중(isDirty)이면 덮어쓰지 않음
@@ -565,7 +573,6 @@ function EntryInputCard({
     setFormData(nextFormData);
     onDraftChange(entry.id, nextFormData);
     setErrors([]);
-    setSaved(false);
     isDirtyRef.current = true;
   };
 
@@ -593,9 +600,8 @@ function EntryInputCard({
       ...getReasonPayload(sharedReason),
     });
     onSaveSharedReason(entry.id);
-    isDirtyRef.current = false; // 저장 완료 - 이후 entry props 동기화 허용
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    isDirtyRef.current = false;
+    showToast('임시저장 완료', 'success');
   };
 
   const handleSubmit = () => {
@@ -813,7 +819,7 @@ function EntryInputCard({
                 className="btn-secondary flex items-center gap-2"
               >
                 <Save size={16} />
-                {saved ? '저장됨 ✓' : '임시저장'}
+                임시저장
               </button>
               <button
                 onClick={handleSubmit}
@@ -847,7 +853,6 @@ function SharedReasonSection({
   equipment,
   reason,
   errors,
-  saved,
   canModify,
   hasShortfall,
   targetShortfall,
@@ -857,13 +862,13 @@ function SharedReasonSection({
   equipment: Equipment;
   reason: ReasonFormData;
   errors: string[];
-  saved: boolean;
   canModify: boolean;
   hasShortfall: boolean;
   targetShortfall: ReturnType<typeof calcEquipmentTargetShortfall>;
   onChange: (field: keyof ReasonFormData, value: string) => void;
   onSave: () => void;
 }) {
+  const { showToast } = useToast();
   const [isOpen, setIsOpen] = useState(hasShortfall);
 
   useEffect(() => {
@@ -967,9 +972,9 @@ function SharedReasonSection({
 
           {canModify && (
             <div className="flex justify-end">
-              <button onClick={onSave} className="btn-secondary flex items-center gap-2">
+              <button onClick={() => { onSave(); showToast('공통 사유 저장 완료', 'success'); }} className="btn-secondary flex items-center gap-2">
                 <Save size={16} />
-                {saved ? '사유 저장됨 ✓' : '공통 사유 저장'}
+                공통 사유 저장
               </button>
             </div>
           )}

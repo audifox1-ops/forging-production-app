@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useReportStore } from '../store/reportStore';
+import { useToast } from '../components/Toast';
 import { SHIFT_LIST, PERIOD_TARGET_LABELS, PeriodTargetType } from '../types';
 import { formatNumber } from '../utils/calculations';
 import { ANNUAL_WORKDAYS_2026, TARGET_EQUIPMENT_LIST, WORKDAYS_2026_BY_MONTH } from '../utils/targetConfig';
@@ -7,6 +8,7 @@ import { Save, Lock } from 'lucide-react';
 
 export default function TargetManagementPage() {
   const { targets, periodTargets, updateTarget, updatePeriodTarget, getCurrentUser } = useReportStore();
+  const { showToast } = useToast();
   const currentUser = getCurrentUser();
   const isAdmin = currentUser?.role === 'admin';
   const canManageTargets = isAdmin || Boolean(currentUser?.can_edit);
@@ -26,7 +28,6 @@ export default function TargetManagementPage() {
       return acc;
     }, {} as Record<PeriodTargetType, { product: number; billet: number }>)
   );
-  const [saved, setSaved] = useState(false);
 
   const handleChange = (equipment: string, shift: string, field: 'product' | 'billet', value: number) => {
     if (!canManageTargets) return;
@@ -36,7 +37,6 @@ export default function TargetManagementPage() {
       ...prev,
       [key]: { ...prev[key], [field]: safeValue },
     }));
-    setSaved(false);
   };
 
   const handlePeriodChange = (period: PeriodTargetType, field: 'product' | 'billet', value: number) => {
@@ -46,7 +46,6 @@ export default function TargetManagementPage() {
       ...prev,
       [period]: { ...prev[period], [field]: safeValue },
     }));
-    setSaved(false);
   };
 
   const handleSaveAll = () => {
@@ -64,8 +63,7 @@ export default function TargetManagementPage() {
       const val = localPeriodTargets[period] || { product: 0, billet: 0 };
       updatePeriodTarget(period, val.product, val.billet);
     });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    showToast('전체 목표값 저장 완료', 'success');
   };
 
   // 합계 계산
@@ -97,7 +95,7 @@ export default function TargetManagementPage() {
           className="btn-primary flex items-center gap-2"
         >
           <Save size={16} />
-          {saved ? '저장완료 ✓' : '전체 저장'}
+          전체 저장
         </button>
       </div>
 
