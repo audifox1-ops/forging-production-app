@@ -167,7 +167,7 @@ function DailyTargetAchievementPanel({
 export default function UserInputPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
   const navigate = useNavigate();
-  const { targets, getReport, getEntriesByReport, saveEntry, submitEntry, createReport, getCurrentUser, isHydrating } = useReportStore();
+  const { targets, getReport, getEntriesByReport, saveEntry, submitEntry, createReport, getCurrentUser, isHydrating, hasHydrated } = useReportStore();
   const currentUser = getCurrentUser();
   const isAdmin = currentUser?.role === 'admin';
   const canWrite = isAdmin || Boolean(currentUser?.can_write);
@@ -187,12 +187,12 @@ export default function UserInputPage() {
   const hasMissingEntries = entries.length < expectedEntriesCount;
 
   useEffect(() => {
-    if (isHydrating) return; // 데이터 로딩 중에는 생성 방지 (DB 409 충돌 방지)
+    if (!hasHydrated || isHydrating) return; // 데이터 로딩 중이거나 아직 한 번도 로드되지 않았을 때는 생성 방지 (DB 409 충돌 방지)
     if (canCreateReport && (!hasReport || hasMissingEntries)) {
       createReport(actualDate);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actualDate, canCreateReport, hasReport, hasMissingEntries, isHydrating]);
+  }, [actualDate, canCreateReport, hasReport, hasMissingEntries, isHydrating, hasHydrated]);
 
 
   const equipmentTabs = EQUIPMENT_LIST.map(equipment => {
