@@ -12,12 +12,15 @@ import {
   Home,
   Menu,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useReportStore } from '../store/reportStore';
+import { useToast } from './Toast';
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
+  const { showToast } = useToast();
   const {
     users,
     currentUserId,
@@ -26,6 +29,7 @@ export default function Layout() {
     isHydrating,
     syncError,
     lastSyncedAt,
+    hydrateStorage,
   } = useReportStore();
   const currentUser = users.find(user => user.id === currentUserId) ?? users[0];
   const isAdmin = currentUser?.role === 'admin';
@@ -38,6 +42,12 @@ export default function Layout() {
     : currentUser?.role === 'manager'
       ? '총괄 권한'
       : canWrite || canEdit ? '권한 부여됨' : '읽기 전용';
+
+  React.useEffect(() => {
+    if (syncError) {
+      showToast(syncError, 'error', 5000);
+    }
+  }, [syncError, showToast]);
 
   const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: '대시보드' },
@@ -158,6 +168,17 @@ export default function Layout() {
               }`} />
               {isHydrating ? '동기화 중' : syncError ? '공유 저장 오류' : storageMode === 'supabase' ? '서버 공유 저장' : '로컬 전용'}
             </div>
+            {syncError && (
+              <button
+                onClick={() => void hydrateStorage()}
+                disabled={isHydrating}
+                className="hidden lg:flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors disabled:opacity-50"
+                title="동기화 다시 시도"
+              >
+                <RefreshCw size={12} className={isHydrating ? 'animate-spin' : ''} />
+                재시도
+              </button>
+            )}
             <select
               value={currentUserId}
               onChange={event => setCurrentUserId(event.target.value)}
