@@ -73,7 +73,12 @@ export function saveLocalReportState(state: PersistedReportState) {
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
-    console.warn('Failed to save local report state', error);
+    const isQuotaError = error instanceof DOMException && error.name === 'QuotaExceededError';
+    if (isQuotaError) {
+      console.warn('localStorage 용량이 초과되었습니다. 브라우저 저장 공간을 확보해주세요.', error);
+    } else {
+      console.warn('Failed to save local report state', error);
+    }
   }
 }
 
@@ -320,16 +325,16 @@ export async function upsertSupabaseRows(table: SupabaseTableName, rows: Supabas
   }
 
   if (table === 'equipment_targets') {
-    await runSupabaseMutation(client => client.from(table).upsert(records as any, { onConflict: 'equipment,shift,effective_date' }));
+    await runSupabaseMutation(client => client.from(table).upsert(records as EquipmentTarget[], { onConflict: 'equipment,shift,effective_date' }));
     return;
   }
 
   if (table === 'production_period_targets') {
-    await runSupabaseMutation(client => client.from(table).upsert(records as any, { onConflict: 'period,effective_date' }));
+    await runSupabaseMutation(client => client.from(table).upsert(records as ProductionPeriodTarget[], { onConflict: 'period,effective_date' }));
     return;
   }
 
-  await runSupabaseMutation(client => client.from(table).upsert(records as any, { onConflict: 'id' }));
+  await runSupabaseMutation(client => client.from(table).upsert(records as User[], { onConflict: 'id' }));
 }
 
 export async function deleteSupabaseRows(table: SupabaseTableName, ids: string | string[]) {
