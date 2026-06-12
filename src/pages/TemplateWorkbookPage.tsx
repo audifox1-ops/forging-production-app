@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, Download, Eye, Grid2X2, Plus, Printer, RefreshCw, Table2, Trash2, X } from 'lucide-react';
+import { BarChart3, CalendarPlus, Download, Eye, Grid2X2, Plus, Printer, RefreshCw, Table2, Trash2, X } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { downloadTemplateWorkbook } from '../utils/excelTemplate';
 import {
@@ -852,6 +852,156 @@ function MonthlyOutputTabulation({
   );
 }
 
+const MONTH_NAMES = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+const AVAILABLE_YEARS = [2024, 2025, 2026, 2027];
+
+function AddMonthlySheetDialog({
+  existingSheetIds,
+  onConfirm,
+  onClose,
+}: {
+  existingSheetIds: string[];
+  onConfirm: (year: number, month: number) => void;
+  onClose: () => void;
+}) {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const [selectedYear, setSelectedYear] = React.useState(
+    AVAILABLE_YEARS.includes(currentYear) ? currentYear : 2026
+  );
+  const [selectedMonth, setSelectedMonth] = React.useState(currentMonth);
+
+  const getSheetId = (year: number, month: number) =>
+    `${String(year).slice(-2)}${String(month).padStart(2, '0')}`;
+
+  const isMonthExisting = (month: number) =>
+    existingSheetIds.includes(getSheetId(selectedYear, month));
+
+  const isSelectedMonthExisting = isMonthExisting(selectedMonth);
+
+  // 선택된 연도 바뀌면 월도 재검증
+  React.useEffect(() => {
+    if (isMonthExisting(selectedMonth)) {
+      const firstAvailable = MONTH_NAMES.findIndex((_, i) => !isMonthExisting(i + 1));
+      if (firstAvailable >= 0) setSelectedMonth(firstAvailable + 1);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear]);
+
+  const handleConfirm = () => {
+    if (isSelectedMonthExisting) return;
+    onConfirm(selectedYear, selectedMonth);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/55 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-[min(480px,96vw)] overflow-hidden">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">월별 시트 추가</h2>
+            <p className="text-xs text-gray-500 mt-0.5">새 월별 생산량 집계 시트를 만듭니다</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* 본문 */}
+        <div className="px-6 py-5 space-y-5">
+          {/* 연도 선택 */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">연도</label>
+            <div className="flex gap-2">
+              {AVAILABLE_YEARS.map(year => (
+                <button
+                  key={year}
+                  type="button"
+                  onClick={() => setSelectedYear(year)}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold border transition-all ${
+                    selectedYear === year
+                      ? 'bg-blue-700 text-white border-blue-700 shadow-sm'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-blue-50 hover:border-blue-300'
+                  }`}
+                >
+                  {year}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 월 선택 그리드 */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">월</label>
+            <div className="grid grid-cols-4 gap-2">
+              {MONTH_NAMES.map((name, index) => {
+                const month = index + 1;
+                const exists = isMonthExisting(month);
+                const isSelected = selectedMonth === month;
+                return (
+                  <button
+                    key={month}
+                    type="button"
+                    disabled={exists}
+                    onClick={() => !exists && setSelectedMonth(month)}
+                    className={`py-3 rounded-lg text-sm font-semibold border transition-all relative ${
+                      exists
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                        : isSelected
+                          ? 'bg-blue-700 text-white border-blue-700 shadow-sm ring-2 ring-blue-300'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-blue-50 hover:border-blue-300'
+                    }`}
+                  >
+                    {name}
+                    {exists && (
+                      <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-green-500" title="이미 존재함" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1 align-middle" />
+              초록 점 = 이미 존재하는 시트 (추가 불가)
+            </p>
+          </div>
+
+          {/* 미리보기 */}
+          <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3">
+            <div className="text-xs text-blue-600 font-medium mb-1">추가될 시트 이름</div>
+            <div className="text-base font-bold text-blue-900">
+              {selectedYear}년 {selectedMonth}월 ({getSheetId(selectedYear, selectedMonth)}월)
+            </div>
+            {!existingSheetIds.some(id => id === `${selectedYear}년 전체`) && (
+              <div className="text-xs text-blue-600 mt-1">
+                ✦ &quot;{selectedYear}년 전체&quot; 연간 시트도 자동으로 함께 생성됩니다
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 푸터 */}
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100 bg-gray-50">
+          <button onClick={onClose} className="btn-secondary">
+            취소
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isSelectedMonthExisting}
+            className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <CalendarPlus size={16} />
+            시트 추가
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ExcelPreviewDialog({
   sheets,
   initialSheetId,
@@ -972,12 +1122,14 @@ export default function TemplateWorkbookPage() {
     updateTemplateWorkbookCell,
     deleteTemplateWorkbookRow,
     addTemplateWorkbookRow,
+    addMonthlyTemplateSheet,
   } = useReportStore();
   const currentUser = getCurrentUser();
   const canManageWorkbook = currentUser?.role === 'admin' || Boolean(currentUser?.can_edit);
   const [selectedSheetId, setSelectedSheetId] = React.useState<string>('');
   const [viewMode, setViewMode] = React.useState<ViewMode>('summary');
   const [isExcelPreviewOpen, setIsExcelPreviewOpen] = React.useState(false);
+  const [isAddMonthDialogOpen, setIsAddMonthDialogOpen] = React.useState(false);
   const defaultSheet = React.useMemo(() => getDefaultTemplateSheet(templateSheets), [templateSheets]);
   const selectedSheet = templateSheets.find(sheet => sheet.id === selectedSheetId) ?? defaultSheet;
   const appSummary = React.useMemo(() => buildTemplateWorkbookAppSummary(templateSheets), [templateSheets]);
@@ -1054,6 +1206,14 @@ export default function TemplateWorkbookPage() {
     printTemplateWorkbook({ preview: true });
   };
 
+  const handleAddMonthlySheet = (year: number, month: number) => {
+    addMonthlyTemplateSheet(year, month);
+    // 추가된 시트 ID 계산 후 자동 이동
+    const sheetId = `${String(year).slice(-2)}${String(month).padStart(2, '0')}`;
+    setSelectedSheetId(sheetId);
+    setIsAddMonthDialogOpen(false);
+  };
+
   return (
     <div className="template-print-page space-y-5 fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3 no-print">
@@ -1070,6 +1230,15 @@ export default function TemplateWorkbookPage() {
             <RefreshCw size={16} className={isHydrating ? 'animate-spin' : ''} />
             새로고침
           </button>
+          {canManageWorkbook && (
+            <button
+              onClick={() => setIsAddMonthDialogOpen(true)}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <CalendarPlus size={16} />
+              월 추가
+            </button>
+          )}
           <button
             onClick={() => setIsExcelPreviewOpen(true)}
             disabled={templateSheets.length === 0}
@@ -1262,6 +1431,14 @@ export default function TemplateWorkbookPage() {
           onClose={() => setIsExcelPreviewOpen(false)}
           onDownload={handlePreviewDownload}
           onPrint={handlePreviewPrint}
+        />
+      )}
+
+      {isAddMonthDialogOpen && (
+        <AddMonthlySheetDialog
+          existingSheetIds={templateSheets.map(s => s.id)}
+          onConfirm={handleAddMonthlySheet}
+          onClose={() => setIsAddMonthDialogOpen(false)}
         />
       )}
     </div>

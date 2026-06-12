@@ -90,6 +90,22 @@ const SYNC_EQUIPMENT_COLUMNS = {
   'R/M': TEMPLATE_SUMMARY_COLUMNS['R/M'],
 } as const;
 
+const MONTHLY_DATA_START_ROW = 8;
+const ANNUAL_MONTH_START_ROW = 8;
+const ANNUAL_MONTH_COUNT = 12;
+const ANNUAL_TOTAL_ROW_NUMBER = ANNUAL_MONTH_START_ROW + ANNUAL_MONTH_COUNT;
+const ANNUAL_SHEET_NAME_PATTERN = /^(\d{4})년 전체$/;
+
+const ANNUAL_SYNC_COLUMNS = Array.from(new Set([
+  ...Object.values(TEMPLATE_SUMMARY_COLUMNS).flatMap(columns => [
+    columns.productActual,
+    columns.productPlan,
+    columns.billetActual,
+    columns.coggingActual,
+  ].filter((column): column is string => Boolean(column))),
+  ...Object.values(TEMPLATE_QUALITY_COLUMNS),
+]));
+
 export const TEMPLATE_COMPACT_COLUMNS = Array.from(new Set([
   'A',
   ...Object.values(TEMPLATE_SUMMARY_COLUMNS).flatMap(group => [
@@ -344,6 +360,14 @@ function formatMonthlyDateLabel(month: number, day: number) {
 
 function formatMonthlyIsoDate(year: number, month: number, day: number) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+export function getMonthlyTemplateWorkbookSheetId(year: number, month: number) {
+  return `${String(year).slice(-2)}${String(month).padStart(2, '0')}`;
+}
+
+export function getMonthlyTemplateWorkbookSheetName(year: number, month: number) {
+  return `${getMonthlyTemplateWorkbookSheetId(year, month)}월`;
 }
 
 function excelSerialFromDate(dateString: string) {
@@ -618,6 +642,138 @@ function recalculateMonthlyTotal(sheet: TemplateWorkbookSheet) {
   recalculateTemplateRow(totalRow);
 }
 
+function getMonthlyTotalWorkbookRow(sheet: TemplateWorkbookSheet) {
+  const meta = getMonthlySheetMeta(sheet);
+  if (!meta) return null;
+
+  return sheet.rows.find(row => isTotalRow(getFirstCellLabel(row)))
+    ?? sheet.rows.find(row => row.row_number === meta.daysInMonth + 8)
+    ?? null;
+}
+
+function getAnnualSheetYear(sheet: TemplateWorkbookSheet) {
+  if (sheet.kind !== 'annual') return null;
+  const match = ANNUAL_SHEET_NAME_PATTERN.exec(sheet.sheet_name);
+  return match ? Number(match[1]) : sheet.year || null;
+}
+
+function getAnnualMonthFromRow(row: TemplateWorkbookRow) {
+  const label = row.row_label ?? getFirstCellLabel(row);
+  const match = /(\d{1,2})\s*월/.exec(label);
+  if (!match) return null;
+
+  const month = Number(match[1]);
+  return Number.isFinite(month) && month >= 1 && month <= 12 ? month : null;
+}
+
+function findAnnualMonthRow(sheet: TemplateWorkbookSheet, month: number) {
+  return sheet.rows.find(row => getAnnualMonthFromRow(row) === month)
+    ?? sheet.rows.find(row => row.row_number === ANNUAL_MONTH_START_ROW + month - 1)
+    ?? null;
+}
+
+function getOrCreateAnnualMonthRow(sheet: TemplateWorkbookSheet, month: number) {
+  let row = findAnnualMonthRow(sheet, month);
+
+  if (!row) {
+    row = {
+      row_number: ANNUAL_MONTH_START_ROW + month - 1,
+      row_label: `${month}월`,
+      cells: [],
+    };
+    sheet.rows.push(row);
+    sheet.rows.sort((a, b) => a.row_number - b.row_number);
+  }
+
+  const label = row.row_label ?? getFirstCellLabel(row) ?? `${month}월`;
+  row.row_label = label || `${month}월`;
+  delete row.row_date;
+  setRowCell(row, 'A', row.row_label);
+
+  return row;
+}
+
+function getOrCreateAnnualTotalRow(sheet: TemplateWorkbookSheet) {
+  let row = sheet.rows.find(item => isTotalRow(getFirstCellLabel(item)))
+    ?? sheet.rows.find(item => item.row_number === ANNUAL_TOTAL_ROW_NUMBER);
+
+  if (!row) {
+    row = {
+      row_number: ANNUAL_TOTAL_ROW_NUMBER,
+      row_label: '합계',
+      cells: [],
+    };
+    sheet.rows.push(row);
+    sheet.rows.sort((a, b) => a.row_number - b.row_number);
+  }
+
+  const label = row.row_label ?? getFirstCellLabel(row) ?? '합계';
+  row.row_label = label || '합계';
+  delete row.row_date;
+  setRowCell(row, 'A', row.row_label);
+
+  return row;
+}
+
+function buildAnnualSumFormula(column: string) {
+  const startRow = ANNUAL_MONTH_START_ROW;
+  const endRow = ANNUAL_MONTH_START_ROW + ANNUAL_MONTH_COUNT - 1;
+  return `SUM(${column}${startRow}:${column}${endRow})`;
+}
+
+function syncAnnualTotalRow(sheet: TemplateWorkbookSheet) {
+  const monthRows = Array.from({ length: ANNUAL_MONTH_COUNT }, (_, index) =>
+    findAnnualMonthRow(sheet, index + 1)
+  ).filter((row): row is TemplateWorkbookRow => Boolean(row));
+  const totalRow = getOrCreateAnnualTotalRow(sheet);
+
+  ANNUAL_SYNC_COLUMNS.forEach(column =>
+    setRowCell(
+      totalRow,
+      column,
+      sumRows(monthRows, column),
+      buildAnnualSumFormula(column)
+    )
+  );
+  recalculateTemplateRow(totalRow);
+}
+
+export function syncAnnualTemplateWorkbookInPlace(sheets: TemplateWorkbookSheet[]) {
+  const monthlySheetsByYear = sheets
+    .filter(sheet => sheet.kind === 'monthly')
+    .reduce<Record<number, Array<{ sheet: TemplateWorkbookSheet; month: number }>>>((acc, sheet) => {
+      const meta = getMonthlySheetMeta(sheet);
+      if (!meta) return acc;
+
+      acc[meta.year] = acc[meta.year] ?? [];
+      acc[meta.year].push({ sheet, month: meta.month });
+      return acc;
+    }, {});
+
+  Object.entries(monthlySheetsByYear).forEach(([yearValue, monthlySheets]) => {
+    const year = Number(yearValue);
+    const annualSheet = sheets.find(sheet => getAnnualSheetYear(sheet) === year);
+    if (!annualSheet) return;
+
+    monthlySheets
+      .sort((a, b) => a.month - b.month)
+      .forEach(({ sheet, month }) => {
+        recalculateMonthlyTotal(sheet);
+        const monthlyTotal = getMonthlyTotalWorkbookRow(sheet);
+        if (!monthlyTotal) return;
+
+        const annualRow = getOrCreateAnnualMonthRow(annualSheet, month);
+        ANNUAL_SYNC_COLUMNS.forEach(column =>
+          setRowCell(annualRow, column, getNumericCell(monthlyTotal, column))
+        );
+        recalculateTemplateRow(annualRow);
+      });
+
+    syncAnnualTotalRow(annualSheet);
+    annualSheet.imported_at = new Date().toISOString();
+  });
+}
+
 function cloneTemplateSheets(sheets: TemplateWorkbookSheet[]) {
   return sheets.map(sheet => ({
     ...sheet,
@@ -796,6 +952,75 @@ export function syncTemplateSheetsWithAllReportEntries(
   }, sheets);
 }
 
+export function createMonthlyTemplateSheet(year: number, month: number): TemplateWorkbookSheet {
+  const id = getMonthlyTemplateWorkbookSheetId(year, month);
+  const sheetName = getMonthlyTemplateWorkbookSheetName(year, month);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  // 헤더 행 (1~7) 기본 구조
+  const headerRows: TemplateWorkbookRow[] = [];
+
+  // 일별 데이터 행 (8번부터 시작)
+  const dailyRows: TemplateWorkbookRow[] = Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1;
+    const dateString = formatMonthlyIsoDate(year, month, day);
+    return {
+      row_number: day + 7,
+      row_date: dateString,
+      cells: [
+        { column: 'A', value: excelSerialFromDate(dateString) },
+      ],
+    };
+  });
+
+  // 합계 행
+  const totalRow: TemplateWorkbookRow = {
+    row_number: daysInMonth + 8,
+    row_label: '합계',
+    cells: [{ column: 'A', value: '합계' }],
+  };
+
+  return {
+    id,
+    sheet_name: sheetName,
+    year,
+    kind: 'monthly',
+    rows: [...headerRows, ...dailyRows, totalRow],
+    imported_at: new Date().toISOString(),
+  };
+}
+
+export function createAnnualTemplateSheet(year: number): TemplateWorkbookSheet {
+  const id = `${year}년 전체`;
+  const sheetName = `${year}년 전체`;
+
+  // 월별 행 (1월~12월)
+  const monthRows: TemplateWorkbookRow[] = Array.from({ length: ANNUAL_MONTH_COUNT }, (_, index) => {
+    const month = index + 1;
+    return {
+      row_number: ANNUAL_MONTH_START_ROW + index,
+      row_label: `${month}월`,
+      cells: [{ column: 'A', value: `${month}월` }],
+    };
+  });
+
+  // 합계 행
+  const totalRow: TemplateWorkbookRow = {
+    row_number: ANNUAL_TOTAL_ROW_NUMBER,
+    row_label: '합계',
+    cells: [{ column: 'A', value: '합계' }],
+  };
+
+  return {
+    id,
+    sheet_name: sheetName,
+    year,
+    kind: 'annual',
+    rows: [...monthRows, totalRow],
+    imported_at: new Date().toISOString(),
+  };
+}
+
 export function updateTemplateWorkbookCell(
   sheets: TemplateWorkbookSheet[],
   sheetId: string,
@@ -818,6 +1043,9 @@ export function updateTemplateWorkbookCell(
   recalculateTemplateRow(row);
   if (sheet.kind === 'monthly') recalculateMonthlyTotal(sheet);
   sheet.imported_at = new Date().toISOString();
+
+  // 월별 시트 변경 시 연간 시트 자동 동기화
+  syncAnnualTemplateWorkbookInPlace(nextSheets);
 
   return nextSheets;
 }

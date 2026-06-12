@@ -30,7 +30,10 @@ import {
 } from '../utils/targetConfig';
 import {
   addTemplateWorkbookRow,
+  createAnnualTemplateSheet,
+  createMonthlyTemplateSheet,
   deleteTemplateWorkbookRow,
+  syncAnnualTemplateWorkbookInPlace,
   syncTemplateSheetsWithAllReportEntries,
   syncTemplateSheetsWithReportEntries,
   updateTemplateWorkbookCell,
@@ -75,6 +78,7 @@ interface ReportStore {
   updateTemplateWorkbookCell: (sheetId: string, rowNumber: number, column: string, value: string | number | null) => void;
   deleteTemplateWorkbookRow: (sheetId: string, rowNumber: number) => void;
   addTemplateWorkbookRow: (sheetId: string) => void;
+  addMonthlyTemplateSheet: (year: number, month: number) => void;
 
   // 유저 관련
   setCurrentUserId: (userId: string) => void;
@@ -94,6 +98,29 @@ const LOCAL_STATE = loadLocalReportState();
 
 const getInitialArray = <T>(localValue: T[] | undefined, fallback: T[]) =>
   Array.isArray(localValue) ? localValue : [...fallback];
+
+// \uc911\ubcf5 \uc5f0\uac04 \uc2dc\ud2b8 \uc81c\uac70: \uac19\uc740 sheet_name\uc73c\ub85c \uc5ec\ub7ec \uac1c\uc77c \ub54c, \ub370\uc774\ud130\uac00 \uac00\uc7a5 \ub9ce\uc740 \uac83\uc744 \uc720\uc9c0
+const deduplicateTemplateSheets = (sheets: TemplateWorkbookSheet[]): TemplateWorkbookSheet[] => {
+  const seenNames = new Map<string, TemplateWorkbookSheet>();
+
+  for (const sheet of sheets) {
+    const key = `${sheet.kind}::${sheet.sheet_name}`;
+    const existing = seenNames.get(key);
+
+    if (!existing) {
+      seenNames.set(key, sheet);
+    } else {
+      // \ub370\uc774\ud130\uac00 \ub354 \ub9ce\uc740 \uc2dc\ud2b8\ub97c \uc720\uc9c0
+      const existingCells = existing.rows.reduce((sum, row) => sum + row.cells.length, 0);
+      const currentCells = sheet.rows.reduce((sum, row) => sum + row.cells.length, 0);
+      if (currentCells > existingCells) {
+        seenNames.set(key, sheet);
+      }
+    }
+  }
+
+  return Array.from(seenNames.values());
+};
 
 const normalizeReports = (reports: ProductionReport[]) =>
   reports
@@ -303,7 +330,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
   const initialReports = normalizeReports(getInitialArray(LOCAL_STATE?.reports, DEMO_REPORTS));
   const initialEntries = getInitialArray(LOCAL_STATE?.entries, DEMO_ENTRIES);
   const initialTemplateSheets = syncTemplateSheetsWithAllReportEntries(
-    getInitialArray(LOCAL_STATE?.templateSheets, []),
+    deduplicateTemplateSheets(getInitialArray(LOCAL_STATE?.templateSheets, [])),
     initialReports,
     initialEntries
   );
@@ -562,6 +589,41 @@ export const useReportStore = create<ReportStore>((set, get) => {
     persistCurrentState(true, () => saveSupabaseReportState(getPersistedState()));
   },
 
+  addMonthlyTemplateSheet: (year, month) => {
+    const { templateSheets } = get();
+    const newSheetId = `${String(year).slice(-2)}${String(month).padStart(2, '0')}`;
+
+    // 이미 존재하는 월 시트는 추가하지 않음 (id 또는 sheet_name 기준)
+    const newSheetName = `${newSheetId}월`;
+    if (templateSheets.some(sheet => sheet.id === newSheetId || sheet.sheet_name === newSheetName)) return;
+
+    const newMonthlySheet = createMonthlyTemplateSheet(year, month);
+    const annualSheetName = `${year}년 전체`;
+    // id 또는 sheet_name으로 연간 시트 존재 여부 확인 (Excel 가져오기 시 id 형식이 다를 수 있음)
+    const hasAnnualSheet = templateSheets.some(
+      sheet => sheet.id === annualSheetName || sheet.sheet_name === annualSheetName
+    );
+
+    const newSheets = hasAnnualSheet
+      ? [...templateSheets, newMonthlySheet]
+      : [...templateSheets, newMonthlySheet, createAnnualTemplateSheet(year)];
+
+    // 중복 연간 시트 제거 후 정렬 (monthly 먼저, annual 마지막)
+    const deduplicatedSheets = deduplicateTemplateSheets(newSheets);
+    const sortedSheets = [...deduplicatedSheets].sort((a, b) => {
+      if (a.kind === b.kind) return a.sheet_name.localeCompare(b.sheet_name);
+      if (a.kind === 'annual') return 1;
+      if (b.kind === 'annual') return -1;
+      return 0;
+    });
+
+    // 연간 시트 동기화
+    syncAnnualTemplateWorkbookInPlace(sortedSheets);
+
+    set({ templateSheets: sortedSheets });
+    persistCurrentState(true, () => saveSupabaseReportState(getPersistedState()));
+  },
+
   setCurrentUserId: (userId) => {
     set({ currentUserId: userId });
     persistCurrentState(false);
@@ -641,7 +703,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
         const reports = normalizeReports(getInitialArray(localState.reports, state.reports));
         const entries = getInitialArray(localState.entries, state.entries);
         const templateSheets = syncTemplateSheetsWithAllReportEntries(
-          getInitialArray(localState.templateSheets, state.templateSheets),
+          deduplicateTemplateSheets(getInitialArray(localState.templateSheets, state.templateSheets)),
           reports,
           entries
         );
@@ -688,7 +750,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
           remoteDefaultsChanged = normalizedUsers.changed || normalizedTargets.changed || normalizedPeriodTargets.changed;
           const reports = normalizeReports(getInitialArray(remoteState.reports, state.reports));
           const entries = getInitialArray(remoteState.entries, state.entries);
-          const templateSheets = getInitialArray(remoteState.templateSheets, state.templateSheets);
+          const templateSheets = deduplicateTemplateSheets(getInitialArray(remoteState.templateSheets, state.templateSheets));
           const syncedTemplateSheets = syncTemplateSheetsWithAllReportEntries(templateSheets, reports, entries);
           remoteTemplateSheetsSynced = syncedTemplateSheets !== templateSheets;
 
