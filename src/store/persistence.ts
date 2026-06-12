@@ -198,31 +198,51 @@ async function ensureSupabaseSession(client: NonNullable<typeof supabase>) {
   }
 }
 
+async function fetchAll<T>(client: NonNullable<typeof supabase>, table: string): Promise<T[]> {
+  let allData: T[] = [];
+  let from = 0;
+  const step = 1000;
+  
+  while (true) {
+    const { data, error } = await client
+      .from(table)
+      .select('*')
+      .order('created_at', { ascending: true })
+      .range(from, from + step - 1);
+      
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    
+    allData = allData.concat(data);
+    if (data.length < step) break;
+    from += step;
+  }
+  return allData;
+}
+
 export async function loadSupabaseReportState(): Promise<Partial<PersistedReportState>> {
   const client = assertSupabase();
   await ensureSupabaseSession(client);
+  
   const [users, reports, entries, targets, periodTargets, comments] = await Promise.all([
-    client.from('users').select('*').order('created_at', { ascending: true }),
-    client.from('production_reports').select('*').order('report_date', { ascending: true }),
-    client.from('production_entries').select('*').order('created_at', { ascending: true }),
-    client.from('equipment_targets').select('*').order('created_at', { ascending: true }),
-    client.from('production_period_targets').select('*').order('created_at', { ascending: true }),
-    client.from('report_comments').select('*').order('created_at', { ascending: true }),
+    fetchAll<User>(client, 'users'),
+    fetchAll<ProductionReport>(client, 'production_reports'),
+    fetchAll<ProductionEntry>(client, 'production_entries'),
+    fetchAll<EquipmentTarget>(client, 'equipment_targets'),
+    fetchAll<ProductionPeriodTarget>(client, 'production_period_targets'),
+    fetchAll<ReportComment>(client, 'report_comments'),
   ]);
 
-  const firstError = [users, reports, entries, targets, periodTargets, comments].find(result => result.error)?.error;
-  if (firstError) throw firstError;
-
   return {
-    users: (users.data ?? []) as User[],
-    reports: ((reports.data ?? []) as ProductionReport[]).filter(report => !isTemplateWorkbookAnchorReport(report)),
+    users: users,
+    reports: reports.filter(report => !isTemplateWorkbookAnchorReport(report)),
     entries: mergeP8Entries(
-      (entries.data ?? []) as ProductionEntry[],
-      (comments.data ?? []) as ReportComment[]
+      entries,
+      comments
     ),
-    targets: (targets.data ?? []) as EquipmentTarget[],
-    periodTargets: (periodTargets.data ?? []) as ProductionPeriodTarget[],
-    templateSheets: parseTemplateWorkbookSheets((comments.data ?? []) as ReportComment[]),
+    targets: targets,
+    periodTargets: periodTargets,
+    templateSheets: parseTemplateWorkbookSheets(comments),
   };
 }
 
