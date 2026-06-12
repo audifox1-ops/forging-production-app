@@ -262,13 +262,13 @@ export async function saveSupabaseReportState(state: PersistedReportState) {
       ? client.from('production_reports').upsert(state.reports, { onConflict: 'id' })
       : Promise.resolve({ error: null }),
     state.targets.length > 0
-      ? client.from('equipment_targets').upsert(state.targets, { onConflict: 'id' })
+      ? client.from('equipment_targets').upsert(state.targets, { onConflict: 'equipment,shift,effective_date' })
       : Promise.resolve({ error: null }),
     state.periodTargets.length > 0
-      ? client.from('production_period_targets').upsert(state.periodTargets, { onConflict: 'id' })
+      ? client.from('production_period_targets').upsert(state.periodTargets, { onConflict: 'period,effective_date' })
       : Promise.resolve({ error: null }),
     regularEntries.length > 0
-      ? client.from('production_entries').upsert(regularEntries as ProductionEntry[], { onConflict: 'id' })
+      ? client.from('production_entries').upsert(regularEntries as ProductionEntry[], { onConflict: 'report_id,equipment,shift' })
       : Promise.resolve({ error: null }),
     p8Comments.length > 0
       ? client.from('report_comments').upsert(p8Comments, { onConflict: 'id' })
@@ -308,7 +308,7 @@ export async function upsertSupabaseRows(table: SupabaseTableName, rows: Supabas
     await runSupabaseMutation(async client => {
       const results = await Promise.all([
         regularRows.length > 0
-          ? client.from('production_entries').upsert(regularRows as ProductionEntry[], { onConflict: 'id' })
+          ? client.from('production_entries').upsert(regularRows as ProductionEntry[], { onConflict: 'report_id,equipment,shift' })
           : Promise.resolve({ error: null }),
         p8Comments.length > 0
           ? client.from('report_comments').upsert(p8Comments, { onConflict: 'id' })
@@ -319,7 +319,17 @@ export async function upsertSupabaseRows(table: SupabaseTableName, rows: Supabas
     return;
   }
 
-  await runSupabaseMutation(client => client.from(table).upsert(records, { onConflict: 'id' }));
+  if (table === 'equipment_targets') {
+    await runSupabaseMutation(client => client.from(table).upsert(records as any, { onConflict: 'equipment,shift,effective_date' }));
+    return;
+  }
+
+  if (table === 'production_period_targets') {
+    await runSupabaseMutation(client => client.from(table).upsert(records as any, { onConflict: 'period,effective_date' }));
+    return;
+  }
+
+  await runSupabaseMutation(client => client.from(table).upsert(records as any, { onConflict: 'id' }));
 }
 
 export async function deleteSupabaseRows(table: SupabaseTableName, ids: string | string[]) {
@@ -376,6 +386,5 @@ export function getStorageErrorMessage(error: unknown) {
     return 'Supabase가 아직 P8 실적 저장을 허용하지 않습니다. Supabase SQL Editor에서 supabase/add-p8-equipment.sql을 실행한 뒤 다시 저장하세요.';
   }
 
-  if (message) return message;
-  return '저장소 동기화 중 알 수 없는 오류가 발생했습니다.';
+  return `공유 저장 오류 상세 정보: ${JSON.stringify(error, null, 2)}`;
 }
