@@ -187,9 +187,25 @@ export default function UserInputPage() {
     if (canCreateReport && !hasReport) {
       createReport(actualDate);
     }
-  // entries.length를 dependency에 넣으면 saveEntry 호출마다 재실행되어 탭 전환 버그 발생
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actualDate, canCreateReport]);
+
+  // 최초 로드 시 1회만 자동 탭 선택
+  const initialSelectDoneRef = React.useRef(false);
+  useEffect(() => {
+    if (initialSelectDoneRef.current) return;
+    if (entries.length === 0) return;
+
+    // 데이터가 로드된 후 첫 번째로 항목이 있는 설비를 찾아 선택 (딱 한 번만)
+    const firstWithEntries = EQUIPMENT_LIST.find(equipment =>
+      entries.some(entry => entry.equipment === equipment)
+    );
+    if (firstWithEntries) {
+      setSelectedEquipment(firstWithEntries);
+    }
+    initialSelectDoneRef.current = true;
+  }, [entries]);
+
 
   const equipmentTabs = EQUIPMENT_LIST.map(equipment => {
     const equipmentEntries = entries.filter(entry => entry.equipment === equipment);
@@ -218,21 +234,9 @@ export default function UserInputPage() {
   const [sharedReasonSaved, setSharedReasonSaved] = useState(false);
   const sharedReason = sharedReasons[selectedEquipment] ?? getReasonFromEntry(selectedReasonSource);
 
-  // 엔트리가 없는 설비는 선택하지 않음 - 최초 로드 시에만 성립 (selectedEquipment가 아직 없는 경우)
-  const hasSelectedEquipmentEntries = entries.some(entry => entry.equipment === selectedEquipment);
-  React.useEffect(() => {
-    if (entries.length === 0) return;
-    if (hasSelectedEquipmentEntries) return; // 이미 해당 설비 엔트리 있으면 이동 안 함
-
-    const firstEquipment = EQUIPMENT_LIST.find(equipment =>
-      entries.some(entry => entry.equipment === equipment)
-    );
-    if (firstEquipment) {
-      setSelectedEquipment(firstEquipment);
-    }
-  // 엔트리가 없는 설비가 선택된 경우에만 실행 (entries 변경 시마다 실행 X)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasSelectedEquipmentEntries]);
+  // 자동 탭 선택: useEffect 없이 useMemo로 계산
+  // entries가 처음 로드될 때 selectedEquipment가 없으면 첫 번째 설비로 이동
+  // (단, 사용자가 직접 탭을 클릭하면 setSelectedEquipment가 호출되어 아래 로직은 무시됨)
 
   useEffect(() => {
     setSharedReasons(prev => ({
