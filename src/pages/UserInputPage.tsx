@@ -181,12 +181,15 @@ export default function UserInputPage() {
   let report = getReport(actualDate);
   const entries = report ? getEntriesByReport(report.id) : [];
 
-  // 보고서가 없으면 자동 생성
+  // 보고서가 없으면 자동 생성 (actualDate 변경 시에만 실행, entries 변경 시 재실행 X)
+  const hasReport = Boolean(report);
   useEffect(() => {
-    if (canCreateReport) {
+    if (canCreateReport && !hasReport) {
       createReport(actualDate);
     }
-  }, [actualDate, canCreateReport, entries.length]);
+  // entries.length를 dependency에 넣으면 saveEntry 호출마다 재실행되어 탭 전환 버그 발생
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actualDate, canCreateReport]);
 
   const equipmentTabs = EQUIPMENT_LIST.map(equipment => {
     const equipmentEntries = entries.filter(entry => entry.equipment === equipment);
@@ -215,9 +218,11 @@ export default function UserInputPage() {
   const [sharedReasonSaved, setSharedReasonSaved] = useState(false);
   const sharedReason = sharedReasons[selectedEquipment] ?? getReasonFromEntry(selectedReasonSource);
 
-  useEffect(() => {
+  // 엔트리가 없는 설비는 선택하지 않음 - 최초 로드 시에만 성립 (selectedEquipment가 아직 없는 경우)
+  const hasSelectedEquipmentEntries = entries.some(entry => entry.equipment === selectedEquipment);
+  React.useEffect(() => {
     if (entries.length === 0) return;
-    if (entries.some(entry => entry.equipment === selectedEquipment)) return;
+    if (hasSelectedEquipmentEntries) return; // 이미 해당 설비 엔트리 있으면 이동 안 함
 
     const firstEquipment = EQUIPMENT_LIST.find(equipment =>
       entries.some(entry => entry.equipment === equipment)
@@ -225,7 +230,9 @@ export default function UserInputPage() {
     if (firstEquipment) {
       setSelectedEquipment(firstEquipment);
     }
-  }, [entries, selectedEquipment]);
+  // 엔트리가 없는 설비가 선택된 경우에만 실행 (entries 변경 시마다 실행 X)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSelectedEquipmentEntries]);
 
   useEffect(() => {
     setSharedReasons(prev => ({
@@ -241,8 +248,13 @@ export default function UserInputPage() {
     selectedReasonSource?.reason_detail,
   ]);
 
+  const prevReportIdRef = React.useRef<string | undefined>(undefined);
   useEffect(() => {
-    setEntryDrafts({});
+    // report.id가 실제로 다른 보고서로 바뀌었을 때만 draft 초기화 (새 보고서 생성 시 createReport가 재호출되어 id가 바뀌는 문제 방지)
+    if (report?.id && prevReportIdRef.current && prevReportIdRef.current !== report.id) {
+      setEntryDrafts({});
+    }
+    prevReportIdRef.current = report?.id;
   }, [report?.id]);
 
   const handlePlanDateChange = (value: string) => {
@@ -504,6 +516,28 @@ function EntryInputCard({
   });
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const isDirtyRef = React.useRef(false); // 사용자가 현재 편집 중인지 추적
+
+  // 임시저장 후 entry props가 업데이트될 때 formData 동기화
+  // 단, 사용자가 현재 편집 중(isDirty)이면 덮어쓰지 않음
+  React.useEffect(() => {
+    if (isDirtyRef.current) return;
+    setFormData({
+      product_plan: entry.product_plan,
+      product_actual: entry.product_actual,
+      billet_plan: entry.billet_plan,
+      billet_actual: entry.billet_actual,
+      next_product_plan: entry.next_product_plan || 0,
+      next_billet_plan: entry.next_billet_plan || 0,
+    });
+  }, [
+    entry.product_plan,
+    entry.product_actual,
+    entry.billet_plan,
+    entry.billet_actual,
+    entry.next_product_plan,
+    entry.next_billet_plan,
+  ]);
 
   const productShortfall = Math.max(0, (formData.product_plan || 0) - (formData.product_actual || 0));
   const billetShortfall = Math.max(0, (formData.billet_plan || 0) - (formData.billet_actual || 0));
@@ -527,6 +561,7 @@ function EntryInputCard({
     onDraftChange(entry.id, nextFormData);
     setErrors([]);
     setSaved(false);
+    isDirtyRef.current = true; // 편집 시작 표시
   };
 
   const validate = (): boolean => {
@@ -553,6 +588,7 @@ function EntryInputCard({
       ...getReasonPayload(sharedReason),
     });
     onSaveSharedReason(entry.id);
+    isDirtyRef.current = false; // 저장 완료 - 이후 entry props 동기화 허용
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
