@@ -9,6 +9,7 @@ import TemplateWorkbookPage from './pages/TemplateWorkbookPage';
 import UserManagementPage from './pages/UserManagementPage';
 import TargetManagementPage from './pages/TargetManagementPage';
 import Layout from './components/Layout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useReportStore } from './store/reportStore';
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
   }, []);
 
   return (
+    <ErrorBoundary>
     <HashRouter>
       <Routes>
         <Route path="/login" element={<Navigate to="/dashboard" replace />} />
@@ -62,6 +64,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>
+    </ErrorBoundary>
   );
 }
 
