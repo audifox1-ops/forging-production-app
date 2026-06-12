@@ -30,19 +30,21 @@ export default function TargetManagementPage() {
 
   const handleChange = (equipment: string, shift: string, field: 'product' | 'billet', value: number) => {
     if (!canManageTargets) return;
+    const safeValue = Number.isFinite(value) && value < 0 ? 0 : value;
     const key = `${equipment}-${shift}`;
     setLocalTargets(prev => ({
       ...prev,
-      [key]: { ...prev[key], [field]: value },
+      [key]: { ...prev[key], [field]: safeValue },
     }));
     setSaved(false);
   };
 
   const handlePeriodChange = (period: PeriodTargetType, field: 'product' | 'billet', value: number) => {
     if (!canManageTargets) return;
+    const safeValue = Number.isFinite(value) && value < 0 ? 0 : value;
     setLocalPeriodTargets(prev => ({
       ...prev,
-      [period]: { ...prev[period], [field]: value },
+      [period]: { ...prev[period], [field]: safeValue },
     }));
     setSaved(false);
   };

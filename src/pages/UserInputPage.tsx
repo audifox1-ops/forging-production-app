@@ -5,7 +5,7 @@ import { ko } from 'date-fns/locale';
 import { Save, Send, AlertCircle, CheckCircle, Info, ChevronDown, ChevronUp, CalendarDays } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { Equipment, EquipmentTarget, EQUIPMENT_LIST, ProductionEntry, REASON_CATEGORIES, ReasonCategory, SHIFT_LIST } from '../types';
-import { formatNumber } from '../utils/calculations';
+import { formatNumber, calcNullableRate, getRateColorClass } from '../utils/calculations';
 import {
   getActualDateFromPlanDate,
   getPlanDateFromActualDate,
@@ -46,20 +46,8 @@ function calcEquipmentTargetShortfall(
   };
 }
 
-function calcTargetAchievementRate(actual: number, target: number): number | null {
-  if (!target) return null;
-  return Math.round((actual / target) * 1000) / 10;
-}
-
 function formatAchievementRate(rate: number | null) {
   return rate === null ? '-' : `${rate.toFixed(1)}%`;
-}
-
-function getAchievementRateClass(rate: number | null) {
-  if (rate === null) return 'text-gray-400';
-  if (rate >= 100) return 'text-green-700';
-  if (rate >= 90) return 'text-yellow-700';
-  return 'text-red-700';
 }
 
 function getReasonFromEntry(entry?: Partial<ReasonFormData>): ReasonFormData {
@@ -78,12 +66,12 @@ function hasReasonContent(entry: Partial<ReasonFormData>) {
 
 function getReasonPayload(reason: ReasonFormData) {
   return {
-    reason_category: reason.reason_category || null,
-    reason_detail: reason.reason_detail.trim() || null,
-    action_today: null,
-    recovery_plan: null,
-    support_request: null,
-  } as any;
+    reason_category: reason.reason_category || undefined,
+    reason_detail: reason.reason_detail.trim() || undefined,
+    action_today: undefined,
+    recovery_plan: undefined,
+    support_request: undefined,
+  };
 }
 
 function DailyTargetAchievementPanel({
@@ -93,8 +81,8 @@ function DailyTargetAchievementPanel({
   equipment: Equipment;
   targetShortfall: ReturnType<typeof calcEquipmentTargetShortfall>;
 }) {
-  const productRate = calcTargetAchievementRate(targetShortfall.productActual, targetShortfall.productTarget);
-  const billetRate = calcTargetAchievementRate(targetShortfall.billetActual, targetShortfall.billetTarget);
+  const productRate = calcNullableRate(targetShortfall.productActual, targetShortfall.productTarget);
+  const billetRate = calcNullableRate(targetShortfall.billetActual, targetShortfall.billetTarget);
   const items = [
     {
       label: '제품',
@@ -143,7 +131,7 @@ function DailyTargetAchievementPanel({
                     목표 {formatNumber(item.target)} KG / 실적 {formatNumber(item.actual)} KG
                   </div>
                 </div>
-                <div className={`text-2xl font-bold tabular-nums ${getAchievementRateClass(item.rate)}`}>
+                <div className={`text-2xl font-bold tabular-nums ${getRateColorClass(item.rate)}`}>
                   {formatAchievementRate(item.rate)}
                 </div>
               </div>
@@ -296,6 +284,29 @@ export default function UserInputPage() {
     setSharedReasonErrors(errors);
     return errors.length === 0;
   };
+
+  if (isHydrating && !hasHydrated) {
+    return (
+      <div className="space-y-5 fade-in max-w-5xl mx-auto">
+        <div className="card">
+          <div className="card-body">
+            <div className="h-8 bg-slate-200 rounded w-48 animate-pulse" />
+            <div className="mt-2 h-5 bg-slate-100 rounded w-64 animate-pulse" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-24 bg-slate-100 rounded-lg animate-pulse" />
+          ))}
+        </div>
+        <div className="card">
+          <div className="card-body">
+            <div className="h-48 bg-slate-100 rounded-lg animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!report) {
     return (
@@ -482,7 +493,7 @@ function EntryInputCard({
   onSaveSharedReason,
   onSubmit,
 }: {
-  entry: any;
+  entry: ProductionEntry;
   reportId: string;
   targets: EquipmentTarget[];
   canWrite: boolean;
@@ -492,7 +503,7 @@ function EntryInputCard({
   equipment: Equipment;
   onDraftChange: (entryId: string, draft: EntryQuantityDraft) => void;
   validateSharedReason: (requiresReason?: boolean) => boolean;
-  onSave: (data: any) => void;
+  onSave: (data: Partial<ProductionEntry> & { report_id: string; equipment: string; shift: string; user_id: string }) => void;
   onSaveSharedReason: (skipEntryId?: string) => void;
   onSubmit: (id: string) => void;
 }) {
@@ -548,12 +559,14 @@ function EntryInputCard({
   const equipmentBilletTarget = equipmentTargets.reduce((sum, target) => sum + (target.billet_target || 0), 0);
 
   const handleChange = (field: string, value: string | number) => {
-    const nextFormData = { ...formData, [field]: value };
+    const numericValue = typeof value === 'number' ? value : Number(value);
+    const safeValue = Number.isFinite(numericValue) && numericValue < 0 ? 0 : numericValue;
+    const nextFormData = { ...formData, [field]: safeValue };
     setFormData(nextFormData);
     onDraftChange(entry.id, nextFormData);
     setErrors([]);
     setSaved(false);
-    isDirtyRef.current = true; // 편집 시작 표시
+    isDirtyRef.current = true;
   };
 
   const validate = (): boolean => {
