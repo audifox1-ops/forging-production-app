@@ -181,30 +181,17 @@ export default function UserInputPage() {
   let report = getReport(actualDate);
   const entries = report ? getEntriesByReport(report.id) : [];
 
-  // 보고서가 없으면 자동 생성 (actualDate 변경 시에만 실행, entries 변경 시 재실행 X)
+  // 보고서가 없거나 누락된 항목이 있을 경우(8개 미만) 자동 생성/복구
   const hasReport = Boolean(report);
+  const expectedEntriesCount = EQUIPMENT_LIST.length * SHIFT_LIST.length; // 4 * 2 = 8
+  const hasMissingEntries = entries.length < expectedEntriesCount;
+
   useEffect(() => {
-    if (canCreateReport && !hasReport) {
+    if (canCreateReport && (!hasReport || hasMissingEntries)) {
       createReport(actualDate);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actualDate, canCreateReport]);
-
-  // 최초 로드 시 1회만 자동 탭 선택
-  const initialSelectDoneRef = React.useRef(false);
-  useEffect(() => {
-    if (initialSelectDoneRef.current) return;
-    if (entries.length === 0) return;
-
-    // 데이터가 로드된 후 첫 번째로 항목이 있는 설비를 찾아 선택 (딱 한 번만)
-    const firstWithEntries = EQUIPMENT_LIST.find(equipment =>
-      entries.some(entry => entry.equipment === equipment)
-    );
-    if (firstWithEntries) {
-      setSelectedEquipment(firstWithEntries);
-    }
-    initialSelectDoneRef.current = true;
-  }, [entries]);
+  }, [actualDate, canCreateReport, hasReport, hasMissingEntries]);
 
 
   const equipmentTabs = EQUIPMENT_LIST.map(equipment => {
