@@ -1,7 +1,18 @@
 import React, { Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useReportStore } from './store/reportStore';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
 const UserInputPage = React.lazy(() => import('./pages/UserInputPage'));
@@ -45,6 +56,7 @@ function App() {
 
   return (
     <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
     <HashRouter>
       <Suspense fallback={<PageLoader />}>
         <Routes>
@@ -78,6 +90,7 @@ function App() {
         </Routes>
       </Suspense>
     </HashRouter>
+    </QueryClientProvider>
     </ErrorBoundary>
   );
 }
