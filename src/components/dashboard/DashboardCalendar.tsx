@@ -4,7 +4,7 @@ import { ko } from 'date-fns/locale';
 import { AlertTriangle } from 'lucide-react';
 import { useReportStore } from '../../store/reportStore';
 import { calcDashboardSummary, formatNumber } from '../../utils/calculations';
-import { getReportPlanDate, getActualDateFromPlanDate } from '../../utils/reportDates';
+import { getReportPlanDate, getActualDateFromPlanDate, getDayName } from '../../utils/reportDates';
 import type { SummaryPeriod } from '../../types';
 import type { ProductionReport } from '../../types';
 
@@ -142,7 +142,7 @@ export function DashboardCalendar({ selectedPlanDate, selectedPeriod, periodRang
                 </div>
               </div>
               <div className="mt-3 text-xs text-gray-500">
-                전일 실적 {format(new Date(actualDateKey), 'M.d')}
+                전일 실적 {format(new Date(actualDateKey), 'M.d')} ({getDayName(actualDateKey)})
               </div>
               {daySummary ? (
                 <div className="mt-2 space-y-1 text-xs">

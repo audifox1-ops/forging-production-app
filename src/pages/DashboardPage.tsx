@@ -37,6 +37,7 @@ import {
   getActualDateFromPlanDate,
   getReportPlanDate,
   getTodayPlanDate,
+  getDayName,
 } from '../utils/reportDates';
 import { get2026PeriodTargetForDate } from '../utils/targetConfig';
 import { downloadReportExcel } from '../utils/excelTemplate';
@@ -113,9 +114,13 @@ export default function DashboardPage() {
   const canEdit = isAdmin || Boolean(currentUser?.can_edit);
   const canCreateReport = canWrite || canEdit;
   const [selectedPlanDate, setSelectedPlanDate] = React.useState(getTodayPlanDate());
+  const [selectedActualDate, setSelectedActualDate] = React.useState(() => getActualDateFromPlanDate(getTodayPlanDate()));
   const [selectedPeriod, setSelectedPeriod] = React.useState<SummaryPeriod>('day');
 
-  const selectedActualDate = getActualDateFromPlanDate(selectedPlanDate);
+  // 계획일이 바뀌면 전일 실적일을 마지막 근무일로 자동 설정 (수동 변경 전까지)
+  React.useEffect(() => {
+    setSelectedActualDate(getActualDateFromPlanDate(selectedPlanDate));
+  }, [selectedPlanDate]);
   const reportsByPlanDate = React.useMemo(
     () => new Map(reports.map(report => [getReportPlanDate(report), report])),
     [reports]
@@ -542,8 +547,19 @@ export default function DashboardPage() {
             <h1 className="mt-1 text-2xl font-bold text-slate-900">생산 대시보드</h1>
             <p className="text-sm text-slate-500 mt-1">
               금일 계획일 {periodRangeLabel}
-              {selectedPeriod === 'day' && ` · 전일 실적일 ${format(new Date(selectedActualDate), 'yyyy.MM.dd')}`}
             </p>
+            {selectedPeriod === 'day' && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-sm text-slate-600">전일 실적일:</span>
+                <input
+                  type="date"
+                  value={selectedActualDate}
+                  onChange={e => setSelectedActualDate(e.target.value)}
+                  className="h-8 px-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <span className="text-xs text-slate-400">({getDayName(selectedActualDate)}요일)</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
@@ -741,7 +757,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="mt-3 text-xs text-gray-500">
-                        전일 실적 {format(new Date(actualDateKey), 'M.d')}
+                        전일 실적 {format(new Date(actualDateKey), 'M.d')} ({getDayName(actualDateKey)})
                       </div>
                       {daySummary ? (
                         <div className="mt-2 space-y-1 text-xs">
@@ -801,7 +817,7 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <div className="ml-auto text-sm text-blue-600">
-                  전일 실적 {format(new Date(selectedActualDate), 'yyyy.MM.dd')} ·
+                  전일 실적 {format(new Date(selectedActualDate), 'yyyy.MM.dd')} ({getDayName(selectedActualDate)}) ·
                   금일 계획 {format(new Date(selectedPlanDate), 'yyyy.MM.dd')} ·
                   제출: {summary.submit_status_count.submitted}/{summary.submit_status_count.total}명 ·
                   미입력: {summary.submit_status_count.not_started}명
