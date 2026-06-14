@@ -204,10 +204,24 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-6 main-content">
           <Outlet />
         </main>
       </div>
+
+      {/* 모바일 하단 네비게이션 */}
+      <nav className="mobile-nav md:hidden">
+        {navItems.slice(0, 4).map(item => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) => isActive ? 'active' : ''}
+          >
+            <item.icon size={20} />
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }
