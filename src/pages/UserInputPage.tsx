@@ -254,6 +254,12 @@ export default function UserInputPage() {
     navigate(`/reports/${getActualDateFromPlanDate(value)}/input`);
   };
 
+  const handleActualDateChange = (value: string) => {
+    if (!value) return;
+    // 전일 실적일이 변경되면 해당 실적일을 기준으로 하는 보고서로 이동
+    navigate(`/reports/${value}/input`);
+  };
+
   const handleSharedReasonChange = (field: keyof ReasonFormData, value: string) => {
     setSharedReasons(prev => ({
       ...prev,
@@ -348,16 +354,31 @@ export default function UserInputPage() {
                 현재 계정: {currentUser?.name || '-'} · {isAdmin ? '관리자 전체 권한' : canWrite || canEdit ? '권한 부여됨' : '읽기 전용'}
               </p>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-              <CalendarDays size={16} className="text-gray-500" />
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">금일 계획일 선택</label>
-                <input
-                  type="date"
-                  value={planDate}
-                  onChange={event => handlePlanDateChange(event.target.value)}
-                  className="form-input py-1.5 w-auto bg-white"
-                />
+            <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <CalendarDays size={16} className="text-gray-500" />
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">금일 계획일</label>
+                  <input
+                    type="date"
+                    value={planDate}
+                    onChange={event => handlePlanDateChange(event.target.value)}
+                    className="form-input py-1.5 w-auto bg-white"
+                  />
+                </div>
+              </div>
+              <div className="h-8 w-px bg-gray-200" />
+              <div className="flex items-center gap-2">
+                <CalendarDays size={16} className="text-gray-500" />
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">전일 실적일</label>
+                  <input
+                    type="date"
+                    value={actualDate}
+                    onChange={event => handleActualDateChange(event.target.value)}
+                    className="form-input py-1.5 w-auto bg-white"
+                  />
+                </div>
               </div>
             </div>
           </div>
