@@ -32,7 +32,7 @@ import KPIStatusCard from '../components/KPIStatusCard';
 import ReasonContent from '../components/ReasonContent';
 import SubmitStatusBadge from '../components/SubmitStatusBadge';
 import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
-import type { PeriodTargetType, ProductionReport } from '../types';
+import type { PeriodTargetType, ProductionReport, SummaryPeriod } from '../types';
 import {
   getActualDateFromPlanDate,
   getReportPlanDate,
@@ -40,8 +40,6 @@ import {
 } from '../utils/reportDates';
 import { get2026PeriodTargetForDate } from '../utils/targetConfig';
 import { downloadReportExcel } from '../utils/excelTemplate';
-
-type SummaryPeriod = 'day' | 'week' | 'month' | 'year';
 
 const PERIOD_OPTIONS: { value: SummaryPeriod; label: string }[] = [
   { value: 'day', label: '일간' },
