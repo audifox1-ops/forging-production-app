@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Plus, FileText, Calendar, Eye, Printer, Copy, Download } from 'lucide-react';
+import { Plus, FileText, Calendar, Eye, Printer, Copy, Download, X } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { calcDashboardSummary } from '../utils/calculations';
 import { STATUS_LABELS } from '../types';
@@ -11,9 +11,98 @@ import {
   getActualDateFromPlanDate,
   getReportPlanDate,
   getTodayPlanDate,
+  getDayName,
+  isWeekend,
 } from '../utils/reportDates';
 import { downloadReportExcel } from '../utils/excelTemplate';
 import type { ProductionReport } from '../types';
+
+function CreateReportDialog({
+  isOpen,
+  onClose,
+  onConfirm,
+  defaultActualDate,
+  defaultPlanDate,
+  sourceReportDate,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (actualDate: string) => void;
+  defaultActualDate: string;
+  defaultPlanDate: string;
+  sourceReportDate?: string;
+}) {
+  const [actualDate, setActualDate] = React.useState(defaultActualDate);
+
+  React.useEffect(() => {
+    if (isOpen) setActualDate(defaultActualDate);
+  }, [isOpen, defaultActualDate]);
+
+  if (!isOpen) return null;
+
+  const actualDayName = getDayName(actualDate);
+  const isWeekendSelected = isWeekend(actualDate);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/55 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-[min(480px,96vw)] overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">
+              {sourceReportDate ? '보고서 복사' : '새 보고서 작성'}
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              금일 계획일: {defaultPlanDate} ({getDayName(defaultPlanDate)}요일)
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">전일 실적일</label>
+            <input
+              type="date"
+              value={actualDate}
+              onChange={e => setActualDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-sm text-gray-600">
+                선택한 날짜: {actualDate} ({actualDayName}요일)
+              </span>
+              {isWeekendSelected && (
+                <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                  주말입니다
+                </span>
+              )}
+            </div>
+          </div>
+
+          {sourceReportDate && (
+            <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+              <strong>복사 원본:</strong> {sourceReportDate} ({getDayName(sourceReportDate)}요일)
+              <br />
+              원본 보고서의 실적 데이터가 새 보고서에 복사됩니다.
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100 bg-gray-50">
+          <button onClick={onClose} className="btn-secondary">취소</button>
+          <button
+            onClick={() => onConfirm(actualDate)}
+            className="btn-primary flex items-center gap-2"
+          >
+            {sourceReportDate ? '복사해서 만들기' : '보고서 만들기'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ReportHistoryPage() {
   const navigate = useNavigate();
@@ -24,21 +113,37 @@ export default function ReportHistoryPage() {
   const canEdit = isAdmin || Boolean(currentUser?.can_edit);
   const canCreateReport = canWrite || canEdit;
 
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [copySourceDate, setCopySourceDate] = React.useState<string | undefined>(undefined);
+
+  const defaultActualDate = getActualDateFromPlanDate(getTodayPlanDate());
+  const defaultPlanDate = getTodayPlanDate();
+
   const sortedReports = [...reports].sort(
     (a, b) => new Date(getReportPlanDate(b)).getTime() - new Date(getReportPlanDate(a)).getTime()
   );
 
-  const handleCreate = () => {
+  const handleOpenCreate = () => {
     if (!canCreateReport) return;
-    const report = createReport(getActualDateFromPlanDate(getTodayPlanDate()));
-    navigate(`/reports/${report.report_date}/input`);
+    setCopySourceDate(undefined);
+    setDialogOpen(true);
   };
 
-  const handleCopy = (reportDate: string) => {
+  const handleOpenCopy = (reportDate: string) => {
     if (!canCreateReport) return;
-    const newDate = getActualDateFromPlanDate(getTodayPlanDate());
-    const report = createReport(newDate, { sourceReportDate: reportDate });
-    navigate(`/reports/${report.report_date}/input`);
+    setCopySourceDate(reportDate);
+    setDialogOpen(true);
+  };
+
+  const handleConfirm = (actualDate: string) => {
+    if (copySourceDate) {
+      const report = createReport(actualDate, { sourceReportDate: copySourceDate });
+      navigate(`/reports/${report.report_date}/input`);
+    } else {
+      const report = createReport(actualDate);
+      navigate(`/reports/${report.report_date}/input`);
+    }
+    setDialogOpen(false);
   };
 
   const handleExcelDownload = async (report: ProductionReport) => {
@@ -57,7 +162,7 @@ export default function ReportHistoryPage() {
           <h1 className="text-2xl font-bold text-gray-900">보고 이력</h1>
           <p className="text-sm text-gray-500 mt-0.5">날짜별 생산 보고서 목록</p>
         </div>
-        <button onClick={handleCreate} disabled={!canCreateReport} className="btn-primary flex items-center gap-2">
+        <button onClick={handleOpenCreate} disabled={!canCreateReport} className="btn-primary flex items-center gap-2">
           <Plus size={16} />
           {canCreateReport ? '새 보고서 작성' : '권한 필요'}
         </button>
@@ -90,11 +195,13 @@ export default function ReportHistoryPage() {
                     <td className="px-4 py-3 font-semibold text-gray-800">
                       <div className="flex items-center gap-2">
                         <Calendar size={14} className="text-gray-400" />
-                        {format(new Date(report.report_date), 'yyyy.MM.dd (eee)', { locale: ko })}
+                        {format(new Date(report.report_date), 'yyyy.MM.dd', { locale: ko })}
+                        <span className="text-xs text-gray-400">({getDayName(report.report_date)}요일)</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-500">
-                      {format(new Date(getReportPlanDate(report)), 'yyyy.MM.dd (eee)', { locale: ko })}
+                      {format(new Date(getReportPlanDate(report)), 'yyyy.MM.dd', { locale: ko })}
+                      <span className="text-xs text-gray-400 ml-1">({getDayName(getReportPlanDate(report))}요일)</span>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`badge ${
@@ -151,7 +258,7 @@ export default function ReportHistoryPage() {
                           <Download size={15} />
                         </button>
                         <button
-                          onClick={() => handleCopy(report.report_date)}
+                          onClick={() => handleOpenCopy(report.report_date)}
                           disabled={!canCreateReport}
                           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                           title="복사해서 새 보고서 생성"
@@ -175,6 +282,16 @@ export default function ReportHistoryPage() {
           </table>
         </div>
       </div>
+
+      {/* 보고서 생성/복사 다이얼로그 */}
+      <CreateReportDialog
+        isOpen={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onConfirm={handleConfirm}
+        defaultActualDate={defaultActualDate}
+        defaultPlanDate={defaultPlanDate}
+        sourceReportDate={copySourceDate}
+      />
     </div>
   );
 }

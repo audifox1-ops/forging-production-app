@@ -26,22 +26,21 @@ import {
   ChevronLeft, ChevronRight, ClipboardCheck, Download, Printer, PlusCircle, RefreshCw, Users,
 } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { calcDashboardSummary, formatNumber } from '../utils/calculations';
+import { calcDashboardSummary, formatNumber, calcNullableRate, getRateColorClass, getTableRateClass, calcRate } from '../utils/calculations';
 import { getEquipmentReasonGroups } from '../utils/reasonGroups';
 import KPIStatusCard from '../components/KPIStatusCard';
 import ReasonContent from '../components/ReasonContent';
 import SubmitStatusBadge from '../components/SubmitStatusBadge';
 import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
-import type { PeriodTargetType, ProductionReport } from '../types';
+import type { PeriodTargetType, ProductionReport, SummaryPeriod } from '../types';
 import {
   getActualDateFromPlanDate,
   getReportPlanDate,
   getTodayPlanDate,
+  getDayName,
 } from '../utils/reportDates';
 import { get2026PeriodTargetForDate } from '../utils/targetConfig';
 import { downloadReportExcel } from '../utils/excelTemplate';
-
-type SummaryPeriod = 'day' | 'week' | 'month' | 'year';
 
 const PERIOD_OPTIONS: { value: SummaryPeriod; label: string }[] = [
   { value: 'day', label: '일간' },
@@ -106,39 +105,22 @@ function shiftPlanDate(dateString: string, period: SummaryPeriod, direction: -1 
   return format(nextDate, 'yyyy-MM-dd');
 }
 
-function getRateColor(rate: number) {
-  if (rate >= 100) return 'text-green-700';
-  if (rate >= 90) return 'text-yellow-700';
-  return 'text-red-700';
-}
-
-function calcRate(actual: number, plan: number) {
-  return plan > 0 ? Math.round((actual / plan) * 1000) / 10 : 0;
-}
-
-function calcNullableRate(actual: number, plan: number) {
-  return plan > 0 ? (actual / plan) * 100 : null;
-}
-
-function getTableRateClass(rate: number | null) {
-  if (rate === null) return 'text-gray-400';
-  if (rate >= 100) return 'text-green-600';
-  if (rate >= 90) return 'text-yellow-600';
-  return 'text-red-600';
-}
-
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { reports, targets, periodTargets, getEntriesByReport, createReport, getCurrentUser } = useReportStore();
+  const { reports, targets, periodTargets, getEntriesByReport, createReport, getCurrentUser, isHydrating, hasHydrated } = useReportStore();
   const currentUser = getCurrentUser();
   const isAdmin = currentUser?.role === 'admin';
   const canWrite = isAdmin || Boolean(currentUser?.can_write);
   const canEdit = isAdmin || Boolean(currentUser?.can_edit);
   const canCreateReport = canWrite || canEdit;
   const [selectedPlanDate, setSelectedPlanDate] = React.useState(getTodayPlanDate());
+  const [selectedActualDate, setSelectedActualDate] = React.useState(() => getActualDateFromPlanDate(getTodayPlanDate()));
   const [selectedPeriod, setSelectedPeriod] = React.useState<SummaryPeriod>('day');
 
-  const selectedActualDate = getActualDateFromPlanDate(selectedPlanDate);
+  // 계획일이 바뀌면 전일 실적일을 마지막 근무일로 자동 설정 (수동 변경 전까지)
+  React.useEffect(() => {
+    setSelectedActualDate(getActualDateFromPlanDate(selectedPlanDate));
+  }, [selectedPlanDate]);
   const reportsByPlanDate = React.useMemo(
     () => new Map(reports.map(report => [getReportPlanDate(report), report])),
     [reports]
@@ -565,8 +547,19 @@ export default function DashboardPage() {
             <h1 className="mt-1 text-2xl font-bold text-slate-900">생산 대시보드</h1>
             <p className="text-sm text-slate-500 mt-1">
               금일 계획일 {periodRangeLabel}
-              {selectedPeriod === 'day' && ` · 전일 실적일 ${format(new Date(selectedActualDate), 'yyyy.MM.dd')}`}
             </p>
+            {selectedPeriod === 'day' && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-sm text-slate-600">전일 실적일:</span>
+                <input
+                  type="date"
+                  value={selectedActualDate}
+                  onChange={e => setSelectedActualDate(e.target.value)}
+                  className="h-8 px-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <span className="text-xs text-slate-400">({getDayName(selectedActualDate)}요일)</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
@@ -764,7 +757,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="mt-3 text-xs text-gray-500">
-                        전일 실적 {format(new Date(actualDateKey), 'M.d')}
+                        전일 실적 {format(new Date(actualDateKey), 'M.d')} ({getDayName(actualDateKey)})
                       </div>
                       {daySummary ? (
                         <div className="mt-2 space-y-1 text-xs">
@@ -824,7 +817,7 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <div className="ml-auto text-sm text-blue-600">
-                  전일 실적 {format(new Date(selectedActualDate), 'yyyy.MM.dd')} ·
+                  전일 실적 {format(new Date(selectedActualDate), 'yyyy.MM.dd')} ({getDayName(selectedActualDate)}) ·
                   금일 계획 {format(new Date(selectedPlanDate), 'yyyy.MM.dd')} ·
                   제출: {summary.submit_status_count.submitted}/{summary.submit_status_count.total}명 ·
                   미입력: {summary.submit_status_count.not_started}명
@@ -905,7 +898,7 @@ export default function DashboardPage() {
                         <div className={`text-sm font-bold ${item.labelClass}`}>{item.label}</div>
                         <div className="text-xs text-gray-500 mt-0.5">계획 대비 실적</div>
                       </div>
-                      <div className={`text-2xl font-bold tabular-nums ${getRateColor(item.rate)}`}>
+                      <div className={`text-2xl font-bold tabular-nums ${getRateColorClass(item.rate)}`}>
                         {item.rate.toFixed(1)}%
                       </div>
                     </div>
@@ -1161,7 +1154,28 @@ export default function DashboardPage() {
                     const reasonGroup = reasonGroupsByEquipment.get(group.equipment);
                     const reasonLabel = reasonGroup?.categories.join(', ');
 
-                    return (
+  if (isHydrating && !hasHydrated) {
+    return (
+      <div className="space-y-6 fade-in">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="h-8 bg-slate-200 rounded w-48 animate-pulse" />
+          <div className="mt-2 h-5 bg-slate-100 rounded w-64 animate-pulse" />
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-20 bg-slate-100 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        </section>
+        <div className="card">
+          <div className="card-body">
+            <div className="h-64 bg-slate-100 rounded-lg animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
                     <React.Fragment key={group.equipment}>
                       {group.rows.map((row, rowIndex) => (
                         <tr

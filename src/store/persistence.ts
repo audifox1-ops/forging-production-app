@@ -1,4 +1,5 @@
 import supabase, { isDemoMode } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import {
   EquipmentTarget,
   ProductionEntry,
@@ -61,7 +62,7 @@ export function loadLocalReportState(): Partial<PersistedReportState> | null {
     if (!raw) return null;
     return JSON.parse(raw) as Partial<PersistedReportState>;
   } catch (error) {
-    console.warn('Failed to load local report state', error);
+    logger.warn('localStorage 로드 실패', { error: String(error) });
     return null;
   }
 }
@@ -73,7 +74,12 @@ export function saveLocalReportState(state: PersistedReportState) {
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
-    console.warn('Failed to save local report state', error);
+    const isQuotaError = error instanceof DOMException && error.name === 'QuotaExceededError';
+    if (isQuotaError) {
+      logger.warn('localStorage 용량 초과', { error: String(error) });
+    } else {
+      logger.warn('localStorage 저장 실패', { error: String(error) });
+    }
   }
 }
 
@@ -194,7 +200,7 @@ async function ensureSupabaseSession(client: NonNullable<typeof supabase>) {
 
   const { error } = await client.auth.signInAnonymously();
   if (error) {
-    console.warn('Supabase anonymous sign-in failed. Falling back to existing access policy.', error);
+    logger.warn('Supabase 익명 인증 실패', { error: String(error) });
   }
 }
 
@@ -320,16 +326,16 @@ export async function upsertSupabaseRows(table: SupabaseTableName, rows: Supabas
   }
 
   if (table === 'equipment_targets') {
-    await runSupabaseMutation(client => client.from(table).upsert(records as any, { onConflict: 'equipment,shift,effective_date' }));
+    await runSupabaseMutation(client => client.from(table).upsert(records as EquipmentTarget[], { onConflict: 'equipment,shift,effective_date' }));
     return;
   }
 
   if (table === 'production_period_targets') {
-    await runSupabaseMutation(client => client.from(table).upsert(records as any, { onConflict: 'period,effective_date' }));
+    await runSupabaseMutation(client => client.from(table).upsert(records as ProductionPeriodTarget[], { onConflict: 'period,effective_date' }));
     return;
   }
 
-  await runSupabaseMutation(client => client.from(table).upsert(records as any, { onConflict: 'id' }));
+  await runSupabaseMutation(client => client.from(table).upsert(records as User[], { onConflict: 'id' }));
 }
 
 export async function deleteSupabaseRows(table: SupabaseTableName, ids: string | string[]) {
@@ -376,15 +382,23 @@ export function getStorageErrorMessage(error: unknown) {
   const code = getSupabaseErrorCode(error);
 
   if (isSupabaseSchemaError(error)) {
-    return `Supabase 테이블을 찾을 수 없습니다${code ? ` (${code})` : ''}. Supabase SQL Editor에서 supabase/fix-42p01.sql을 실행하세요. 서버 공유 저장이 복구될 때까지 다른 자리와 데이터가 공유되지 않을 수 있습니다.`;
+    return `Supabase 테이블을 찾을 수 없습니다${code ? ` (${code})` : ''}. Supabase SQL Editor에서 supabase/fix-42p01.sql을 실행하세요.`;
   }
 
   if (
     code === '23514' &&
     /production_entries_equipment_check|violates check constraint/i.test(message)
   ) {
-    return 'Supabase가 아직 P8 실적 저장을 허용하지 않습니다. Supabase SQL Editor에서 supabase/add-p8-equipment.sql을 실행한 뒤 다시 저장하세요.';
+    return 'Supabase가 아직 P8 실적 저장을 허용하지 않습니다. supabase/add-p8-equipment.sql을 실행한 뒤 다시 저장하세요.';
   }
 
-  return `공유 저장 오류 상세 정보: ${JSON.stringify(error, null, 2)}`;
+  if (code === '401' || code === '403') {
+    return 'Supabase 인증 오류입니다. 페이지를 새로고침한 뒤 다시 시도해주세요.';
+  }
+
+  if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || /network/i.test(message)) {
+    return '네트워크 연결 오류입니다. 인터넷 연결을 확인한 뒤 다시 시도해주세요.';
+  }
+
+  return `공유 저장 오류: ${message || '알 수 없는 오류'}`;
 }

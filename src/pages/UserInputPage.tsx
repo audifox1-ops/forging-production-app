@@ -4,8 +4,9 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Save, Send, AlertCircle, CheckCircle, Info, ChevronDown, ChevronUp, CalendarDays } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
+import { useToast } from '../components/Toast';
 import { Equipment, EquipmentTarget, EQUIPMENT_LIST, ProductionEntry, REASON_CATEGORIES, ReasonCategory, SHIFT_LIST } from '../types';
-import { formatNumber } from '../utils/calculations';
+import { formatNumber, calcNullableRate, getRateColorClass } from '../utils/calculations';
 import {
   getActualDateFromPlanDate,
   getPlanDateFromActualDate,
@@ -46,20 +47,8 @@ function calcEquipmentTargetShortfall(
   };
 }
 
-function calcTargetAchievementRate(actual: number, target: number): number | null {
-  if (!target) return null;
-  return Math.round((actual / target) * 1000) / 10;
-}
-
 function formatAchievementRate(rate: number | null) {
   return rate === null ? '-' : `${rate.toFixed(1)}%`;
-}
-
-function getAchievementRateClass(rate: number | null) {
-  if (rate === null) return 'text-gray-400';
-  if (rate >= 100) return 'text-green-700';
-  if (rate >= 90) return 'text-yellow-700';
-  return 'text-red-700';
 }
 
 function getReasonFromEntry(entry?: Partial<ReasonFormData>): ReasonFormData {
@@ -78,12 +67,12 @@ function hasReasonContent(entry: Partial<ReasonFormData>) {
 
 function getReasonPayload(reason: ReasonFormData) {
   return {
-    reason_category: reason.reason_category || null,
-    reason_detail: reason.reason_detail.trim() || null,
-    action_today: null,
-    recovery_plan: null,
-    support_request: null,
-  } as any;
+    reason_category: reason.reason_category || undefined,
+    reason_detail: reason.reason_detail.trim() || undefined,
+    action_today: undefined,
+    recovery_plan: undefined,
+    support_request: undefined,
+  };
 }
 
 function DailyTargetAchievementPanel({
@@ -93,8 +82,8 @@ function DailyTargetAchievementPanel({
   equipment: Equipment;
   targetShortfall: ReturnType<typeof calcEquipmentTargetShortfall>;
 }) {
-  const productRate = calcTargetAchievementRate(targetShortfall.productActual, targetShortfall.productTarget);
-  const billetRate = calcTargetAchievementRate(targetShortfall.billetActual, targetShortfall.billetTarget);
+  const productRate = calcNullableRate(targetShortfall.productActual, targetShortfall.productTarget);
+  const billetRate = calcNullableRate(targetShortfall.billetActual, targetShortfall.billetTarget);
   const items = [
     {
       label: '제품',
@@ -143,7 +132,7 @@ function DailyTargetAchievementPanel({
                     목표 {formatNumber(item.target)} KG / 실적 {formatNumber(item.actual)} KG
                   </div>
                 </div>
-                <div className={`text-2xl font-bold tabular-nums ${getAchievementRateClass(item.rate)}`}>
+                <div className={`text-2xl font-bold tabular-nums ${getRateColorClass(item.rate)}`}>
                   {formatAchievementRate(item.rate)}
                 </div>
               </div>
@@ -219,7 +208,6 @@ export default function UserInputPage() {
   const selectedHasShortfall = selectedTargetShortfall.hasShortfall;
   const [sharedReasons, setSharedReasons] = useState<Partial<Record<Equipment, ReasonFormData>>>({});
   const [sharedReasonErrors, setSharedReasonErrors] = useState<string[]>([]);
-  const [sharedReasonSaved, setSharedReasonSaved] = useState(false);
   const sharedReason = sharedReasons[selectedEquipment] ?? getReasonFromEntry(selectedReasonSource);
 
   // 자동 탭 선택: useEffect 없이 useMemo로 계산
@@ -232,7 +220,6 @@ export default function UserInputPage() {
       [selectedEquipment]: getReasonFromEntry(selectedReasonSource),
     }));
     setSharedReasonErrors([]);
-    setSharedReasonSaved(false);
   }, [
     selectedEquipment,
     selectedReasonSource?.id,
@@ -242,16 +229,35 @@ export default function UserInputPage() {
 
   const prevReportIdRef = React.useRef<string | undefined>(undefined);
   useEffect(() => {
-    // report.id가 실제로 다른 보고서로 바뀌었을 때만 draft 초기화 (새 보고서 생성 시 createReport가 재호출되어 id가 바뀌는 문제 방지)
     if (report?.id && prevReportIdRef.current && prevReportIdRef.current !== report.id) {
       setEntryDrafts({});
     }
     prevReportIdRef.current = report?.id;
   }, [report?.id]);
 
+  const hasUnsavedChanges = Object.keys(entryDrafts).length > 0;
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
   const handlePlanDateChange = (value: string) => {
     if (!value) return;
     navigate(`/reports/${getActualDateFromPlanDate(value)}/input`);
+  };
+
+  const handleActualDateChange = (value: string) => {
+    if (!value) return;
+    // 전일 실적일이 변경되면 해당 실적일을 기준으로 하는 보고서로 이동
+    navigate(`/reports/${value}/input`);
   };
 
   const handleSharedReasonChange = (field: keyof ReasonFormData, value: string) => {
@@ -263,7 +269,6 @@ export default function UserInputPage() {
       },
     }));
     setSharedReasonErrors([]);
-    setSharedReasonSaved(false);
   };
 
   const saveSharedReasonForEntries = (skipEntryId?: string) => {
@@ -279,8 +284,6 @@ export default function UserInputPage() {
           ...getReasonPayload(sharedReason),
         });
       });
-    setSharedReasonSaved(true);
-    setTimeout(() => setSharedReasonSaved(false), 2000);
   };
 
   const validateSharedReason = (requiresReason = selectedHasShortfall) => {
@@ -296,6 +299,29 @@ export default function UserInputPage() {
     setSharedReasonErrors(errors);
     return errors.length === 0;
   };
+
+  if (isHydrating && !hasHydrated) {
+    return (
+      <div className="space-y-5 fade-in max-w-5xl mx-auto">
+        <div className="card">
+          <div className="card-body">
+            <div className="h-8 bg-slate-200 rounded w-48 animate-pulse" />
+            <div className="mt-2 h-5 bg-slate-100 rounded w-64 animate-pulse" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-24 bg-slate-100 rounded-lg animate-pulse" />
+          ))}
+        </div>
+        <div className="card">
+          <div className="card-body">
+            <div className="h-48 bg-slate-100 rounded-lg animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!report) {
     return (
@@ -328,16 +354,31 @@ export default function UserInputPage() {
                 현재 계정: {currentUser?.name || '-'} · {isAdmin ? '관리자 전체 권한' : canWrite || canEdit ? '권한 부여됨' : '읽기 전용'}
               </p>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-              <CalendarDays size={16} className="text-gray-500" />
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">금일 계획일 선택</label>
-                <input
-                  type="date"
-                  value={planDate}
-                  onChange={event => handlePlanDateChange(event.target.value)}
-                  className="form-input py-1.5 w-auto bg-white"
-                />
+            <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <CalendarDays size={16} className="text-gray-500" />
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">금일 계획일</label>
+                  <input
+                    type="date"
+                    value={planDate}
+                    onChange={event => handlePlanDateChange(event.target.value)}
+                    className="form-input py-1.5 w-auto bg-white"
+                  />
+                </div>
+              </div>
+              <div className="h-8 w-px bg-gray-200" />
+              <div className="flex items-center gap-2">
+                <CalendarDays size={16} className="text-gray-500" />
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">전일 실적일</label>
+                  <input
+                    type="date"
+                    value={actualDate}
+                    onChange={event => handleActualDateChange(event.target.value)}
+                    className="form-input py-1.5 w-auto bg-white"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -452,7 +493,6 @@ export default function UserInputPage() {
               equipment={selectedEquipment}
               reason={sharedReason}
               errors={sharedReasonErrors}
-              saved={sharedReasonSaved}
               canModify={canWrite || canEdit}
               hasShortfall={selectedHasShortfall}
               targetShortfall={selectedTargetShortfall}
@@ -482,7 +522,7 @@ function EntryInputCard({
   onSaveSharedReason,
   onSubmit,
 }: {
-  entry: any;
+  entry: ProductionEntry;
   reportId: string;
   targets: EquipmentTarget[];
   canWrite: boolean;
@@ -492,10 +532,11 @@ function EntryInputCard({
   equipment: Equipment;
   onDraftChange: (entryId: string, draft: EntryQuantityDraft) => void;
   validateSharedReason: (requiresReason?: boolean) => boolean;
-  onSave: (data: any) => void;
+  onSave: (data: Partial<ProductionEntry> & { report_id: string; equipment: string; shift: string; user_id: string }) => void;
   onSaveSharedReason: (skipEntryId?: string) => void;
   onSubmit: (id: string) => void;
 }) {
+  const { showToast } = useToast();
   const isSubmitted = entry.submit_status === 'submitted' || entry.submit_status === 'approved';
   const canModify = canWrite || canEdit;
   const [formData, setFormData] = useState({
@@ -507,8 +548,7 @@ function EntryInputCard({
     next_billet_plan: entry.next_billet_plan || 0,
   });
   const [errors, setErrors] = useState<string[]>([]);
-  const [saved, setSaved] = useState(false);
-  const isDirtyRef = React.useRef(false); // 사용자가 현재 편집 중인지 추적
+  const isDirtyRef = React.useRef(false);
 
   // 임시저장 후 entry props가 업데이트될 때 formData 동기화
   // 단, 사용자가 현재 편집 중(isDirty)이면 덮어쓰지 않음
@@ -548,12 +588,13 @@ function EntryInputCard({
   const equipmentBilletTarget = equipmentTargets.reduce((sum, target) => sum + (target.billet_target || 0), 0);
 
   const handleChange = (field: string, value: string | number) => {
-    const nextFormData = { ...formData, [field]: value };
+    const numericValue = typeof value === 'number' ? value : Number(value);
+    const safeValue = Number.isFinite(numericValue) && numericValue < 0 ? 0 : numericValue;
+    const nextFormData = { ...formData, [field]: safeValue };
     setFormData(nextFormData);
     onDraftChange(entry.id, nextFormData);
     setErrors([]);
-    setSaved(false);
-    isDirtyRef.current = true; // 편집 시작 표시
+    isDirtyRef.current = true;
   };
 
   const validate = (): boolean => {
@@ -580,9 +621,8 @@ function EntryInputCard({
       ...getReasonPayload(sharedReason),
     });
     onSaveSharedReason(entry.id);
-    isDirtyRef.current = false; // 저장 완료 - 이후 entry props 동기화 허용
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    isDirtyRef.current = false;
+    showToast('임시저장 완료', 'success');
   };
 
   const handleSubmit = () => {
@@ -800,7 +840,7 @@ function EntryInputCard({
                 className="btn-secondary flex items-center gap-2"
               >
                 <Save size={16} />
-                {saved ? '저장됨 ✓' : '임시저장'}
+                임시저장
               </button>
               <button
                 onClick={handleSubmit}
@@ -834,7 +874,6 @@ function SharedReasonSection({
   equipment,
   reason,
   errors,
-  saved,
   canModify,
   hasShortfall,
   targetShortfall,
@@ -844,13 +883,13 @@ function SharedReasonSection({
   equipment: Equipment;
   reason: ReasonFormData;
   errors: string[];
-  saved: boolean;
   canModify: boolean;
   hasShortfall: boolean;
   targetShortfall: ReturnType<typeof calcEquipmentTargetShortfall>;
   onChange: (field: keyof ReasonFormData, value: string) => void;
   onSave: () => void;
 }) {
+  const { showToast } = useToast();
   const [isOpen, setIsOpen] = useState(hasShortfall);
 
   useEffect(() => {
@@ -954,9 +993,9 @@ function SharedReasonSection({
 
           {canModify && (
             <div className="flex justify-end">
-              <button onClick={onSave} className="btn-secondary flex items-center gap-2">
+              <button onClick={() => { onSave(); showToast('공통 사유 저장 완료', 'success'); }} className="btn-secondary flex items-center gap-2">
                 <Save size={16} />
-                {saved ? '사유 저장됨 ✓' : '공통 사유 저장'}
+                공통 사유 저장
               </button>
             </div>
           )}

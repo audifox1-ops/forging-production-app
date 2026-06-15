@@ -7,6 +7,7 @@ export type Equipment = 'P15' | 'P5' | 'R/M' | 'P8';
 export type Shift = '주간' | '야간';
 export type ProductionType = '제품' | '황지';
 export type PeriodTargetType = 'weekly' | 'monthly' | 'yearly';
+export type SummaryPeriod = 'day' | 'week' | 'month' | 'year';
 
 export type ReportStatus = 'draft' | 'collecting' | 'submitted' | 'reviewed';
 export type EntryStatus = 'not_started' | 'saved' | 'submitted' | 'returned' | 'approved';

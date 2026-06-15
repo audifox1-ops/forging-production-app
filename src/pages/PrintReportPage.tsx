@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Download, Printer, ArrowLeft } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
-import { calcDashboardSummary, formatNumber } from '../utils/calculations';
+import { calcDashboardSummary, formatNumber, calcNullableRate, getRateColorClass } from '../utils/calculations';
 import { generateOverallSummary, generateReasonSentence } from '../utils/reportTextGenerator';
 import { getEquipmentReasonGroups } from '../utils/reasonGroups';
 import ReasonContent, { ReasonTextList } from '../components/ReasonContent';
@@ -15,17 +15,6 @@ import {
   getTodayPlanDate,
 } from '../utils/reportDates';
 import { downloadReportExcel } from '../utils/excelTemplate';
-
-function calcNullableRate(actual: number, target: number) {
-  return target > 0 ? (actual / target) * 100 : null;
-}
-
-function getPrintRateClass(rate: number | null) {
-  if (rate === null) return 'text-gray-400';
-  if (rate >= 100) return 'text-green-700';
-  if (rate >= 90) return 'text-yellow-700';
-  return 'text-red-700';
-}
 
 const PRINT_EQUIPMENT_ORDER: Equipment[] = ['P15', 'P5', 'R/M', 'P8'];
 const DAILY_REPORT_PRINT_CLASS = 'daily-report-print-document';
@@ -308,7 +297,7 @@ export default function PrintReportPage() {
                         <td className="px-2 py-1.5 text-center border border-gray-300">{row.entry.shift}</td>
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(row.productTarget)}</td>
                         <td className="px-2 py-1.5 text-right font-medium border border-gray-300">{formatNumber(row.entry.product_actual)}</td>
-                        <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getPrintRateClass(row.productRate)}`}>
+                        <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getRateColorClass(row.productRate)}`}>
                           {row.productRate !== null ? `${Math.round(row.productRate)}%` : '-'}
                         </td>
                         <td className={`px-2 py-1.5 text-right border border-gray-300 ${row.productShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
@@ -316,7 +305,7 @@ export default function PrintReportPage() {
                         </td>
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(row.billetTarget)}</td>
                         <td className="px-2 py-1.5 text-right font-medium border border-gray-300">{formatNumber(row.entry.billet_actual)}</td>
-                        <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getPrintRateClass(row.billetRate)}`}>
+                        <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getRateColorClass(row.billetRate)}`}>
                           {row.billetRate !== null ? `${Math.round(row.billetRate)}%` : '-'}
                         </td>
                         <td className={`px-2 py-1.5 text-right border border-gray-300 ${row.billetShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
@@ -333,7 +322,7 @@ export default function PrintReportPage() {
                       <td colSpan={2} className="px-2 py-1.5 text-center border border-gray-300">{group.equipment} 합계</td>
                       <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.productTarget)}</td>
                       <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.productActual)}</td>
-                      <td className={`px-2 py-1.5 text-center border border-gray-300 ${getPrintRateClass(group.total.productRate)}`}>
+                      <td className={`px-2 py-1.5 text-center border border-gray-300 ${getRateColorClass(group.total.productRate)}`}>
                         {group.total.productRate !== null ? `${Math.round(group.total.productRate)}%` : '-'}
                       </td>
                       <td className={`px-2 py-1.5 text-right border border-gray-300 ${group.total.productShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
@@ -341,7 +330,7 @@ export default function PrintReportPage() {
                       </td>
                       <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.billetTarget)}</td>
                       <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.billetActual)}</td>
-                      <td className={`px-2 py-1.5 text-center border border-gray-300 ${getPrintRateClass(group.total.billetRate)}`}>
+                      <td className={`px-2 py-1.5 text-center border border-gray-300 ${getRateColorClass(group.total.billetRate)}`}>
                         {group.total.billetRate !== null ? `${Math.round(group.total.billetRate)}%` : '-'}
                       </td>
                       <td className={`px-2 py-1.5 text-right border border-gray-300 ${group.total.billetShortfall > 0 ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
@@ -455,12 +444,12 @@ export default function PrintReportPage() {
                             <td className="px-2 py-1.5 text-center border border-gray-300">{entry.shift}</td>
                             <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(row.productTarget)}</td>
                             <td className="px-2 py-1.5 text-right border border-gray-300 font-medium">{formatNumber(nextProductPlan)}</td>
-                            <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getPrintRateClass(row.nextProductRate)}`}>
+                            <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getRateColorClass(row.nextProductRate)}`}>
                               {row.nextProductRate !== null ? `${Math.round(row.nextProductRate)}%` : '-'}
                             </td>
                             <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(row.billetTarget)}</td>
                             <td className="px-2 py-1.5 text-right border border-gray-300 font-medium">{formatNumber(nextBilletPlan)}</td>
-                            <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getPrintRateClass(row.nextBilletRate)}`}>
+                            <td className={`px-2 py-1.5 text-center font-bold border border-gray-300 ${getRateColorClass(row.nextBilletRate)}`}>
                               {row.nextBilletRate !== null ? `${Math.round(row.nextBilletRate)}%` : '-'}
                             </td>
                             {rowIndex === 0 && (
@@ -475,12 +464,12 @@ export default function PrintReportPage() {
                         <td colSpan={2} className="px-2 py-1.5 text-center border border-gray-300">{group.equipment} 합계</td>
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.productTarget)}</td>
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.nextProductPlan)}</td>
-                        <td className={`px-2 py-1.5 text-center border border-gray-300 ${getPrintRateClass(group.total.nextProductRate)}`}>
+                        <td className={`px-2 py-1.5 text-center border border-gray-300 ${getRateColorClass(group.total.nextProductRate)}`}>
                           {group.total.nextProductRate !== null ? `${Math.round(group.total.nextProductRate)}%` : '-'}
                         </td>
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.billetTarget)}</td>
                         <td className="px-2 py-1.5 text-right border border-gray-300">{formatNumber(group.total.nextBilletPlan)}</td>
-                        <td className={`px-2 py-1.5 text-center border border-gray-300 ${getPrintRateClass(group.total.nextBilletRate)}`}>
+                        <td className={`px-2 py-1.5 text-center border border-gray-300 ${getRateColorClass(group.total.nextBilletRate)}`}>
                           {group.total.nextBilletRate !== null ? `${Math.round(group.total.nextBilletRate)}%` : '-'}
                         </td>
                       </tr>
