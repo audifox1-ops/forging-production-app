@@ -1,3 +1,5 @@
+import { isNonWorkingDay } from './reportDates';
+
 export const TARGET_YEAR_2026 = 2026;
 
 export type TargetTotals = {
@@ -53,6 +55,25 @@ export const ANNUAL_TARGET_TOTALS_2026 = multiplyTargetTotals(
   DAILY_TARGET_TOTALS_2026,
   ANNUAL_WORKDAYS_2026
 );
+
+export function getDailyProductTargetForDate(
+  equipment: TargetEquipment,
+  dateString: string,
+  options: { allowNonWorkingDayOverride?: boolean; currentValue?: number | null } = {}
+) {
+  const currentValue = typeof options.currentValue === 'number' && Number.isFinite(options.currentValue)
+    ? options.currentValue
+    : null;
+
+  if (isNonWorkingDay(dateString)) {
+    if (options.allowNonWorkingDayOverride && currentValue && currentValue > 0) {
+      return currentValue;
+    }
+    return 0;
+  }
+
+  return DAILY_TARGETS_2026_BY_EQUIPMENT[equipment].product;
+}
 
 export function multiplyTargetTotals(target: TargetTotals, multiplier: number): TargetTotals {
   return {

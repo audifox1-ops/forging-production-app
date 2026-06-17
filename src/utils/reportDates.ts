@@ -3,6 +3,25 @@ import type { ProductionReport } from '../types';
 
 export const REPORT_DATE_FORMAT = 'yyyy-MM-dd';
 
+const KOREA_PUBLIC_HOLIDAYS = new Set([
+  '2026-01-01',
+  '2026-02-16',
+  '2026-02-17',
+  '2026-02-18',
+  '2026-03-02',
+  '2026-05-05',
+  '2026-05-25',
+  '2026-06-06',
+  '2026-08-17',
+  '2026-09-24',
+  '2026-09-25',
+  '2026-09-26',
+  '2026-09-28',
+  '2026-10-03',
+  '2026-10-09',
+  '2026-12-25',
+]);
+
 export function getTodayPlanDate(date = new Date()) {
   return format(date, REPORT_DATE_FORMAT);
 }
@@ -22,20 +41,28 @@ export function isWeekend(dateString: string): boolean {
   return day === 0 || day === 6;
 }
 
+export function isPublicHoliday(dateString: string): boolean {
+  return KOREA_PUBLIC_HOLIDAYS.has(dateString);
+}
+
+export function isNonWorkingDay(dateString: string): boolean {
+  return isWeekend(dateString) || isPublicHoliday(dateString);
+}
+
 /**
  * 해당 날짜 이전의 마지막 근무일(주말 제외)을 반환
  * 기준일 이전 날짜부터 역방향으로 탐색
  */
 export function getLastWorkingDay(beforeDate: string): string {
   let date = subDays(parseISO(beforeDate), 1);
-  let day = getDay(date);
+  let dateString = format(date, REPORT_DATE_FORMAT);
 
-  while (day === 0 || day === 6) {
+  while (isNonWorkingDay(dateString)) {
     date = subDays(date, 1);
-    day = getDay(date);
+    dateString = format(date, REPORT_DATE_FORMAT);
   }
 
-  return format(date, REPORT_DATE_FORMAT);
+  return dateString;
 }
 
 /**
@@ -51,18 +78,15 @@ export function getActualDateFromPlanDate(planDate: string) {
  * 실적일이 금요일이면 다음 월요일, 나머지는 다음 날
  */
 export function getPlanDateFromActualDate(actualDate: string) {
-  const day = getDayOfWeek(actualDate);
+  let date = addDays(parseISO(actualDate), 1);
+  let dateString = format(date, REPORT_DATE_FORMAT);
 
-  if (day === 5) {
-    return format(addDays(parseISO(actualDate), 3), REPORT_DATE_FORMAT);
+  while (isNonWorkingDay(dateString)) {
+    date = addDays(date, 1);
+    dateString = format(date, REPORT_DATE_FORMAT);
   }
-  if (day === 6) {
-    return format(addDays(parseISO(actualDate), 2), REPORT_DATE_FORMAT);
-  }
-  if (day === 0) {
-    return format(addDays(parseISO(actualDate), 1), REPORT_DATE_FORMAT);
-  }
-  return format(addDays(parseISO(actualDate), 1), REPORT_DATE_FORMAT);
+
+  return dateString;
 }
 
 export function getReportPlanDate(report: Pick<ProductionReport, 'report_date' | 'next_plan_date'>) {

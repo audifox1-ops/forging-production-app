@@ -7,6 +7,7 @@ import type {
   TemplateWorkbookRow,
   TemplateWorkbookSheet,
 } from '../types';
+import { getDailyProductTargetForDate } from './targetConfig';
 
 export type TemplateEquipmentKey = 'P15' | 'P5' | 'R/M' | 'TOTAL';
 
@@ -528,7 +529,30 @@ function buildMonthlySumFormula(column: string, startRow: number, endRow: number
   return `SUM(${column}${startRow}:${column}${endRow})`;
 }
 
+function applyMonthlyDefaultPlanValues(row: TemplateWorkbookRow) {
+  if (!row.row_date) return;
+
+  const p15Plan = getDailyProductTargetForDate('P15', row.row_date, {
+    currentValue: getNumericCell(row, TEMPLATE_SUMMARY_COLUMNS.P15.productPlan),
+    allowNonWorkingDayOverride: true,
+  });
+  const p5Plan = getDailyProductTargetForDate('P5', row.row_date, {
+    currentValue: getNumericCell(row, TEMPLATE_SUMMARY_COLUMNS.P5.productPlan),
+    allowNonWorkingDayOverride: true,
+  });
+  const rmPlan = getDailyProductTargetForDate('R/M', row.row_date, {
+    currentValue: getNumericCell(row, TEMPLATE_SUMMARY_COLUMNS['R/M'].productPlan),
+    allowNonWorkingDayOverride: true,
+  });
+
+  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.P15.productPlan, p15Plan);
+  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.P5.productPlan, p5Plan);
+  setRowCell(row, TEMPLATE_SUMMARY_COLUMNS['R/M'].productPlan, rmPlan);
+}
+
 function recalculateTemplateRow(row: TemplateWorkbookRow) {
+  applyMonthlyDefaultPlanValues(row);
+
   (Object.values(SYNC_EQUIPMENT_COLUMNS)).forEach(columns => {
     const productActual = getNumericCell(row, columns.productActual);
     const productPlan = getNumericCell(row, columns.productPlan);
@@ -615,6 +639,8 @@ function recalculateMonthlyTotal(sheet: TemplateWorkbookSheet) {
   const dailyRows = Array.from({ length: meta.daysInMonth }, (_, index) =>
     sheet.rows.find(row => row.row_number === index + 8)
   ).filter((row): row is TemplateWorkbookRow => Boolean(row));
+
+  dailyRows.forEach(recalculateTemplateRow);
 
   const totalColumns = Array.from(new Set(
     [
@@ -820,23 +846,13 @@ function applyActualEntryValues(row: TemplateWorkbookRow, totals: ReturnType<typ
     const values = totals[equipment];
 
     setRowCell(row, columns.productActual, values.productActual);
-    setRowCell(row, columns.productPlan, values.productPlan);
     if (columns.billetActual) setRowCell(row, columns.billetActual, values.billetActual);
   });
   recalculateTemplateRow(row);
 }
 
 function applyPlanEntryValues(row: TemplateWorkbookRow, totals: ReturnType<typeof aggregateReportEntries>) {
-  (Object.keys(SYNC_EQUIPMENT_COLUMNS) as Array<keyof typeof SYNC_EQUIPMENT_COLUMNS>).forEach(equipment => {
-    const columns = SYNC_EQUIPMENT_COLUMNS[equipment];
-    const values = totals[equipment];
-
-    setRowCell(row, columns.productPlan, values.nextProductPlan);
-    if (columns.billetActual) {
-      const existingBilletActual = getNumericCell(row, columns.billetActual);
-      setRowCell(row, columns.billetActual, existingBilletActual);
-    }
-  });
+  void totals;
   recalculateTemplateRow(row);
 }
 

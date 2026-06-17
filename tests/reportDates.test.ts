@@ -6,6 +6,8 @@ import {
   getReportPlanDate,
   getLastWorkingDay,
   isWeekend,
+  isPublicHoliday,
+  isNonWorkingDay,
   getDayName,
 } from '../src/utils/reportDates';
 
@@ -23,41 +25,49 @@ describe('getTodayPlanDate', () => {
 
 describe('isWeekend', () => {
   it('should return true for Saturday and Sunday', () => {
-    expect(isWeekend('2026-01-10')).toBe(true);  // 토요일
-    expect(isWeekend('2026-01-11')).toBe(true);  // 일요일
+    expect(isWeekend('2026-01-10')).toBe(true);
+    expect(isWeekend('2026-01-11')).toBe(true);
   });
 
   it('should return false for weekdays', () => {
-    expect(isWeekend('2026-01-12')).toBe(false); // 월요일
-    expect(isWeekend('2026-01-15')).toBe(false); // 목요일
+    expect(isWeekend('2026-01-12')).toBe(false);
+    expect(isWeekend('2026-01-15')).toBe(false);
+  });
+});
+
+describe('non-working day helpers', () => {
+  it('should identify public holidays', () => {
+    expect(isPublicHoliday('2026-03-02')).toBe(true);
+    expect(isPublicHoliday('2026-03-03')).toBe(false);
+  });
+
+  it('should identify non-working days', () => {
+    expect(isNonWorkingDay('2026-03-01')).toBe(true);
+    expect(isNonWorkingDay('2026-03-02')).toBe(true);
+    expect(isNonWorkingDay('2026-03-03')).toBe(false);
   });
 });
 
 describe('getLastWorkingDay', () => {
   it('should return previous weekday when given a weekday', () => {
-    // 2026-01-15 목요일 -> 2026-01-14 수요일
     expect(getLastWorkingDay('2026-01-15')).toBe('2026-01-14');
   });
 
   it('should skip weekend when given Monday', () => {
-    // 2026-01-12 월요일 -> 2026-01-09 금요일
     expect(getLastWorkingDay('2026-01-12')).toBe('2026-01-09');
   });
 
-  it('should skip weekend when given Tuesday after holiday', () => {
-    // 2026-01-06 화요일 -> 2026-01-05 월요일
-    expect(getLastWorkingDay('2026-01-06')).toBe('2026-01-05');
+  it('should skip public holidays', () => {
+    expect(getLastWorkingDay('2026-03-03')).toBe('2026-02-27');
   });
 });
 
 describe('getActualDateFromPlanDate', () => {
-  it('should return previous weekday', () => {
-    // 2026-01-15 목요일 -> 2026-01-14 수요일
+  it('should return previous working day', () => {
     expect(getActualDateFromPlanDate('2026-01-15')).toBe('2026-01-14');
   });
 
   it('should skip weekend when plan date is Monday', () => {
-    // 2026-01-12 월요일 -> 2026-01-09 금요일
     expect(getActualDateFromPlanDate('2026-01-12')).toBe('2026-01-09');
   });
 });
@@ -68,13 +78,15 @@ describe('getPlanDateFromActualDate', () => {
   });
 
   it('should return next Monday for Friday', () => {
-    // 2026-01-09 금요일 -> 2026-01-12 월요일
     expect(getPlanDateFromActualDate('2026-01-09')).toBe('2026-01-12');
   });
 
   it('should return next Monday for Sunday', () => {
-    // 2026-01-11 일요일 -> 2026-01-12 월요일
     expect(getPlanDateFromActualDate('2026-01-11')).toBe('2026-01-12');
+  });
+
+  it('should skip public holidays and weekends', () => {
+    expect(getPlanDateFromActualDate('2026-02-27')).toBe('2026-03-03');
   });
 });
 
@@ -92,12 +104,12 @@ describe('getReportPlanDate', () => {
 
 describe('getDayName', () => {
   it('should return Korean day name', () => {
-    expect(getDayName('2026-01-12')).toBe('월'); // 월요일
-    expect(getDayName('2026-01-13')).toBe('화'); // 화요일
-    expect(getDayName('2026-01-14')).toBe('수'); // 수요일
-    expect(getDayName('2026-01-15')).toBe('목'); // 목요일
-    expect(getDayName('2026-01-16')).toBe('금'); // 금요일
-    expect(getDayName('2026-01-17')).toBe('토'); // 토요일
-    expect(getDayName('2026-01-18')).toBe('일'); // 일요일
+    expect(getDayName('2026-01-12')).toBe('월');
+    expect(getDayName('2026-01-13')).toBe('화');
+    expect(getDayName('2026-01-14')).toBe('수');
+    expect(getDayName('2026-01-15')).toBe('목');
+    expect(getDayName('2026-01-16')).toBe('금');
+    expect(getDayName('2026-01-17')).toBe('토');
+    expect(getDayName('2026-01-18')).toBe('일');
   });
 });
