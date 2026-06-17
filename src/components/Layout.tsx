@@ -17,9 +17,9 @@ import { format } from 'date-fns';
 import { useReportStore } from '../store/reportStore';
 import { useToast } from './Toast';
 
-const APP_NAME = 'TAEWOONG Dispatch';
-const APP_TAGLINE = 'Production Control';
-const APP_LOGO_SRC = '/taewoong-dispatch-logo.svg';
+const APP_NAME = '생산량보고';
+const APP_TAGLINE = 'Production Reporting';
+const APP_LOGO_SRC = '/production-report-logo.svg';
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
