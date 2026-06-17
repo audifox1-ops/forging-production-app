@@ -8,7 +8,6 @@ import {
   Table2,
   History,
   ChevronRight,
-  Factory,
   Home,
   Menu,
   X,
@@ -17,6 +16,10 @@ import {
 import { format } from 'date-fns';
 import { useReportStore } from '../store/reportStore';
 import { useToast } from './Toast';
+
+const APP_NAME = 'TAEWOONG Dispatch';
+const APP_TAGLINE = 'Production Control';
+const APP_LOGO_SRC = '/taewoong-dispatch-logo.svg';
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
@@ -41,7 +44,9 @@ export default function Layout() {
     ? '관리자 전체 권한'
     : currentUser?.role === 'manager'
       ? '총괄 권한'
-      : canWrite || canEdit ? '권한 부여됨' : '읽기 전용';
+      : canWrite || canEdit
+        ? '입력 및 편집 가능'
+        : '읽기 전용';
 
   React.useEffect(() => {
     if (syncError) {
@@ -52,11 +57,27 @@ export default function Layout() {
   const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: '대시보드' },
     { to: '/reports', icon: FileText, label: '보고서' },
-    { to: '/template-workbook', icon: Table2, label: '생산량집계' },
+    { to: '/template-workbook', icon: Table2, label: '생산량 집계' },
     { to: '/admin/users', icon: Users, label: '담당자 관리' },
     { to: '/admin/targets', icon: Target, label: '목표값 관리' },
     { to: '/admin/history', icon: History, label: '보고 이력' },
   ];
+
+  const storageTitle =
+    syncError ||
+    (storageMode === 'supabase'
+      ? lastSyncedAt
+        ? `마지막 서버 동기화 ${format(new Date(lastSyncedAt), 'HH:mm')}`
+        : 'Supabase 서버와 연결되어 부서원과 공유됩니다'
+      : '이 브라우저에만 저장되어 다른 자리와 공유되지 않습니다');
+
+  const storageLabel = isHydrating
+    ? '동기화 중'
+    : syncError
+      ? '공유 저장소 오류'
+      : storageMode === 'supabase'
+        ? '서버 공유 모드'
+        : '로컬 전용';
 
   return (
     <div className="flex h-screen bg-slate-100">
@@ -68,13 +89,13 @@ export default function Layout() {
           className="flex items-center gap-3 px-4 py-5 border-b border-blue-800 hover:bg-blue-800/70 transition-colors"
           title="대시보드로 이동"
         >
-          <div className="w-8 h-8 bg-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Factory size={18} />
+          <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center flex-shrink-0">
+            <img src={APP_LOGO_SRC} alt={APP_NAME} className="w-full h-full object-cover" />
           </div>
           {sidebarOpen && (
             <div className="overflow-hidden">
-              <div className="text-sm font-bold leading-tight">단조 생산</div>
-              <div className="text-xs text-blue-300">보고 시스템</div>
+              <div className="text-sm font-bold leading-tight">{APP_NAME}</div>
+              <div className="text-xs text-blue-300">{APP_TAGLINE}</div>
             </div>
           )}
         </NavLink>
@@ -102,9 +123,7 @@ export default function Layout() {
           {sidebarOpen ? (
             <div className="overflow-hidden">
               <div className="text-sm font-medium truncate">{currentUser?.name || '계정 선택'}</div>
-              <div className="text-xs text-blue-300 truncate">
-                {permissionLabel}
-              </div>
+              <div className="text-xs text-blue-300 truncate">{permissionLabel}</div>
             </div>
           ) : (
             <div className="w-full flex justify-center text-blue-300" title={currentUser?.name || '계정 선택'}>
@@ -130,9 +149,9 @@ export default function Layout() {
           >
             <Home size={18} />
           </NavLink>
-          <div className="flex items-center gap-1.5 text-sm text-gray-500">
-            <NavLink to="/dashboard" className="hover:text-blue-700 transition-colors">
-              단조 생산 보고 시스템
+          <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
+            <NavLink to="/dashboard" className="hover:text-blue-700 transition-colors truncate">
+              {APP_NAME}
             </NavLink>
             <ChevronRight size={14} />
             <span className="text-gray-800 font-medium">
@@ -148,25 +167,20 @@ export default function Layout() {
                     ? 'bg-green-50 text-green-700 border-green-200'
                     : 'bg-slate-50 text-slate-600 border-slate-200'
               }`}
-              title={
-                syncError ||
-                (storageMode === 'supabase'
-                  ? lastSyncedAt
-                    ? `마지막 서버 동기화: ${format(new Date(lastSyncedAt), 'HH:mm')}`
-                    : 'Supabase 서버에 저장되어 부서원이 공유합니다'
-                  : '이 브라우저에만 저장되어 다른 자리와 공유되지 않습니다')
-              }
+              title={storageTitle}
             >
-              <span className={`w-2 h-2 rounded-full ${
-                isHydrating
-                  ? 'bg-amber-500'
-                  : syncError
-                    ? 'bg-red-500'
-                    : storageMode === 'supabase'
-                      ? 'bg-green-500'
-                      : 'bg-slate-400'
-              }`} />
-              {isHydrating ? '동기화 중' : syncError ? '공유 저장 오류' : storageMode === 'supabase' ? '서버 공유 저장' : '로컬 전용'}
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isHydrating
+                    ? 'bg-amber-500'
+                    : syncError
+                      ? 'bg-red-500'
+                      : storageMode === 'supabase'
+                        ? 'bg-green-500'
+                        : 'bg-slate-400'
+                }`}
+              />
+              {storageLabel}
             </div>
             {syncError && (
               <button
@@ -176,7 +190,7 @@ export default function Layout() {
                 title="동기화 다시 시도"
               >
                 <RefreshCw size={12} className={isHydrating ? 'animate-spin' : ''} />
-                재시도
+                다시 시도
               </button>
             )}
             <select
@@ -209,13 +223,12 @@ export default function Layout() {
         </main>
       </div>
 
-      {/* 모바일 하단 네비게이션 */}
       <nav className="mobile-nav md:hidden">
         {navItems.slice(0, 4).map(item => (
           <NavLink
             key={item.to}
             to={item.to}
-            className={({ isActive }) => isActive ? 'active' : ''}
+            className={({ isActive }) => (isActive ? 'active' : '')}
           >
             <item.icon size={20} />
             <span>{item.label}</span>
