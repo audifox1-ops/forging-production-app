@@ -58,17 +58,9 @@ export const ANNUAL_TARGET_TOTALS_2026 = multiplyTargetTotals(
 
 export function getDailyProductTargetForDate(
   equipment: TargetEquipment,
-  dateString: string,
-  options: { allowNonWorkingDayOverride?: boolean; currentValue?: number | null } = {}
+  dateString: string
 ) {
-  const currentValue = typeof options.currentValue === 'number' && Number.isFinite(options.currentValue)
-    ? options.currentValue
-    : null;
-
   if (isNonWorkingDay(dateString)) {
-    if (options.allowNonWorkingDayOverride && currentValue && currentValue > 0) {
-      return currentValue;
-    }
     return 0;
   }
 

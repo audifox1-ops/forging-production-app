@@ -14,7 +14,7 @@ describe('template workbook plan defaults', () => {
     expect(getCellMap(row!).AQ.value).toBe(415000);
   });
 
-  it('defaults weekends to zero unless manually overridden', () => {
+  it('forces weekends to zero', () => {
     const sheet = createMonthlyTemplateSheet(2026, 1);
     const [weekendSheet] = updateTemplateWorkbookCell([sheet], sheet.id, 10, 'B', 1000);
     const weekendRow = weekendSheet.rows.find(item => item.row_number === 10);
@@ -24,12 +24,17 @@ describe('template workbook plan defaults', () => {
     expect(getCellMap(weekendRow!).Q.value).toBe(0);
     expect(getCellMap(weekendRow!).AE.value).toBe(0);
     expect(getCellMap(weekendRow!).AQ.value).toBe(0);
+  });
 
-    const [overriddenSheet] = updateTemplateWorkbookCell([weekendSheet], sheet.id, 10, 'C', 123000);
-    const overriddenRow = overriddenSheet.rows.find(item => item.row_number === 10);
+  it('forces public holidays to zero', () => {
+    const sheet = createMonthlyTemplateSheet(2026, 3);
+    const [holidaySheet] = updateTemplateWorkbookCell([sheet], sheet.id, 9, 'C', 123000);
+    const holidayRow = holidaySheet.rows.find(item => item.row_number === 9);
 
-    expect(overriddenRow).toBeDefined();
-    expect(getCellMap(overriddenRow!).C.value).toBe(123000);
-    expect(getCellMap(overriddenRow!).AQ.value).toBe(123000);
+    expect(holidayRow).toBeDefined();
+    expect(getCellMap(holidayRow!).C.value).toBe(0);
+    expect(getCellMap(holidayRow!).Q.value).toBe(0);
+    expect(getCellMap(holidayRow!).AE.value).toBe(0);
+    expect(getCellMap(holidayRow!).AQ.value).toBe(0);
   });
 });

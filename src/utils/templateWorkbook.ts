@@ -532,18 +532,9 @@ function buildMonthlySumFormula(column: string, startRow: number, endRow: number
 function applyMonthlyDefaultPlanValues(row: TemplateWorkbookRow) {
   if (!row.row_date) return;
 
-  const p15Plan = getDailyProductTargetForDate('P15', row.row_date, {
-    currentValue: getNumericCell(row, TEMPLATE_SUMMARY_COLUMNS.P15.productPlan),
-    allowNonWorkingDayOverride: true,
-  });
-  const p5Plan = getDailyProductTargetForDate('P5', row.row_date, {
-    currentValue: getNumericCell(row, TEMPLATE_SUMMARY_COLUMNS.P5.productPlan),
-    allowNonWorkingDayOverride: true,
-  });
-  const rmPlan = getDailyProductTargetForDate('R/M', row.row_date, {
-    currentValue: getNumericCell(row, TEMPLATE_SUMMARY_COLUMNS['R/M'].productPlan),
-    allowNonWorkingDayOverride: true,
-  });
+  const p15Plan = getDailyProductTargetForDate('P15', row.row_date);
+  const p5Plan = getDailyProductTargetForDate('P5', row.row_date);
+  const rmPlan = getDailyProductTargetForDate('R/M', row.row_date);
 
   setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.P15.productPlan, p15Plan);
   setRowCell(row, TEMPLATE_SUMMARY_COLUMNS.P5.productPlan, p5Plan);
