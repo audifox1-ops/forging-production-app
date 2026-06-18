@@ -51,6 +51,16 @@ describe('template workbook plan defaults', () => {
     expect(getCellMap(holidayRow!).AQ.value).toBe(0);
   });
 
+  it('limits monthly totals to rows before today', () => {
+    const asOfDate = new Date('2026-06-18T09:00:00+09:00');
+    const sheet = createMonthlyTemplateSheet(2026, 6);
+    const [updatedSheet] = updateTemplateWorkbookCell([sheet], sheet.id, 25, 'Q', 999999, asOfDate);
+    const totalRow = updatedSheet.rows.find(item => item.row_label === '합계' || item.row_number === 38);
+
+    expect(totalRow).toBeDefined();
+    expect(getCellMap(totalRow!).Q.value).toBe(840000);
+  });
+
   it('aggregates R/M actuals with P8 production for the workbook preview', () => {
     const report: ProductionReport = {
       id: 'report-1',

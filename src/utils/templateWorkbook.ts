@@ -7,6 +7,7 @@ import type {
   TemplateWorkbookRow,
   TemplateWorkbookSheet,
 } from '../types';
+import { getTodayPlanDate } from './reportDates';
 import { getDailyProductTargetForDate } from './targetConfig';
 import { aggregateEquipmentTotals } from './reportEquipmentTotals';
 
@@ -623,7 +624,7 @@ function recalculateTemplateRow(row: TemplateWorkbookRow) {
   );
 }
 
-function recalculateMonthlyTotal(sheet: TemplateWorkbookSheet) {
+function recalculateMonthlyTotal(sheet: TemplateWorkbookSheet, asOfDate = new Date()) {
   const meta = getMonthlySheetMeta(sheet);
   const totalRow = getOrCreateMonthlyTotalRow(sheet);
   if (!meta || !totalRow) return;
@@ -633,6 +634,9 @@ function recalculateMonthlyTotal(sheet: TemplateWorkbookSheet) {
   ).filter((row): row is TemplateWorkbookRow => Boolean(row));
 
   dailyRows.forEach(recalculateTemplateRow);
+
+  const cutoffDate = getTodayPlanDate(asOfDate);
+  const visibleRows = dailyRows.filter(row => row.row_date && row.row_date < cutoffDate);
 
   const totalColumns = Array.from(new Set(
     [
@@ -647,14 +651,16 @@ function recalculateMonthlyTotal(sheet: TemplateWorkbookSheet) {
     ]
   ));
 
-  const firstDailyRowNumber = 8;
-  const lastDailyRowNumber = meta.daysInMonth + 7;
+  const firstVisibleRowNumber = visibleRows[0]?.row_number;
+  const lastVisibleRowNumber = visibleRows[visibleRows.length - 1]?.row_number;
   totalColumns.forEach(column =>
     setRowCell(
       totalRow,
       column,
-      sumRows(dailyRows, column),
-      buildMonthlySumFormula(column, firstDailyRowNumber, lastDailyRowNumber)
+      visibleRows.length > 0 ? sumRows(visibleRows, column) : 0,
+      visibleRows.length > 0 && firstVisibleRowNumber && lastVisibleRowNumber
+        ? buildMonthlySumFormula(column, firstVisibleRowNumber, lastVisibleRowNumber)
+        : '0'
     )
   );
   recalculateTemplateRow(totalRow);
@@ -884,7 +890,8 @@ export function syncTemplateSheetsWithReportEntries(
   sheets: TemplateWorkbookSheet[],
   reports: ProductionReport[],
   entries: ProductionEntry[],
-  reportId: string
+  reportId: string,
+  asOfDate = new Date()
 ) {
   const report = reports.find(item => item.id === reportId);
   if (!report || sheets.length === 0) return sheets;
@@ -896,7 +903,7 @@ export function syncTemplateSheetsWithReportEntries(
 
   if (actualSheet && actualRow) {
     applyActualEntryValues(actualRow, totals);
-    recalculateMonthlyTotal(actualSheet);
+    recalculateMonthlyTotal(actualSheet, asOfDate);
     actualSheet.imported_at = new Date().toISOString();
   }
 
@@ -905,7 +912,7 @@ export function syncTemplateSheetsWithReportEntries(
 
   if (planSheet && planRow) {
     applyPlanEntryValues(planRow, totals);
-    recalculateMonthlyTotal(planSheet);
+    recalculateMonthlyTotal(planSheet, asOfDate);
     planSheet.imported_at = new Date().toISOString();
   }
 
@@ -921,7 +928,8 @@ function compareTemplateSheetContent(sheets: TemplateWorkbookSheet[]) {
 export function syncTemplateSheetsWithAllReportEntries(
   sheets: TemplateWorkbookSheet[],
   reports: ProductionReport[],
-  entries: ProductionEntry[]
+  entries: ProductionEntry[],
+  asOfDate = new Date()
 ) {
   if (sheets.length === 0 || reports.length === 0) return sheets;
   const sortedReports = [...reports].sort((a, b) => a.report_date.localeCompare(b.report_date));
@@ -932,7 +940,8 @@ export function syncTemplateSheetsWithAllReportEntries(
       currentSheets,
       reports,
       entries,
-      report.id
+      report.id,
+      asOfDate
     );
 
     return compareTemplateSheetContent(syncedSheets) === previousContent
@@ -1015,7 +1024,8 @@ export function updateTemplateWorkbookCell(
   sheetId: string,
   rowNumber: number,
   column: string,
-  value: TemplateWorkbookCell['value']
+  value: TemplateWorkbookCell['value'],
+  asOfDate = new Date()
 ) {
   const nextSheets = cloneTemplateSheets(sheets);
   const sheet = nextSheets.find(item => item.id === sheetId);
@@ -1030,7 +1040,7 @@ export function updateTemplateWorkbookCell(
 
   setRowCell(row, column.toUpperCase(), value);
   recalculateTemplateRow(row);
-  if (sheet.kind === 'monthly') recalculateMonthlyTotal(sheet);
+  if (sheet.kind === 'monthly') recalculateMonthlyTotal(sheet, asOfDate);
   sheet.imported_at = new Date().toISOString();
 
   // 월별 시트 변경 시 연간 시트 자동 동기화
