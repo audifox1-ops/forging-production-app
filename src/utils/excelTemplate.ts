@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
-import type { Equipment, ProductionEntry, ProductionReport, TemplateWorkbookCell, TemplateWorkbookSheet } from '../types';
+import type { ProductionEntry, ProductionReport, TemplateWorkbookCell, TemplateWorkbookSheet } from '../types';
+import { aggregateEquipmentTotals } from './reportEquipmentTotals';
 
 const APP_BASE_URL = import.meta.env.BASE_URL || '/';
 const NORMALIZED_BASE_URL = APP_BASE_URL.endsWith('/') ? APP_BASE_URL : `${APP_BASE_URL}/`;
@@ -9,22 +10,12 @@ const OFFICE_RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument
 
 export const EXCEL_TEMPLATE_URL = `${NORMALIZED_BASE_URL}templates/template.xlsx`;
 
-type ReportEquipment = Extract<Equipment, 'P15' | 'P5' | 'R/M'>;
-
-type EquipmentTotals = {
-  productPlan: number;
-  productActual: number;
-  billetActual: number;
-};
-
 type FormulaValue = {
   formula: string;
   value: number;
 };
 
 type XmlParent = Document | Element;
-
-const REPORT_EQUIPMENT: ReportEquipment[] = ['P15', 'P5', 'R/M'];
 
 const WEEKDAYS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
 
@@ -280,24 +271,6 @@ async function getWorksheetPath(zip: JSZip, sheetName: string) {
   return normalizeXmlPath('xl/workbook.xml', target);
 }
 
-function aggregateEntries(entries: ProductionEntry[]) {
-  const totals = REPORT_EQUIPMENT.reduce<Record<ReportEquipment, EquipmentTotals>>((acc, equipment) => {
-    acc[equipment] = { productPlan: 0, productActual: 0, billetActual: 0 };
-    return acc;
-  }, {} as Record<ReportEquipment, EquipmentTotals>);
-
-  entries.forEach(entry => {
-    if (!REPORT_EQUIPMENT.includes(entry.equipment as ReportEquipment)) return;
-
-    const equipment = entry.equipment as ReportEquipment;
-    totals[equipment].productPlan += entry.product_plan || 0;
-    totals[equipment].productActual += entry.product_actual || 0;
-    totals[equipment].billetActual += entry.billet_actual || 0;
-  });
-
-  return totals;
-}
-
 function rate(actual: number, plan: number) {
   return plan > 0 ? actual / plan : 0;
 }
@@ -323,7 +296,7 @@ function applyFormulaCells(
 
 function applyReportValues(worksheet: Document, row: Element, entries: ProductionEntry[]) {
   const rowNumber = Number(row.getAttribute('r'));
-  const totals = aggregateEntries(entries);
+  const totals = aggregateEquipmentTotals(entries);
   const p15 = totals.P15;
   const p5 = totals.P5;
   const rm = totals['R/M'];
