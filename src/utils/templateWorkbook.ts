@@ -811,7 +811,9 @@ function aggregateReportEntries(entries: ProductionEntry[], reportId: string) {
   const targetEntries = entries.filter(entry => entry.report_id === reportId);
 
   return (Object.keys(SYNC_EQUIPMENT_COLUMNS) as Array<keyof typeof SYNC_EQUIPMENT_COLUMNS>).reduce((acc, equipment) => {
-    const equipmentEntries = targetEntries.filter(entry => entry.equipment === equipment);
+    const equipmentEntries = targetEntries.filter(entry =>
+      entry.equipment === equipment || (equipment === 'R/M' && entry.equipment === 'P8')
+    );
     acc[equipment] = {
       productPlan: equipmentEntries.reduce((sum, entry) => sum + (entry.product_plan || 0), 0),
       productActual: equipmentEntries.reduce((sum, entry) => sum + (entry.product_actual || 0), 0),
