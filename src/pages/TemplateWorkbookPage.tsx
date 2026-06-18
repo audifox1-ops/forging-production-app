@@ -1029,8 +1029,8 @@ function ExcelPreviewDialog({
 
   return (
     <div className="template-preview-print-modal fixed inset-0 z-50 bg-slate-900/55 flex items-center justify-center p-4">
-      <div className="template-preview-dialog bg-white rounded-lg shadow-xl border border-gray-200 w-[min(1180px,96vw)] max-h-[92vh] flex flex-col overflow-hidden">
-        <div className="template-preview-controls no-print px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+      <div className="template-preview-dialog bg-white rounded-lg shadow-xl border border-gray-200 w-[min(1120px,96vw)] max-h-[92vh] min-w-0 flex flex-col overflow-hidden">
+        <div className="template-preview-controls no-print min-w-0 px-5 py-4 border-b border-gray-100 flex items-center gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-gray-900">엑셀 미리보기</h2>
             <p className="text-xs text-gray-500 mt-0.5">
@@ -1046,7 +1046,7 @@ function ExcelPreviewDialog({
           </button>
         </div>
 
-        <div className="template-preview-controls no-print px-5 py-3 border-b border-gray-100 flex gap-2 overflow-x-auto">
+        <div className="template-preview-controls no-print min-w-0 px-5 py-3 border-b border-gray-100 flex gap-2 overflow-x-auto">
           {sheets.map(sheet => (
             <button
               key={sheet.id}
@@ -1063,9 +1063,9 @@ function ExcelPreviewDialog({
           ))}
         </div>
 
-        <div className="flex-1 overflow-auto p-5 bg-slate-50">
+        <div className="template-preview-scroll-area flex-1 min-w-0 overflow-auto p-5 bg-slate-50">
           {previewSheet ? (
-            <div className="template-preview-print-area bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="template-preview-print-area min-w-0 bg-white border border-gray-200 rounded-lg overflow-hidden">
               {previewSheet.kind !== 'monthly' && (
                 <div className="template-preview-print-header template-print-header hidden">
                 <h2 className="font-semibold text-gray-900">{previewSheet.sheet_name}</h2>
