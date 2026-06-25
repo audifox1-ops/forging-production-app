@@ -60,6 +60,7 @@ interface ReportStore {
   // 보고서 관련
   getReport: (reportDate: string) => ProductionReport | undefined;
   createReport: (reportDate: string, options?: CreateReportOptions) => ProductionReport;
+  deleteReport: (reportId: string) => void;
 
   // 실적 항목 관련
   getEntriesByReport: (reportId: string) => ProductionEntry[];
@@ -395,6 +396,33 @@ export const useReportStore = create<ReportStore>((set, get) => {
     });
 
     return newReport;
+  },
+
+  deleteReport: (reportId) => {
+    const entryIds = get().entries
+      .filter(e => e.report_id === reportId)
+      .map(e => e.id);
+
+    set(state => {
+      const nextEntries = state.entries.filter(e => e.report_id !== reportId);
+      const nextReports = state.reports.filter(r => r.id !== reportId);
+      return {
+        reports: nextReports,
+        entries: nextEntries,
+        templateSheets: syncTemplateSheetsWithAllReportEntries(
+          state.templateSheets,
+          nextReports,
+          nextEntries
+        ),
+      };
+    });
+
+    persistCurrentState(true, async () => {
+      if (entryIds.length > 0) {
+        await deleteSupabaseRows('production_entries', entryIds);
+      }
+      await deleteSupabaseRows('production_reports', reportId);
+    });
   },
 
   getEntriesByReport: (reportId) => {
