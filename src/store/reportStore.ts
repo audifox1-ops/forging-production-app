@@ -294,9 +294,13 @@ export const useReportStore = create<ReportStore>((set, get) => {
       user_name: assignedUser?.name ?? initialAssignee.userName,
       equipment,
       shift,
-      product_plan: sourceEntry?.next_product_plan || currentTarget?.product_target || 0,
+      product_plan: sourceEntry != null
+        ? (sourceEntry.next_product_plan ?? 0)
+        : (currentTarget?.product_target ?? 0),
       product_actual: 0,
-      billet_plan: sourceEntry?.next_billet_plan || currentTarget?.billet_target || 0,
+      billet_plan: sourceEntry != null
+        ? (sourceEntry.next_billet_plan ?? 0)
+        : (currentTarget?.billet_target ?? 0),
       billet_actual: 0,
       next_product_plan: 0,
       next_billet_plan: 0,
