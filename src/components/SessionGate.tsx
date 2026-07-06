@@ -1,30 +1,29 @@
-// SessionGate — 통합 인증 게이트.
-// 배경: Supabase 프로젝트를 Forging Insight와 통합하면서 모든 테이블이
-//   authenticated 전용 RLS로 보호된다. 같은 도메인 + 같은 프로젝트이므로
-//   메인 시스템(Forging Insight)에서 로그인하면 세션이 자동 공유된다.
-// 동작: 세션 확인 중 → 로딩 / 세션 없음 → 메인으로 안내 / 세션 있음 → 앱 렌더.
-//   Supabase 미설정(데모 모드)이면 기존 동작 그대로 통과시킨다.
+// SessionGate — 조회는 누구나, 수정은 로그인(관리자)만.
+// 운영 방침(2026-07): 부서원은 로그인 없이 일보를 조회한다.
+//   DB(RLS)가 익명에게 SELECT만 허용하므로, 비로그인 상태의 수정 시도는
+//   저장 단계에서 거부된다. 이 컴포넌트는 차단 대신 상단에 얇은 배너로
+//   현재 모드(조회 전용/관리자)를 알려 혼란을 줄인다.
+// 관리자 로그인: 같은 도메인의 메인 시스템(Forging Insight)에서 로그인하면
+//   세션이 자동 공유되어 배너가 관리자 모드로 바뀐다.
 
 import React from 'react';
 import supabase, { isDemoMode } from '../lib/supabase';
 
 export function SessionGate({ children }: { children: React.ReactNode }) {
-  // checking: 최초 세션 확인 중, authed: 로그인 세션 존재 여부
-  const [checking, setChecking] = React.useState(!isDemoMode);
-  const [authed, setAuthed] = React.useState(false);
+  // authed: 로그인 세션 존재 여부 (null = 확인 중)
+  const [authed, setAuthed] = React.useState<boolean | null>(isDemoMode ? true : null);
+  // dismissed: 조회 모드 배너를 사용자가 닫았는지 (세션 동안만 기억)
+  const [dismissed, setDismissed] = React.useState(false);
 
   React.useEffect(() => {
     if (isDemoMode || !supabase) return;
     let mounted = true;
 
-    // 최초 1회 세션 확인 (메인 시스템에서 로그인했다면 여기서 바로 통과)
+    // 최초 1회 세션 확인
     void supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setAuthed(Boolean(data.session));
-      setChecking(false);
+      if (mounted) setAuthed(Boolean(data.session));
     });
-
-    // 로그인/로그아웃/토큰 갱신을 구독해 상태 반영
+    // 로그인/로그아웃/토큰 갱신 구독
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) setAuthed(Boolean(session));
     });
@@ -34,38 +33,35 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  if (isDemoMode) return <>{children}</>;
+  // 조회 전용 배너: 비로그인 확정 상태에서만, 닫기 전까지 표시
+  const showViewerBanner = !isDemoMode && authed === false && !dismissed;
 
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-slate-50">
-        <p className="text-sm text-gray-500">로그인 상태 확인 중...</p>
-      </div>
-    );
-  }
-
-  if (!authed) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-slate-50 px-4">
-        <div className="max-w-sm w-full bg-white border border-slate-200 rounded-xl shadow-sm p-7 text-center">
-          <h1 className="text-lg font-semibold text-slate-800 mb-2">로그인이 필요합니다</h1>
-          <p className="text-sm text-slate-500 leading-relaxed mb-5">
-            생산일보는 부서 통합 시스템(Forging Insight)과 계정을 함께 사용합니다.
-            메인 시스템에서 로그인한 뒤 다시 열어주세요.
-          </p>
-          {/* 별도 앱이므로 react-router Link가 아닌 일반 링크로 전체 이동 */}
-          <a
-            href="/"
-            className="inline-block w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5"
-          >
-            메인 시스템으로 이동
-          </a>
+  return (
+    <>
+      {showViewerBanner && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-800 text-xs px-4 py-2 flex items-center justify-between gap-3">
+          <span>
+            조회 전용 모드입니다 — 열람은 자유롭게, 입력·수정은 관리자 로그인 후 가능합니다.
+          </span>
+          <span className="flex items-center gap-3 shrink-0">
+            {/* 별도 앱이므로 일반 링크로 전체 이동 (메인에서 로그인하면 세션 공유됨) */}
+            <a href="/" className="underline font-medium hover:text-amber-900">
+              관리자 로그인
+            </a>
+            <button
+              type="button"
+              aria-label="안내 닫기"
+              className="font-bold px-1 hover:text-amber-900"
+              onClick={() => setDismissed(true)}
+            >
+              ×
+            </button>
+          </span>
         </div>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
+      )}
+      {children}
+    </>
+  );
 }
 
 export default SessionGate;
