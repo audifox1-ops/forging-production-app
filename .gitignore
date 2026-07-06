@@ -24,3 +24,6 @@ Thumbs.db
 
 # Vite 캐시
 .vite/
+
+# Supabase 데이터 이관용 키 파일 (절대 커밋 금지)
+.env.migration

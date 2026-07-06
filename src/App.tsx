@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import SessionGate from './components/SessionGate';
 import { useReportStore } from './store/reportStore';
 
 const queryClient = new QueryClient({
@@ -56,6 +57,8 @@ function App() {
 
   return (
     <ErrorBoundary>
+    {/* 통합 인증: Supabase 프로젝트 통합 후 비로그인 접근을 차단한다 (데모 모드는 통과) */}
+    <SessionGate>
     <QueryClientProvider client={queryClient}>
     <HashRouter>
       <Suspense fallback={<PageLoader />}>
@@ -91,6 +94,7 @@ function App() {
       </Suspense>
     </HashRouter>
     </QueryClientProvider>
+    </SessionGate>
     </ErrorBoundary>
   );
 }
