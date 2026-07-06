@@ -731,7 +731,63 @@ function getMonthlyOutputCellClass(column: string) {
   ].filter(Boolean).join(' ');
 }
 
+const MONTHLY_OUTPUT_RATE_SOURCE_COLUMNS: Record<string, { actual: string; plan: string }> = {
+  D: { actual: 'B', plan: 'C' },
+  R: { actual: 'P', plan: 'Q' },
+  AF: { actual: 'AD', plan: 'AE' },
+  AR: { actual: 'AP', plan: 'AQ' },
+};
+
+function getMonthlyOutputSheetMeta(sheet: TemplateWorkbookSheet) {
+  const match = /^(\d{2})(\d{2})/.exec(sheet.sheet_name);
+  if (!match) return null;
+
+  const month = Number(match[2]);
+  if (!Number.isFinite(month) || month < 1 || month > 12) return null;
+
+  const year = Number.isFinite(sheet.year) ? sheet.year : 2000 + Number(match[1]);
+  return {
+    year,
+    month,
+    daysInMonth: new Date(Date.UTC(year, month, 0)).getUTCDate(),
+  };
+}
+
+function sumMonthlyOutputColumn(rows: TemplateWorkbookRow[], column: string) {
+  return rows.reduce((sum, row) => sum + (getNumericWorkbookCell(row, column) ?? 0), 0);
+}
+
+function buildMonthlyOutputTotalRow(
+  sheet: TemplateWorkbookSheet,
+  rows: TemplateWorkbookRow[],
+  issueDateIso: string
+): TemplateWorkbookRow | null {
+  const meta = getMonthlyOutputSheetMeta(sheet);
+  if (!meta) return null;
+
+  const visibleRows = rows.filter(row => row.row_date && row.row_date < issueDateIso);
+
+  return {
+    row_number: meta.daysInMonth + 8,
+    row_label: '합계',
+    cells: [
+      { column: 'A', value: '합계' },
+      ...MONTHLY_OUTPUT_DATA_COLUMNS.map(column => {
+        const rateColumns = MONTHLY_OUTPUT_RATE_SOURCE_COLUMNS[column];
+        if (!rateColumns) {
+          return { column, value: sumMonthlyOutputColumn(visibleRows, column) };
+        }
+
+        const actualTotal = sumMonthlyOutputColumn(visibleRows, rateColumns.actual);
+        const planTotal = sumMonthlyOutputColumn(visibleRows, rateColumns.plan);
+        return { column, value: planTotal > 0 ? actualTotal / planTotal : 0 };
+      }),
+    ],
+  };
+}
+
 function MonthlyOutputTabulation({
+  sheet,
   rows,
 }: {
   sheet: TemplateWorkbookSheet;
@@ -739,7 +795,17 @@ function MonthlyOutputTabulation({
 }) {
   const issueDate = React.useMemo(() => formatIssueDate(), []);
   const issueDateIso = React.useMemo(() => formatLocalIsoDate(), []);
-  const outputRows = rows.filter(row => row.row_number >= 8 && row.row_number <= 38);
+  const outputRows = React.useMemo(() => {
+    const meta = getMonthlyOutputSheetMeta(sheet);
+    const cutoffRowNumber = meta ? meta.daysInMonth + 8 : Number.POSITIVE_INFINITY;
+    return [...rows]
+      .filter(row => row.row_number >= 8 && row.row_number < cutoffRowNumber)
+      .sort((a, b) => a.row_number - b.row_number);
+  }, [rows, sheet]);
+  const totalRow = React.useMemo(
+    () => buildMonthlyOutputTotalRow(sheet, outputRows, issueDateIso),
+    [sheet, outputRows, issueDateIso]
+  );
 
   return (
     <div className="sample-output-sheet template-print-sheet">
@@ -828,11 +894,10 @@ function MonthlyOutputTabulation({
           </tr>
 
           {outputRows.map(row => {
-            const isTotalRow = row.row_number === 38 || formatMonthlyOutputDate(row) === '합계';
-            const shouldBlankRow = !isTotalRow && shouldBlankMonthlyOutputRow(row, issueDateIso);
+            const shouldBlankRow = shouldBlankMonthlyOutputRow(row, issueDateIso);
 
             return (
-              <tr key={row.row_number} className={isTotalRow ? 'sample-total-row' : 'sample-body-row'}>
+              <tr key={row.row_number} className="sample-body-row">
                 <td className="sample-date-cell sample-output-thick-left">{formatMonthlyOutputDate(row)}</td>
                 {MONTHLY_OUTPUT_DATA_COLUMNS.map(column => (
                   <td key={`${row.row_number}-${column}`} className={getMonthlyOutputCellClass(column)}>
@@ -842,6 +907,16 @@ function MonthlyOutputTabulation({
               </tr>
             );
           })}
+          {totalRow && (
+            <tr key="monthly-total-row" className="sample-total-row">
+              <td className="sample-date-cell sample-output-thick-left">합계</td>
+              {MONTHLY_OUTPUT_DATA_COLUMNS.map(column => (
+                <td key={`total-${column}`} className={getMonthlyOutputCellClass(column)}>
+                  {formatMonthlyOutputCell(totalRow, column)}
+                </td>
+              ))}
+            </tr>
+          )}
         </tbody>
       </table>
       <div className="sample-output-footer">
