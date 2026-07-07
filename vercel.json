@@ -5,6 +5,18 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/daily",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/daily/(assets/.*|templates/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|xml|json|txt|woff2?|ttf|eot|map))",
+      "destination": "/$1"
+    },
+    {
+      "source": "/daily/(.*)",
+      "destination": "/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

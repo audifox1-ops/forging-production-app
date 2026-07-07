@@ -2,6 +2,7 @@ import React from 'react';
 import { BarChart3, CalendarPlus, Download, Eye, Grid2X2, Plus, Printer, RefreshCw, Table2, Trash2, X } from 'lucide-react';
 import { useReportStore } from '../store/reportStore';
 import { downloadTemplateWorkbook } from '../utils/excelTemplate';
+import { withBasePath } from '../lib/baseUrl';
 import {
   buildTemplateWorkbookAppSummary,
   columnToNumber,
@@ -24,7 +25,7 @@ const PRINT_DOCUMENT_CLASS = 'template-workbook-print-document';
 const PRINT_PAGE_STYLE_ID = 'template-workbook-landscape-print-style';
 const PREVIEW_PRINTING_CLASS = 'template-workbook-preview-printing';
 const PERCENT_COLUMNS = new Set(['D', 'R', 'AF', 'AR']);
-const TAEWOONG_LOGO_SRC = '/templates/taewoong-logo.jpeg';
+const REPORT_LOGO_SRC = withBasePath('production-report-logo.svg');
 const MONTHLY_OUTPUT_DATA_COLUMNS = [
   'B',
   'C',
@@ -819,7 +820,7 @@ function MonthlyOutputTabulation({
         <tbody>
           <tr className="sample-document-row">
             <td rowSpan={4} colSpan={4} className="sample-logo-cell sample-output-thick-left sample-output-thick-top">
-              <img src={TAEWOONG_LOGO_SRC} alt="TAEWOONG" />
+              <img src={REPORT_LOGO_SRC} alt="생산량보고" />
             </td>
             <td rowSpan={2} colSpan={4} className="sample-document-label sample-output-thick-top">
               <span className="sample-korean-label">문서제목</span>

@@ -1,1 +1,6 @@
+/daily/assets/* /assets/:splat 200
+/daily/templates/* /templates/:splat 200
+/daily/production-report-logo.svg /production-report-logo.svg 200
+/daily/taewoong-dispatch-logo.svg /taewoong-dispatch-logo.svg 200
+/daily/* /index.html 200
 /* /index.html 200

@@ -1,9 +1,8 @@
 import JSZip from 'jszip';
 import type { ProductionEntry, ProductionReport, TemplateWorkbookCell, TemplateWorkbookSheet } from '../types';
 import { aggregateEquipmentTotals } from './reportEquipmentTotals';
+import { NORMALIZED_BASE_URL } from '../lib/baseUrl';
 
-const APP_BASE_URL = import.meta.env.BASE_URL || '/';
-const NORMALIZED_BASE_URL = APP_BASE_URL.endsWith('/') ? APP_BASE_URL : `${APP_BASE_URL}/`;
 const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const SPREADSHEET_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const OFFICE_RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';

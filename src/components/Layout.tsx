@@ -16,10 +16,11 @@ import {
 import { format } from 'date-fns';
 import { useReportStore } from '../store/reportStore';
 import { useToast } from './Toast';
+import { withBasePath } from '../lib/baseUrl';
 
 const APP_NAME = '생산량보고';
 const APP_TAGLINE = 'Production Reporting';
-const APP_LOGO_SRC = '/production-report-logo.svg';
+const APP_LOGO_SRC = withBasePath('production-report-logo.svg');
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
