@@ -54,7 +54,19 @@ async function requireSupabaseSession(client: NonNullable<typeof supabase>) {
     return data.session;
   }
 
-  throw new Error('Supabase ?몄쬆??�????�???�씤??利앹???�넗????�쾭????�쪟 ?뺣낫???�?�??�＜?몄슂.');
+  // 운영 방침(전과 동일): 부서원은 로그인 없이 입력한다.
+  // 세션이 없으면 익명 로그인으로 세션을 만든다(Supabase 프로젝트에 Anonymous Sign-Ins 활성 필요 — 2026-07-07 활성화됨).
+  // 익명 세션도 authenticated 역할이므로 RLS 쓰기 정책(auth.role()='authenticated')을 통과한다.
+  // forging-app 연동(같은 Supabase 공유, /daily·대시보드 조회)은 그대로 유지된다.
+  const { data: anonData, error: anonError } = await client.auth.signInAnonymously();
+  if (anonError) {
+    throw anonError;
+  }
+  if (anonData.session) {
+    return anonData.session;
+  }
+
+  throw new Error('Supabase ?몄쬆??�????�???�씤??利앹???�넗????�쾭????�쪟 ?뺣낫???�?�??�＜?몄슂.');
 }
 
 function getLocalStorage() {
@@ -75,7 +87,7 @@ export function loadLocalReportState(): Partial<PersistedReportState> | null {
     if (!raw) return null;
     return JSON.parse(raw) as Partial<PersistedReportState>;
   } catch (error) {
-    logger.warn('localStorage 로드 ?�패', { error: String(error) });
+    logger.warn('localStorage 로드 ?�패', { error: String(error) });
     return null;
   }
 }
@@ -89,16 +101,16 @@ export function saveLocalReportState(state: PersistedReportState) {
   } catch (error) {
     const isQuotaError = error instanceof DOMException && error.name === 'QuotaExceededError';
     if (isQuotaError) {
-      logger.warn('localStorage ?�량 초과', { error: String(error) });
+      logger.warn('localStorage ?�량 초과', { error: String(error) });
     } else {
-      logger.warn('localStorage ?�???�패', { error: String(error) });
+      logger.warn('localStorage ?�???�패', { error: String(error) });
     }
   }
 }
 
 function assertSupabase() {
   if (!supabase) {
-    throw new Error('Supabase ?�경변?��? ?�어 ?�버 공유 ?�?�을 ?�용?????�습?�다.');
+    throw new Error('Supabase ?�경변?��? ?�어 ?�버 공유 ?�?�을 ?�용?????�습?�다.');
   }
   return supabase;
 }
@@ -156,8 +168,8 @@ function parseTemplateWorkbookSheetComment(comment: ReportComment): TemplateWork
 function getTemplateWorkbookSheetOrder(sheet: TemplateWorkbookSheet) {
   const monthlyMatch = /^(\d{2})(\d{2})??/.exec(sheet.sheet_name);
   if (monthlyMatch) return Number(monthlyMatch[1]) * 100 + Number(monthlyMatch[2]);
-  if (sheet.sheet_name === '2025???�체') return 202500;
-  if (sheet.sheet_name === '2026???�체') return 202600;
+  if (sheet.sheet_name === '2025???�체') return 202500;
+  if (sheet.sheet_name === '2026???�체') return 202600;
   return 999999;
 }
 
@@ -389,23 +401,23 @@ export function getStorageErrorMessage(error: unknown) {
   const code = getSupabaseErrorCode(error);
 
   if (isSupabaseSchemaError(error)) {
-    return `Supabase ?�이블을 찾을 ???�습?�다${code ? ` (${code})` : ''}. Supabase SQL Editor?�서 supabase/fix-42p01.sql???�행?�세??`;
+    return `Supabase ?�이블을 찾을 ???�습?�다${code ? ` (${code})` : ''}. Supabase SQL Editor?�서 supabase/fix-42p01.sql???�행?�세??`;
   }
 
   if (
     code === '23514' &&
     /production_entries_equipment_check|violates check constraint/i.test(message)
   ) {
-    return 'Supabase가 ?�직 P8 ?�적 ?�?�을 ?�용?��? ?�습?�다. supabase/add-p8-equipment.sql???�행?????�시 ?�?�하?�요.';
+    return 'Supabase가 ?�직 P8 ?�적 ?�?�을 ?�용?��? ?�습?�다. supabase/add-p8-equipment.sql???�행?????�시 ?�?�하?�요.';
   }
 
   if (code === '401' || code === '403') {
-    return 'Supabase ?�증 ?�류?�니?? ?�이지�??�로고침?????�시 ?�도?�주?�요.';
+    return 'Supabase ?�증 ?�류?�니?? ?�이지�??�로고침?????�시 ?�도?�주?�요.';
   }
 
   if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || /network/i.test(message)) {
-    return '?�트?�크 ?�결 ?�류?�니?? ?�터???�결???�인?????�시 ?�도?�주?�요.';
+    return '?�트?�크 ?�결 ?�류?�니?? ?�터???�결???�인?????�시 ?�도?�주?�요.';
   }
 
-  return `공유 ?�???�류: ${message || '?????�는 ?�류'}`;
+  return `공유 ?�???�류: ${message || '?????�는 ?�류'}`;
 }
