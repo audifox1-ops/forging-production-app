@@ -12,6 +12,8 @@ dist-ssr/
 .env.local
 .env.*.local
 .env.migration
+dev-gate*.log
+preview*.log
 
 # 에디터
 .vscode/
