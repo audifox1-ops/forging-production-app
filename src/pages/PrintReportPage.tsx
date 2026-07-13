@@ -207,22 +207,7 @@ export default function PrintReportPage() {
             <div className="print-section-title bg-blue-100 px-3 py-2 font-bold text-blue-900 text-sm mb-2 border-l-4 border-blue-700">
               1. 전일 실적 및 금일 계획 요약
             </div>
-            <div className="print-kpi-grid grid grid-cols-4 gap-3 mb-3">
-              <div className={`print-kpi-card p-3 rounded-lg text-center border-2 ${
-                targetBasedSummary.total_achievement_rate >= 100 ? 'bg-green-50 border-green-300' :
-                  targetBasedSummary.total_achievement_rate >= 90 ? 'bg-yellow-50 border-yellow-300' : 'bg-red-50 border-red-300'
-              }`}>
-                <div className="text-xs text-gray-500">전체 달성율</div>
-                <div className={`print-kpi-value text-2xl font-bold mt-1 ${
-                  targetBasedSummary.total_achievement_rate >= 100 ? 'text-green-700' :
-                    targetBasedSummary.total_achievement_rate >= 90 ? 'text-yellow-700' : 'text-red-700'
-                }`}>
-                  {Math.round(targetBasedSummary.total_achievement_rate)}%
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {formatNumber(summary.total_actual)} / {formatNumber(targetBasedSummary.total_plan)} KG
-                </div>
-              </div>
+            <div className="print-kpi-grid grid grid-cols-3 gap-3 mb-3">
               <div className="print-kpi-card p-3 rounded-lg text-center border bg-blue-50 border-blue-200">
                 <div className="text-xs text-gray-500">제품 달성율</div>
                 <div className="print-kpi-value text-2xl font-bold mt-1 text-blue-700">
