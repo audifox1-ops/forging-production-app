@@ -599,10 +599,8 @@ function EntryInputCard({
 
   const validate = (): boolean => {
     const errs: string[] = [];
-    // 전일 실적(제품·황지)이 실제로 둘 다 0인 날(가동 없음 등)도 있을 수 있어 더 이상 막지 않는다.
-    if (formData.next_product_plan === 0 && formData.next_billet_plan === 0) {
-      errs.push('금일 제품 또는 황지 생산계획 중 하나 이상 입력해주세요.');
-    }
+    // 전일 실적(제품·황지)이 둘 다 0인 날(가동 없음 등)도 있어 막지 않는다(원격 fix).
+    // 금일 생산계획(제품/황지)도 선택 입력 — 계획 미입력이어도 제출 가능(사용자 요청 2026-07).
     setErrors(errs);
     return errs.length === 0;
   };
