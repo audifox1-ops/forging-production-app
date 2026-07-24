@@ -47,7 +47,7 @@ export const TEMPLATE_WORKBOOK_ANCHOR_REPORT_ID = 'template-workbook-anchor';
 async function requireSupabaseSession(client: NonNullable<typeof supabase>) {
   const { data, error } = await client.auth.getSession();
   if (error) {
-    throw error;
+    throw new Error(`Supabase session check failed: ${error.message}`);
   }
 
   if (data.session) {
@@ -60,7 +60,7 @@ async function requireSupabaseSession(client: NonNullable<typeof supabase>) {
   // forging-app 연동(같은 Supabase 공유, /daily·대시보드 조회)은 그대로 유지된다.
   const { data: anonData, error: anonError } = await client.auth.signInAnonymously();
   if (anonError) {
-    throw anonError;
+    throw new Error(`Supabase anonymous sign-in failed: ${anonError.message}`);
   }
   if (anonData.session) {
     return anonData.session;
@@ -396,6 +396,29 @@ function getErrorMessage(error: unknown) {
     : '';
 }
 
+function isAnonymousAuthError(message: string) {
+  return /anonymous|anon|sign-?in|signups? not allowed|signup|provider.*disabled/i.test(message);
+}
+
+function isBrowserStorageError(message: string) {
+  return /localStorage|sessionStorage|storage|quota|access is denied|operation is insecure|blocked/i.test(message);
+}
+
+function isSupabasePermissionError(error: unknown, message: string, code: string) {
+  const status =
+    typeof error === 'object' && error !== null && 'status' in error
+      ? String((error as { status?: unknown }).status)
+      : '';
+
+  return (
+    code === '401' ||
+    code === '403' ||
+    status === '401' ||
+    status === '403' ||
+    /permission denied|row level security|rls|not authorized|jwt|auth/i.test(message)
+  );
+}
+
 export function getStorageErrorMessage(error: unknown) {
   const message = getErrorMessage(error);
   const code = getSupabaseErrorCode(error);
@@ -411,8 +434,24 @@ export function getStorageErrorMessage(error: unknown) {
     return 'Supabase가 ?�직 P8 ?�적 ?�?�을 ?�용?��? ?�습?�다. supabase/add-p8-equipment.sql???�행?????�시 ?�?�하?�요.';
   }
 
+  if (isAnonymousAuthError(message)) {
+    return '생산일보 앱이 서버 공유 저장소에 접속하지 못했습니다. Supabase Auth의 Anonymous Sign-Ins가 꺼져 있거나 이 브라우저에서 새 공유 세션 생성이 차단된 상태입니다. Supabase Auth 설정에서 익명 로그인을 켠 뒤, 문제가 있는 PC에서 forging-production-app.vercel.app 사이트 데이터를 삭제하고 다시 접속해 주세요.';
+  }
+
+  if (isBrowserStorageError(message)) {
+    return '브라우저 저장소 접근이 차단되어 생산일보 앱 공유 세션을 만들 수 없습니다. 시크릿/InPrivate 모드, 회사 보안 확장, 쿠키/사이트 데이터 차단 설정을 해제한 뒤 forging-production-app.vercel.app 사이트 데이터를 삭제하고 다시 접속해 주세요.';
+  }
+
+  if (isSupabasePermissionError(error, message, code)) {
+    return 'Supabase 공유 저장소 인증 또는 RLS 권한 오류입니다. 생산일보 앱의 익명 인증 세션이 authenticated 권한으로 users, production_reports, production_entries 등에 접근할 수 있는지 확인해 주세요.';
+  }
+
   if (code === '401' || code === '403') {
     return 'Supabase ?�증 ?�류?�니?? ?�이지�??�로고침?????�시 ?�도?�주?�요.';
+  }
+
+  if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || /network/i.test(message)) {
+    return '네트워크 연결 오류입니다. 인터넷 연결, 회사망/VPN, Supabase 접속 차단 여부를 확인한 뒤 다시 시도해 주세요.';
   }
 
   if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || /network/i.test(message)) {
