@@ -7,6 +7,7 @@ import {
   getLastWorkingDay,
   isWeekend,
   isPublicHoliday,
+  isCompanyHoliday,
   isNonWorkingDay,
   getDayName,
 } from '../src/utils/reportDates';
@@ -41,10 +42,26 @@ describe('non-working day helpers', () => {
     expect(isPublicHoliday('2026-03-03')).toBe(false);
   });
 
+  it('should identify 2026 summer vacation as company holidays', () => {
+    expect(isCompanyHoliday('2026-07-30')).toBe(true);
+    expect(isCompanyHoliday('2026-08-04')).toBe(true);
+    expect(isCompanyHoliday('2026-08-05')).toBe(false);
+  });
+
   it('should identify non-working days', () => {
     expect(isNonWorkingDay('2026-03-01')).toBe(true);
     expect(isNonWorkingDay('2026-03-02')).toBe(true);
     expect(isNonWorkingDay('2026-03-03')).toBe(false);
+  });
+
+  it('should treat 2026 summer vacation as non-working days', () => {
+    expect(isNonWorkingDay('2026-07-30')).toBe(true);
+    expect(isNonWorkingDay('2026-07-31')).toBe(true);
+    expect(isNonWorkingDay('2026-08-01')).toBe(true);
+    expect(isNonWorkingDay('2026-08-02')).toBe(true);
+    expect(isNonWorkingDay('2026-08-03')).toBe(true);
+    expect(isNonWorkingDay('2026-08-04')).toBe(true);
+    expect(isNonWorkingDay('2026-08-05')).toBe(false);
   });
 });
 
@@ -60,6 +77,10 @@ describe('getLastWorkingDay', () => {
   it('should skip public holidays', () => {
     expect(getLastWorkingDay('2026-03-03')).toBe('2026-02-27');
   });
+
+  it('should skip the 2026 summer vacation window', () => {
+    expect(getLastWorkingDay('2026-08-05')).toBe('2026-07-29');
+  });
 });
 
 describe('getActualDateFromPlanDate', () => {
@@ -69,6 +90,10 @@ describe('getActualDateFromPlanDate', () => {
 
   it('should skip weekend when plan date is Monday', () => {
     expect(getActualDateFromPlanDate('2026-01-12')).toBe('2026-01-09');
+  });
+
+  it('should resolve 2026-08-05 plan date to 2026-07-29 actual date', () => {
+    expect(getActualDateFromPlanDate('2026-08-05')).toBe('2026-07-29');
   });
 });
 
@@ -88,6 +113,10 @@ describe('getPlanDateFromActualDate', () => {
   it('should skip public holidays and weekends', () => {
     expect(getPlanDateFromActualDate('2026-02-27')).toBe('2026-03-03');
   });
+
+  it('should resolve 2026-07-29 actual date to 2026-08-05 plan date', () => {
+    expect(getPlanDateFromActualDate('2026-07-29')).toBe('2026-08-05');
+  });
 });
 
 describe('getReportPlanDate', () => {
@@ -99,6 +128,11 @@ describe('getReportPlanDate', () => {
   it('should calculate from report_date if next_plan_date is empty', () => {
     const report = { report_date: '2026-01-14', next_plan_date: '' };
     expect(getReportPlanDate(report)).toBe('2026-01-15');
+  });
+
+  it('should recalculate if stored next_plan_date is now a non-working day', () => {
+    const report = { report_date: '2026-07-29', next_plan_date: '2026-07-30' };
+    expect(getReportPlanDate(report)).toBe('2026-08-05');
   });
 });
 

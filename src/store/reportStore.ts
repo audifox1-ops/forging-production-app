@@ -123,14 +123,33 @@ const deduplicateTemplateSheets = (sheets: TemplateWorkbookSheet[]): TemplateWor
   return Array.from(seenNames.values());
 };
 
-const normalizeReports = (reports: ProductionReport[]) =>
-  reports
-    .filter(report => !isTemplateWorkbookAnchorReport(report))
-    .map(report =>
-      (report as { status: string }).status === 'closed'
+const normalizeReportDefaults = (reports: ProductionReport[]) => {
+  let changed = false;
+  const value = reports
+    .filter(report => {
+      const keep = !isTemplateWorkbookAnchorReport(report);
+      if (!keep) changed = true;
+      return keep;
+    })
+    .map(report => {
+      let nextReport = (report as { status: string }).status === 'closed'
         ? { ...report, status: 'reviewed' as const }
-        : report
-    );
+        : report;
+      if (nextReport !== report) changed = true;
+
+      const expectedPlanDate = getPlanDateFromActualDate(nextReport.report_date);
+      if (nextReport.next_plan_date !== expectedPlanDate) {
+        changed = true;
+        nextReport = { ...nextReport, next_plan_date: expectedPlanDate };
+      }
+
+      return nextReport;
+    });
+
+  return { value, changed };
+};
+
+const normalizeReports = (reports: ProductionReport[]) => normalizeReportDefaults(reports).value;
 
 const PREVIOUS_2026_TARGETS_BY_EQUIPMENT: Record<TargetEquipment, { product: number; billet: number }> = {
   P15: { product: 17545, billet: 18150 },
@@ -779,8 +798,13 @@ export const useReportStore = create<ReportStore>((set, get) => {
           const normalizedPeriodTargets = normalizePeriodTargetDefaults(
             getInitialArray(remoteState.periodTargets, state.periodTargets)
           );
-          remoteDefaultsChanged = normalizedUsers.changed || normalizedTargets.changed || normalizedPeriodTargets.changed;
-          const reports = normalizeReports(getInitialArray(remoteState.reports, state.reports));
+          const normalizedReports = normalizeReportDefaults(getInitialArray(remoteState.reports, state.reports));
+          remoteDefaultsChanged =
+            normalizedUsers.changed ||
+            normalizedTargets.changed ||
+            normalizedPeriodTargets.changed ||
+            normalizedReports.changed;
+          const reports = normalizedReports.value;
           const entries = getInitialArray(remoteState.entries, state.entries);
           const templateSheets = deduplicateTemplateSheets(getInitialArray(remoteState.templateSheets, state.templateSheets));
           const syncedTemplateSheets = syncTemplateSheetsWithAllReportEntries(templateSheets, reports, entries);

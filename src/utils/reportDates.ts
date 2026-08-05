@@ -23,6 +23,16 @@ const KOREA_PUBLIC_HOLIDAYS = new Set([
   '2026-12-25',
 ]);
 
+const COMPANY_HOLIDAYS = new Set([
+  // 2026 summer vacation: 2026-08-05 plan should use 2026-07-29 as actual date.
+  '2026-07-30',
+  '2026-07-31',
+  '2026-08-01',
+  '2026-08-02',
+  '2026-08-03',
+  '2026-08-04',
+]);
+
 export function getTodayPlanDate(date = new Date()) {
   return format(date, REPORT_DATE_FORMAT);
 }
@@ -46,8 +56,12 @@ export function isPublicHoliday(dateString: string): boolean {
   return KOREA_PUBLIC_HOLIDAYS.has(dateString);
 }
 
+export function isCompanyHoliday(dateString: string): boolean {
+  return COMPANY_HOLIDAYS.has(dateString);
+}
+
 export function isNonWorkingDay(dateString: string): boolean {
-  return isWeekend(dateString) || isPublicHoliday(dateString);
+  return isWeekend(dateString) || isPublicHoliday(dateString) || isCompanyHoliday(dateString);
 }
 
 /**
@@ -91,7 +105,9 @@ export function getPlanDateFromActualDate(actualDate: string) {
 }
 
 export function getReportPlanDate(report: Pick<ProductionReport, 'report_date' | 'next_plan_date'>) {
-  return report.next_plan_date || getPlanDateFromActualDate(report.report_date);
+  const calculatedPlanDate = getPlanDateFromActualDate(report.report_date);
+  if (!report.next_plan_date || isNonWorkingDay(report.next_plan_date)) return calculatedPlanDate;
+  return report.next_plan_date;
 }
 
 /**
