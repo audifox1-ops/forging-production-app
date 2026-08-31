@@ -42,9 +42,10 @@ function App() {
     // 주기 동기화는 전 테이블을 통째로 다시 받는다(persistence.ts fetchAll).
     // 30초 주기로 돌리면 하루 1GB가 넘는 전송량이 나와 Supabase 무료 한도(월 5GB)를
     // 며칠 만에 소진한다 - 실제로 2026-08-31 egress 초과로 로그인이 차단됐다.
-    // ① 숨은 탭에서는 아예 쏘지 않고 ② 주기를 5분으로 늘린다.
+    // ① 숨은 탭에서는 아예 쏘지 않고 ② 주기를 10분으로 늘린다.
+    // 무료 요금제(월 5GB)를 유지하기로 해 여러 대가 동시에 띄워도 한도에 들도록 잡은 값이다.
     // 탭으로 돌아오는 순간은 아래 focus 리스너가 즉시 동기화하므로 체감 지연은 없다.
-    const SYNC_INTERVAL_MS = 5 * 60 * 1000;
+    const SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
     const syncFromServer = () => {
       if (document.hidden) return;
