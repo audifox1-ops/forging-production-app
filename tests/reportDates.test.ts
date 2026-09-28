@@ -42,6 +42,10 @@ describe('non-working day helpers', () => {
     expect(isPublicHoliday('2026-03-03')).toBe(false);
   });
 
+  it('should treat 2026-09-28 as a working day for report generation', () => {
+    expect(isNonWorkingDay('2026-09-28')).toBe(false);
+  });
+
   it('should identify 2026 summer vacation as company holidays', () => {
     expect(isCompanyHoliday('2026-07-30')).toBe(true);
     expect(isCompanyHoliday('2026-08-04')).toBe(true);
@@ -112,6 +116,10 @@ describe('getPlanDateFromActualDate', () => {
 
   it('should skip public holidays and weekends', () => {
     expect(getPlanDateFromActualDate('2026-02-27')).toBe('2026-03-03');
+  });
+
+  it('should use 2026-09-28 as the next plan date', () => {
+    expect(getPlanDateFromActualDate('2026-09-23')).toBe('2026-09-28');
   });
 
   it('should resolve 2026-07-29 actual date to 2026-08-05 plan date', () => {
