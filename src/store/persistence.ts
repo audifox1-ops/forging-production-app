@@ -22,6 +22,12 @@ export interface PersistedReportState {
   currentUserId: string;
 }
 
+export function getReportStateForSync(state: PersistedReportState): PersistedReportState {
+  // User rows are managed through the admin-only user mutations. Report/entry
+  // synchronization must not try to upsert them from an ordinary session.
+  return { ...state, users: [] };
+}
+
 export type SupabaseTableName =
   | 'users'
   | 'production_reports'
@@ -276,21 +282,19 @@ export async function saveSupabaseReportState(state: PersistedReportState) {
 
   const client = assertSupabase();
   await requireSupabaseSession(client);
+  const syncState = getReportStateForSync(state);
   const { regularRows: regularEntries, p8Entries } = splitP8Entries(state.entries);
   const p8Comments = p8Entries.map(toP8EntryComment);
   const templateSheetComments = state.templateSheets.map(toTemplateWorkbookSheetComment);
   const operations = [
-    state.users.length > 0
-      ? client.from('users').upsert(state.users, { onConflict: 'id' })
+    syncState.reports.length > 0
+      ? client.from('production_reports').upsert(syncState.reports, { onConflict: 'id' })
       : Promise.resolve({ error: null }),
-    state.reports.length > 0
-      ? client.from('production_reports').upsert(state.reports, { onConflict: 'id' })
+    syncState.targets.length > 0
+      ? client.from('equipment_targets').upsert(syncState.targets, { onConflict: 'equipment,shift,effective_date' })
       : Promise.resolve({ error: null }),
-    state.targets.length > 0
-      ? client.from('equipment_targets').upsert(state.targets, { onConflict: 'equipment,shift,effective_date' })
-      : Promise.resolve({ error: null }),
-    state.periodTargets.length > 0
-      ? client.from('production_period_targets').upsert(state.periodTargets, { onConflict: 'period,effective_date' })
+    syncState.periodTargets.length > 0
+      ? client.from('production_period_targets').upsert(syncState.periodTargets, { onConflict: 'period,effective_date' })
       : Promise.resolve({ error: null }),
     regularEntries.length > 0
       ? client.from('production_entries').upsert(regularEntries as ProductionEntry[], { onConflict: 'report_id,equipment,shift' })

@@ -1,37 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { getStorageErrorMessage } from '../src/store/persistence';
+import type { PersistedReportState } from '../src/store/persistence';
+import { getReportStateForSync } from '../src/store/persistence';
 
-describe('getStorageErrorMessage', () => {
-  it('explains anonymous auth setup failures', () => {
-    const message = getStorageErrorMessage(
-      new Error('Supabase anonymous sign-in failed: signups not allowed')
-    );
+const state: PersistedReportState = {
+  reports: [],
+  entries: [],
+  targets: [],
+  periodTargets: [],
+  templateSheets: [],
+  users: [{
+    id: 'admin',
+    name: '관리자',
+    email: 'admin@example.com',
+    employee_no: '1',
+    role: 'admin',
+    assigned_equipment: [],
+    assigned_shift: null,
+    can_write: true,
+    can_edit: true,
+    can_delete: true,
+    created_at: '2026-01-01T00:00:00Z',
+  }],
+  currentUserId: 'admin',
+};
 
-    expect(message).toContain('Anonymous Sign-Ins');
-    expect(message).toContain('forging-production-app.vercel.app');
-  });
-
-  it('explains browser storage blocks', () => {
-    const message = getStorageErrorMessage(new Error('localStorage access is denied'));
-
-    expect(message).toContain('forging-production-app.vercel.app');
-    expect(message).toContain('사이트 데이터');
-  });
-
-  it('explains Supabase permission failures', () => {
-    const message = getStorageErrorMessage({
-      code: '403',
-      message: 'permission denied for table production_reports',
-    });
-
-    expect(message).toContain('RLS');
-    expect(message).toContain('production_reports');
-  });
-
-  it('explains network failures', () => {
-    const message = getStorageErrorMessage(new Error('network request failed'));
-
-    expect(message).toContain('Supabase');
-    expect(message).toContain('VPN');
+describe('Supabase report state sync', () => {
+  it('does not include users because user management is persisted separately', () => {
+    expect(getReportStateForSync(state).users).toEqual([]);
   });
 });
