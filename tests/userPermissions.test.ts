@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { User } from '../src/types';
-import { canCreateReport, resolveCurrentUser } from '../src/utils/userPermissions';
+import { canCreateReport, resolveCurrentUser, resolveHydratedUsers } from '../src/utils/userPermissions';
 
 const user = (overrides: Partial<User>): User => ({
   id: 'user-1',
@@ -27,5 +27,17 @@ describe('user permissions', () => {
 
   it('allows managers to create reports even when legacy rows lack permission flags', () => {
     expect(canCreateReport(user({ role: 'manager' }))).toBe(true);
+  });
+
+  it('preserves local users when the remote users query returns an empty array', () => {
+    const admin = user({ id: 'admin', role: 'admin', name: '관리자' });
+
+    expect(resolveHydratedUsers([], [admin], [])).toEqual([admin]);
+  });
+
+  it('restores the fallback user list when both remote and local users are empty', () => {
+    const admin = user({ id: 'admin', role: 'admin', name: '관리자' });
+
+    expect(resolveHydratedUsers([], [], [admin])).toEqual([admin]);
   });
 });

@@ -38,7 +38,7 @@ import {
   syncTemplateSheetsWithReportEntries,
   updateTemplateWorkbookCell,
 } from '../utils/templateWorkbook';
-import { resolveCurrentUser } from '../utils/userPermissions';
+import { resolveCurrentUser, resolveHydratedUsers } from '../utils/userPermissions';
 
 interface CreateReportOptions {
   sourceReportDate?: string;
@@ -762,7 +762,9 @@ export const useReportStore = create<ReportStore>((set, get) => {
     const localState = shouldUseLocalCache ? loadLocalReportState() : null;
     if (localState) {
       set(state => {
-        const normalizedUsers = normalizeUserDefaults(getInitialArray(localState.users, state.users));
+        const normalizedUsers = normalizeUserDefaults(
+          resolveHydratedUsers(localState.users ?? [], state.users, DEMO_USERS)
+        );
         const normalizedTargets = normalizeTargetDefaults(getInitialArray(localState.targets, state.targets));
         const normalizedPeriodTargets = normalizePeriodTargetDefaults(
           getInitialArray(localState.periodTargets, state.periodTargets)
@@ -809,7 +811,9 @@ export const useReportStore = create<ReportStore>((set, get) => {
         let remoteDefaultsChanged = false;
         let remoteTemplateSheetsSynced = false;
         set(state => {
-          const normalizedUsers = normalizeUserDefaults(getInitialArray(remoteState.users, state.users));
+          const normalizedUsers = normalizeUserDefaults(
+            resolveHydratedUsers(remoteState.users ?? [], state.users, DEMO_USERS)
+          );
           const normalizedTargets = normalizeTargetDefaults(getInitialArray(remoteState.targets, state.targets));
           const normalizedPeriodTargets = normalizePeriodTargetDefaults(
             getInitialArray(remoteState.periodTargets, state.periodTargets)
