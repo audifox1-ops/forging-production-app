@@ -12,6 +12,7 @@ import {
   getPlanDateFromActualDate,
   getTodayPlanDate,
 } from '../utils/reportDates';
+import { canCreateReport as canCreateReportForUser } from '../utils/userPermissions';
 
 type ReasonFormData = {
   reason_category: ReasonCategory | '';
@@ -159,9 +160,9 @@ export default function UserInputPage() {
   const { targets, getReport, getEntriesByReport, saveEntry, submitEntry, createReport, getCurrentUser, isHydrating, hasHydrated } = useReportStore();
   const currentUser = getCurrentUser();
   const isAdmin = currentUser?.role === 'admin';
-  const canWrite = isAdmin || Boolean(currentUser?.can_write);
-  const canEdit = isAdmin || Boolean(currentUser?.can_edit);
-  const canCreateReport = canWrite || canEdit;
+  const canWrite = isAdmin || currentUser?.role === 'manager' || Boolean(currentUser?.can_write);
+  const canEdit = isAdmin || currentUser?.role === 'manager' || Boolean(currentUser?.can_edit);
+  const canCreateReport = canCreateReportForUser(currentUser);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment>('P15');
   const [entryDrafts, setEntryDrafts] = useState<Record<string, EntryQuantityDraft>>({});
 

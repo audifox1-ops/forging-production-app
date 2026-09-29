@@ -41,6 +41,7 @@ import {
 } from '../utils/reportDates';
 import { get2026PeriodTargetForDate } from '../utils/targetConfig';
 import { downloadReportExcel } from '../utils/excelTemplate';
+import { canCreateReport as canCreateReportForUser } from '../utils/userPermissions';
 
 const PERIOD_OPTIONS: { value: SummaryPeriod; label: string }[] = [
   { value: 'day', label: '일간' },
@@ -109,10 +110,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { reports, targets, periodTargets, getEntriesByReport, createReport, getCurrentUser, isHydrating, hasHydrated } = useReportStore();
   const currentUser = getCurrentUser();
-  const isAdmin = currentUser?.role === 'admin';
-  const canWrite = isAdmin || Boolean(currentUser?.can_write);
-  const canEdit = isAdmin || Boolean(currentUser?.can_edit);
-  const canCreateReport = canWrite || canEdit;
+  const canCreateReport = canCreateReportForUser(currentUser);
   const [selectedPlanDate, setSelectedPlanDate] = React.useState(getTodayPlanDate());
   const [selectedActualDate, setSelectedActualDate] = React.useState(() => getActualDateFromPlanDate(getTodayPlanDate()));
   const [selectedPeriod, setSelectedPeriod] = React.useState<SummaryPeriod>('day');

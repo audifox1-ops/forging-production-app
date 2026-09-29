@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import { useReportStore } from '../store/reportStore';
 import { useToast } from './Toast';
 import { withBasePath } from '../lib/baseUrl';
+import { resolveCurrentUser } from '../utils/userPermissions';
 
 const APP_NAME = '생산량보고';
 const APP_TAGLINE = 'Production Reporting';
@@ -35,10 +36,10 @@ export default function Layout() {
     lastSyncedAt,
     hydrateStorage,
   } = useReportStore();
-  const currentUser = users.find(user => user.id === currentUserId) ?? users[0];
+  const currentUser = resolveCurrentUser(users, currentUserId);
   const isAdmin = currentUser?.role === 'admin';
-  const canWrite = isAdmin || Boolean(currentUser?.can_write);
-  const canEdit = isAdmin || Boolean(currentUser?.can_edit);
+  const canWrite = isAdmin || currentUser?.role === 'manager' || Boolean(currentUser?.can_write);
+  const canEdit = isAdmin || currentUser?.role === 'manager' || Boolean(currentUser?.can_edit);
   const canDelete = isAdmin || Boolean(currentUser?.can_delete);
   const roleLabel = isAdmin ? '관리자' : currentUser?.role === 'manager' ? '총괄' : '사용자';
   const permissionLabel = isAdmin

@@ -38,6 +38,7 @@ import {
   syncTemplateSheetsWithReportEntries,
   updateTemplateWorkbookCell,
 } from '../utils/templateWorkbook';
+import { resolveCurrentUser } from '../utils/userPermissions';
 
 interface CreateReportOptions {
   sourceReportDate?: string;
@@ -293,8 +294,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
   };
 
   const resolveCurrentUserId = (users: User[], currentUserId: string) => {
-    if (users.some(user => user.id === currentUserId)) return currentUserId;
-    return users.find(user => user.role === 'admin')?.id ?? users[0]?.id ?? currentUserId;
+    return resolveCurrentUser(users, currentUserId)?.id ?? currentUserId;
   };
 
   const buildDefaultEntry = (
@@ -385,10 +385,19 @@ export const useReportStore = create<ReportStore>((set, get) => {
     if (existing) {
       const missingEntries = buildMissingEntries(existing.id, sourceEntries);
       if (missingEntries.length > 0) {
-        set(state => ({
-          entries: [...state.entries, ...missingEntries],
-        }));
-        persistCurrentState(true, () => upsertSupabaseRows('production_entries', missingEntries));
+        set(state => {
+          const nextEntries = [...state.entries, ...missingEntries];
+          return {
+            entries: nextEntries,
+            templateSheets: syncTemplateSheetsWithReportEntries(
+              state.templateSheets,
+              state.reports,
+              nextEntries,
+              existing.id
+            ),
+          };
+        });
+        persistCurrentState(true, () => saveSupabaseReportState(getPersistedState()));
       }
       return existing;
     }
@@ -405,14 +414,21 @@ export const useReportStore = create<ReportStore>((set, get) => {
 
     const newEntries = buildMissingEntries(newReport.id, sourceEntries);
 
-    set(state => ({
-      reports: [...state.reports, newReport],
-      entries: [...state.entries, ...newEntries],
-    }));
-    persistCurrentState(true, async () => {
-      await upsertSupabaseRows('production_reports', newReport);
-      await upsertSupabaseRows('production_entries', newEntries);
+    set(state => {
+      const nextReports = [...state.reports, newReport];
+      const nextEntries = [...state.entries, ...newEntries];
+      return {
+        reports: nextReports,
+        entries: nextEntries,
+        templateSheets: syncTemplateSheetsWithReportEntries(
+          state.templateSheets,
+          nextReports,
+          nextEntries,
+          newReport.id
+        ),
+      };
     });
+    persistCurrentState(true, () => saveSupabaseReportState(getPersistedState()));
 
     return newReport;
   },
@@ -682,7 +698,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
 
   getCurrentUser: () => {
     const state = get();
-    return state.users.find(user => user.id === state.currentUserId);
+    return resolveCurrentUser(state.users, state.currentUserId);
   },
 
   getUsers: () => get().users,

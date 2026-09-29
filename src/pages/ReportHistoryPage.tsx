@@ -17,6 +17,7 @@ import {
 } from '../utils/reportDates';
 import { downloadReportExcel } from '../utils/excelTemplate';
 import type { ProductionReport } from '../types';
+import { canCreateReport as canCreateReportForUser } from '../utils/userPermissions';
 
 // ────────────────────────────────────────────────────────────
 // 보고서 삭제 확인 다이얼로그
@@ -182,11 +183,8 @@ export default function ReportHistoryPage() {
   const { reports, getEntriesByReport, createReport, deleteReport, getCurrentUser } = useReportStore();
   const { showToast } = useToast();
   const currentUser = getCurrentUser();
-  const isAdmin = currentUser?.role === 'admin';
-  const canWrite = isAdmin || Boolean(currentUser?.can_write);
-  const canEdit = isAdmin || Boolean(currentUser?.can_edit);
-  const canDelete = isAdmin || Boolean(currentUser?.can_delete);
-  const canCreateReport = canWrite || canEdit;
+  const canCreateReport = canCreateReportForUser(currentUser);
+  const canDelete = currentUser?.role === 'admin' || Boolean(currentUser?.can_delete);
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [copySourceDate, setCopySourceDate] = React.useState<string | undefined>(undefined);
