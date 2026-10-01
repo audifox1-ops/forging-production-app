@@ -8,6 +8,7 @@ export type Shift = '주간' | '야간';
 export type ProductionType = '제품' | '황지';
 export type PeriodTargetType = 'weekly' | 'monthly' | 'yearly';
 export type SummaryPeriod = 'day' | 'week' | 'month' | 'year';
+export type PlanSource = 'carried' | 'manual' | 'unavailable';
 
 export type ReportStatus = 'draft' | 'collecting' | 'submitted' | 'reviewed';
 export type EntryStatus = 'not_started' | 'saved' | 'submitted' | 'returned' | 'approved';
@@ -44,6 +45,7 @@ export interface ProductionReport {
   created_by: string;
   created_at: string;
   updated_at: string;
+  closed_at?: string;
 }
 
 export interface ProductionEntry {
@@ -59,6 +61,7 @@ export interface ProductionEntry {
   billet_actual: number;
   next_product_plan: number;
   next_billet_plan: number;
+  plan_source?: PlanSource;
   product_achievement_rate?: number;
   billet_achievement_rate?: number;
   product_shortfall?: number;

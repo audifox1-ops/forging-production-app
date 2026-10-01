@@ -39,6 +39,11 @@ import {
   updateTemplateWorkbookCell,
 } from '../utils/templateWorkbook';
 import { resolveCurrentUser, resolveHydratedUsers } from '../utils/userPermissions';
+import {
+  buildCarryoverPlans,
+  getPlanSourceAfterEdit,
+  isCarryoverUpdateAllowed,
+} from '../utils/planCarryover';
 
 interface CreateReportOptions {
   sourceReportDate?: string;
@@ -57,6 +62,7 @@ interface ReportStore {
   isHydrating: boolean;
   syncError?: string;
   lastSyncedAt?: string;
+  planCarryoverWarnings: Record<string, string>;
 
   // 보고서 관련
   getReport: (reportDate: string) => ProductionReport | undefined;
@@ -301,12 +307,22 @@ export const useReportStore = create<ReportStore>((set, get) => {
     reportId: string,
     equipment: Equipment,
     shift: Shift,
-    sourceEntries: ProductionEntry[]
+    sourceEntries: ProductionEntry[],
+    sourceReport?: ProductionReport
   ): ProductionEntry => {
     const currentTarget = get().targets.find(item => item.equipment === equipment && item.shift === shift);
     const sourceEntry = sourceEntries.find(entry => entry.equipment === equipment && entry.shift === shift);
     const initialAssignee = INITIAL_ASSIGNEES_BY_EQUIPMENT[equipment];
     const assignedUser = get().users.find(user => user.email === initialAssignee.email);
+    const carryover = buildCarryoverPlans(
+      sourceReport
+        ? sourceEntry ?? { next_product_plan: 0, next_billet_plan: 0 }
+        : undefined,
+      {
+        product_plan: currentTarget?.product_target ?? 0,
+        billet_plan: currentTarget?.billet_target ?? 0,
+      }
+    );
     return {
       id: genId(),
       report_id: reportId,
@@ -314,23 +330,24 @@ export const useReportStore = create<ReportStore>((set, get) => {
       user_name: assignedUser?.name ?? initialAssignee.userName,
       equipment,
       shift,
-      product_plan: sourceEntry != null
-        ? (sourceEntry.next_product_plan ?? 0)
-        : (currentTarget?.product_target ?? 0),
+      product_plan: carryover.product_plan,
       product_actual: 0,
-      billet_plan: sourceEntry != null
-        ? (sourceEntry.next_billet_plan ?? 0)
-        : (currentTarget?.billet_target ?? 0),
+      billet_plan: carryover.billet_plan,
       billet_actual: 0,
       next_product_plan: 0,
       next_billet_plan: 0,
+      plan_source: carryover.plan_source,
       submit_status: 'not_started',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
   };
 
-  const buildMissingEntries = (reportId: string, sourceEntries: ProductionEntry[]) => {
+  const buildMissingEntries = (
+    reportId: string,
+    sourceEntries: ProductionEntry[],
+    sourceReport?: ProductionReport
+  ) => {
     const existingEntries = get().entries.filter(entry => entry.report_id === reportId);
     const newEntries: ProductionEntry[] = [];
 
@@ -338,12 +355,35 @@ export const useReportStore = create<ReportStore>((set, get) => {
       SHIFT_LIST.forEach(shift => {
         const exists = existingEntries.some(entry => entry.equipment === equipment && entry.shift === shift);
         if (!exists) {
-          newEntries.push(buildDefaultEntry(reportId, equipment, shift, sourceEntries));
+          newEntries.push(buildDefaultEntry(reportId, equipment, shift, sourceEntries, sourceReport));
         }
       });
     });
 
     return newEntries;
+  };
+
+  const getCarryoverWarning = (
+    sourceReport: ProductionReport | undefined,
+    sourceEntries: ProductionEntry[]
+  ) => {
+    if (!sourceReport) return undefined;
+
+    const hasUnavailableExpectedPlan = EQUIPMENT_LIST.some(equipment =>
+      SHIFT_LIST.some(shift => {
+        const sourceEntry = sourceEntries.find(
+          entry => entry.equipment === equipment && entry.shift === shift
+        );
+        return !sourceEntry || (
+          sourceEntry.next_product_plan <= 0 &&
+          sourceEntry.next_billet_plan <= 0
+        );
+      })
+    );
+
+    return hasUnavailableExpectedPlan
+      ? `직전 보고서(${sourceReport.report_date})의 금일 예상이 아직 입력되지 않았습니다.`
+      : undefined;
   };
 
   const initialTargets = normalizeTargetDefaults(getInitialArray(LOCAL_STATE?.targets, DEMO_TARGETS)).value;
@@ -372,6 +412,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
   isHydrating: false,
   syncError: undefined,
   lastSyncedAt: undefined,
+  planCarryoverWarnings: {},
 
   getReport: (reportDate) => {
     return get().reports.find(r => r.report_date === reportDate);
@@ -381,14 +422,18 @@ export const useReportStore = create<ReportStore>((set, get) => {
     const existing = get().getReport(reportDate);
     const sourceReport = getSourceReport(reportDate, options);
     const sourceEntries = sourceReport ? get().getEntriesByReport(sourceReport.id) : [];
+    const carryoverWarning = getCarryoverWarning(sourceReport, sourceEntries);
 
     if (existing) {
-      const missingEntries = buildMissingEntries(existing.id, sourceEntries);
+      const missingEntries = buildMissingEntries(existing.id, sourceEntries, sourceReport);
       if (missingEntries.length > 0) {
         set(state => {
           const nextEntries = [...state.entries, ...missingEntries];
           return {
             entries: nextEntries,
+            planCarryoverWarnings: carryoverWarning
+              ? { ...state.planCarryoverWarnings, [existing.id]: carryoverWarning }
+              : state.planCarryoverWarnings,
             templateSheets: syncTemplateSheetsWithReportEntries(
               state.templateSheets,
               state.reports,
@@ -412,7 +457,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
       updated_at: new Date().toISOString(),
     };
 
-    const newEntries = buildMissingEntries(newReport.id, sourceEntries);
+    const newEntries = buildMissingEntries(newReport.id, sourceEntries, sourceReport);
 
     set(state => {
       const nextReports = [...state.reports, newReport];
@@ -420,6 +465,9 @@ export const useReportStore = create<ReportStore>((set, get) => {
       return {
         reports: nextReports,
         entries: nextEntries,
+        planCarryoverWarnings: carryoverWarning
+          ? { ...state.planCarryoverWarnings, [newReport.id]: carryoverWarning }
+          : state.planCarryoverWarnings,
         templateSheets: syncTemplateSheetsWithReportEntries(
           state.templateSheets,
           nextReports,
@@ -484,6 +532,14 @@ export const useReportStore = create<ReportStore>((set, get) => {
       savedEntry = {
         ...existing,
         ...entryData,
+        plan_source: getPlanSourceAfterEdit(
+          existing.plan_source,
+          { product_plan: existing.product_plan, billet_plan: existing.billet_plan },
+          {
+            product_plan: entryData.product_plan ?? existing.product_plan,
+            billet_plan: entryData.billet_plan ?? existing.billet_plan,
+          }
+        ),
         submit_status: existing.submit_status === 'submitted' || existing.submit_status === 'approved'
           ? existing.submit_status
           : 'saved',
@@ -516,23 +572,62 @@ export const useReportStore = create<ReportStore>((set, get) => {
         billet_actual: 0,
         next_product_plan: 0,
         next_billet_plan: 0,
+        plan_source: 'manual',
         ...entryData,
       };
       savedEntry = newEntry;
-      set(state => {
-        const nextEntries = [...state.entries, newEntry];
-
-        return {
-          entries: nextEntries,
-          templateSheets: syncTemplateSheetsWithReportEntries(
-            state.templateSheets,
-            state.reports,
-            nextEntries,
-            savedEntry.report_id
-          ),
-        };
-      });
     }
+
+    set(state => {
+      const sourceReport = state.reports.find(report => report.id === savedEntry.report_id);
+      const successorReport = sourceReport?.next_plan_date
+        ? state.reports.find(report => report.report_date === sourceReport.next_plan_date)
+        : undefined;
+      const nextEntries = state.entries.map(entry =>
+        existing && entry.id === existing.id ? savedEntry : entry
+      );
+
+      if (!existing) nextEntries.push(savedEntry);
+
+      if (sourceReport && successorReport && successorReport.id !== sourceReport.id) {
+        nextEntries.forEach((entry, index) => {
+          if (
+            entry.report_id === successorReport.id &&
+            entry.equipment === savedEntry.equipment &&
+            entry.shift === savedEntry.shift &&
+            isCarryoverUpdateAllowed(entry.plan_source, successorReport)
+          ) {
+            nextEntries[index] = {
+              ...entry,
+              product_plan: savedEntry.next_product_plan,
+              billet_plan: savedEntry.next_billet_plan,
+              updated_at: now,
+            };
+          }
+        });
+      }
+
+      const nextWarnings = { ...state.planCarryoverWarnings };
+      if (sourceReport && successorReport) {
+        const warning = getCarryoverWarning(
+          sourceReport,
+          nextEntries.filter(entry => entry.report_id === sourceReport.id)
+        );
+        if (warning) nextWarnings[successorReport.id] = warning;
+        else delete nextWarnings[successorReport.id];
+      }
+
+      return {
+        entries: nextEntries,
+        planCarryoverWarnings: nextWarnings,
+        templateSheets: syncTemplateSheetsWithReportEntries(
+          state.templateSheets,
+          state.reports,
+          nextEntries,
+          savedEntry.report_id
+        ),
+      };
+    });
     persistCurrentState(true, () => saveSupabaseReportState(getPersistedState()));
   },
 
