@@ -63,5 +63,7 @@ export function isCarryoverUpdateAllowed(
   planSource: PlanSource | undefined,
   report: Pick<ProductionReport, 'status'> & { closed_at?: string }
 ) {
-  return planSource === 'carried' && report.status !== 'reviewed' && !report.closed_at;
+  return (planSource === 'carried' || planSource === 'unavailable') &&
+    report.status !== 'reviewed' &&
+    !report.closed_at;
 }

@@ -35,9 +35,9 @@ describe('plan carryover rules', () => {
     expect(getPlanSourceAfterEdit('carried', { product_plan: 37036, billet_plan: 0 }, { product_plan: 37036, billet_plan: 0 })).toBe('carried');
   });
 
-  it('does not overwrite manual or unavailable entries during carryover propagation', () => {
+  it('does not overwrite manual entries but allows unavailable entries to be filled', () => {
     expect(isCarryoverUpdateAllowed('manual', { status: 'collecting' })).toBe(false);
-    expect(isCarryoverUpdateAllowed('unavailable', { status: 'collecting' })).toBe(false);
+    expect(isCarryoverUpdateAllowed('unavailable', { status: 'collecting' })).toBe(true);
     expect(isCarryoverUpdateAllowed('carried', { status: 'collecting' })).toBe(true);
   });
 

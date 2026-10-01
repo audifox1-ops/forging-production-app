@@ -601,6 +601,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
               ...entry,
               product_plan: savedEntry.next_product_plan,
               billet_plan: savedEntry.next_billet_plan,
+              plan_source: 'carried',
               updated_at: now,
             };
           }
