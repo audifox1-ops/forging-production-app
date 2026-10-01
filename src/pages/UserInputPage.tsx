@@ -13,6 +13,7 @@ import {
   getTodayPlanDate,
 } from '../utils/reportDates';
 import { canCreateReport as canCreateReportForUser } from '../utils/userPermissions';
+import { getManualPlanChangeMessages } from '../utils/planCarryoverDisplay';
 
 type ReasonFormData = {
   reason_category: ReasonCategory | '';
@@ -157,7 +158,19 @@ function DailyTargetAchievementPanel({
 export default function UserInputPage() {
   const { reportDate } = useParams<{ reportDate: string }>();
   const navigate = useNavigate();
-  const { targets, getReport, getEntriesByReport, saveEntry, submitEntry, createReport, getCurrentUser, isHydrating, hasHydrated } = useReportStore();
+  const {
+    reports,
+    targets,
+    getReport,
+    getEntriesByReport,
+    saveEntry,
+    submitEntry,
+    createReport,
+    getCurrentUser,
+    isHydrating,
+    hasHydrated,
+    planCarryoverWarnings,
+  } = useReportStore();
   const currentUser = getCurrentUser();
   const isAdmin = currentUser?.role === 'admin';
   const canWrite = isAdmin || currentUser?.role === 'manager' || Boolean(currentUser?.can_write);
@@ -170,6 +183,13 @@ export default function UserInputPage() {
   const planDate = getPlanDateFromActualDate(actualDate);
   let report = getReport(actualDate);
   const entries = report ? getEntriesByReport(report.id) : [];
+  const predecessorReport = report
+    ? reports.find(candidate => candidate.next_plan_date === report!.report_date && candidate.report_date < report!.report_date)
+    : undefined;
+  const predecessorEntries = predecessorReport ? getEntriesByReport(predecessorReport.id) : [];
+  const getPredecessorEntry = (entry: ProductionEntry) => predecessorEntries.find(
+    predecessorEntry => predecessorEntry.equipment === entry.equipment && predecessorEntry.shift === entry.shift
+  );
 
   // 보고서가 없거나 누락된 항목이 있을 경우(8개 미만) 자동 생성/복구
   const hasReport = Boolean(report);
@@ -403,6 +423,13 @@ export default function UserInputPage() {
         </div>
       </div>
 
+      {planCarryoverWarnings[report.id] && (
+        <div className="flex items-start gap-3 p-4 border border-amber-200 rounded-xl bg-amber-50 text-sm text-amber-800">
+          <AlertCircle size={18} className="flex-shrink-0 mt-0.5 text-amber-600" />
+          <div>{planCarryoverWarnings[report.id]}</div>
+        </div>
+      )}
+
       {entries.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -474,6 +501,7 @@ export default function UserInputPage() {
               <EntryInputCard
                 key={entry.id}
                 entry={entry}
+                predecessorEntry={getPredecessorEntry(entry)}
                 reportId={report!.id}
                 targets={targets}
                 canWrite={canWrite}
@@ -510,6 +538,7 @@ export default function UserInputPage() {
 // 개별 실적 입력 카드
 function EntryInputCard({
   entry,
+  predecessorEntry,
   reportId,
   targets,
   canWrite,
@@ -524,6 +553,7 @@ function EntryInputCard({
   onSubmit,
 }: {
   entry: ProductionEntry;
+  predecessorEntry?: ProductionEntry;
   reportId: string;
   targets: EquipmentTarget[];
   canWrite: boolean;
@@ -587,6 +617,7 @@ function EntryInputCard({
   const equipmentTargets = targets.filter(target => target.equipment === entry.equipment);
   const equipmentProductTarget = equipmentTargets.reduce((sum, target) => sum + (target.product_target || 0), 0);
   const equipmentBilletTarget = equipmentTargets.reduce((sum, target) => sum + (target.billet_target || 0), 0);
+  const manualPlanChangeMessages = getManualPlanChangeMessages(entry, predecessorEntry);
 
   const handleChange = (field: string, value: string | number) => {
     const numericValue = typeof value === 'number' ? value : Number(value);
@@ -667,6 +698,11 @@ function EntryInputCard({
 
       {/* 입력 테이블 */}
       <div className="card-body space-y-5">
+        {manualPlanChangeMessages.length > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 space-y-1">
+            {manualPlanChangeMessages.map(message => <div key={message}>{message}</div>)}
+          </div>
+        )}
         {/* 실적/계획 입력 섹션 */}
         <div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 text-sm">

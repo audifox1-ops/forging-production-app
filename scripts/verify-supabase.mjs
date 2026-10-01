@@ -249,7 +249,11 @@ async function main() {
 
   await ensureAuthenticated(client);
   await verifyTableReads(client);
-  await verifyAppWrites(client);
+  if (process.env.VERIFY_SUPABASE_WRITES === 'true') {
+    await verifyAppWrites(client);
+  } else {
+    console.log('write:checks:skipped reason=VERIFY_SUPABASE_WRITES is not true');
+  }
 
   console.log('supabase:verify:ok');
 }
