@@ -11,6 +11,7 @@ import ReasonContent, { ReasonTextList } from '../components/ReasonContent';
 import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
 import {
   getActualDateFromPlanDate,
+  formatReportDate,
   getPlanDateFromActualDate,
   getTodayPlanDate,
 } from '../utils/reportDates';
@@ -165,8 +166,8 @@ export default function AdminReportPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">보고서 미리보기</h1>
             <p className="text-sm text-gray-500">
-              전일 실적일 {format(new Date(actualDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko })} ·
-              금일 계획일 {format(new Date(reportPlanDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko })}
+              전일 실적일 {formatReportDate(actualDate, 'yyyy년 MM월 dd일 (eee)')} ·
+              금일 계획일 {formatReportDate(reportPlanDate, 'yyyy년 MM월 dd일 (eee)')}
             </p>
           </div>
         </div>

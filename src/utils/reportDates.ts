@@ -3,6 +3,10 @@ import type { ProductionReport } from '../types';
 
 export const REPORT_DATE_FORMAT = 'yyyy-MM-dd';
 
+export function formatReportDate(dateString: string, dateFormat = 'yyyy년 MM월 dd일') {
+  return format(parseISO(dateString), dateFormat);
+}
+
 const KOREA_PUBLIC_HOLIDAYS = new Set([
   '2026-01-01',
   '2026-02-16',

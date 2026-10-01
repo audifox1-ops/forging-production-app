@@ -9,6 +9,7 @@ import { Equipment, EquipmentTarget, EQUIPMENT_LIST, ProductionEntry, REASON_CAT
 import { formatNumber, calcNullableRate, getRateColorClass } from '../utils/calculations';
 import {
   getActualDateFromPlanDate,
+  formatReportDate,
   getPlanDateFromActualDate,
   getTodayPlanDate,
 } from '../utils/reportDates';
@@ -364,11 +365,11 @@ export default function UserInputPage() {
               <h1 className="text-xl font-bold text-gray-900">생산실적 입력</h1>
               <p className="text-sm text-gray-500 mt-0.5">
                 전일 실적일: <span className="font-medium text-gray-700">
-                  {format(new Date(actualDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko })}
+                  {formatReportDate(actualDate, 'yyyy년 MM월 dd일 (eee)')}
                 </span>
                 <span className="mx-1 text-gray-300">·</span>
                 금일 계획일: <span className="font-medium text-gray-700">
-                  {format(new Date(planDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko })}
+                  {formatReportDate(planDate, 'yyyy년 MM월 dd일 (eee)')}
                 </span>
               </p>
               <p className="text-sm text-gray-500">

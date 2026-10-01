@@ -35,6 +35,7 @@ import { EQUIPMENT_LIST, SHIFT_LIST } from '../types';
 import type { PeriodTargetType, ProductionReport, SummaryPeriod } from '../types';
 import {
   getActualDateFromPlanDate,
+  formatReportDate,
   getReportPlanDate,
   getTodayPlanDate,
   getDayName,
@@ -755,7 +756,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="mt-3 text-xs text-gray-500">
-                        전일 실적 {format(new Date(actualDateKey), 'M.d')} ({getDayName(actualDateKey)})
+                        전일 실적 {formatReportDate(actualDateKey, 'M.d')} ({getDayName(actualDateKey)})
                       </div>
                       {daySummary ? (
                         <div className="mt-2 space-y-1 text-xs">
@@ -815,8 +816,8 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <div className="ml-auto text-sm text-blue-600">
-                  전일 실적 {format(new Date(selectedActualDate), 'yyyy.MM.dd')} ({getDayName(selectedActualDate)}) ·
-                  금일 계획 {format(new Date(selectedPlanDate), 'yyyy.MM.dd')} ·
+                  전일 실적 {formatReportDate(selectedActualDate, 'yyyy.MM.dd')} ({getDayName(selectedActualDate)}) ·
+                  금일 계획 {formatReportDate(selectedPlanDate, 'yyyy.MM.dd')} ·
                   제출: {summary.submit_status_count.submitted}/{summary.submit_status_count.total}명 ·
                   미입력: {summary.submit_status_count.not_started}명
                 </div>
