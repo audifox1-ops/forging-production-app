@@ -10,6 +10,7 @@ import SubmitStatusBadge from '../components/SubmitStatusBadge';
 import { useToast } from '../components/Toast';
 import {
   getActualDateFromPlanDate,
+  formatReportDate,
   getReportPlanDate,
   getTodayPlanDate,
   getDayName,
@@ -48,7 +49,7 @@ function DeleteReportDialog({
             <div>
               <h2 className="text-base font-bold text-gray-900">보고서 삭제</h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                {format(new Date(report.report_date), 'yyyy년 MM월 dd일', { locale: ko })} ({getDayName(report.report_date)}요일) 보고서
+                {formatReportDate(report.report_date)} ({getDayName(report.report_date)}요일) 보고서
               </p>
             </div>
           </div>
@@ -237,7 +238,7 @@ export default function ReportHistoryPage() {
     if (!deleteTarget) return;
     deleteReport(deleteTarget.id);
     showToast(
-      `${format(new Date(deleteTarget.report_date), 'yyyy.MM.dd', { locale: ko })} 보고서가 삭제되었습니다.`,
+      `${formatReportDate(deleteTarget.report_date, 'yyyy.MM.dd')} 보고서가 삭제되었습니다.`,
       'success'
     );
     setDeleteTarget(null);
@@ -284,12 +285,12 @@ export default function ReportHistoryPage() {
                     <td className="px-4 py-3 font-semibold text-gray-800">
                       <div className="flex items-center gap-2">
                         <Calendar size={14} className="text-gray-400" />
-                        {format(new Date(report.report_date), 'yyyy.MM.dd', { locale: ko })}
+                        {formatReportDate(report.report_date, 'yyyy.MM.dd')}
                         <span className="text-xs text-gray-400">({getDayName(report.report_date)}요일)</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-500">
-                      {format(new Date(getReportPlanDate(report)), 'yyyy.MM.dd', { locale: ko })}
+                      {formatReportDate(getReportPlanDate(report), 'yyyy.MM.dd')}
                       <span className="text-xs text-gray-400 ml-1">({getDayName(getReportPlanDate(report))}요일)</span>
                     </td>
                     <td className="px-4 py-3 text-center">

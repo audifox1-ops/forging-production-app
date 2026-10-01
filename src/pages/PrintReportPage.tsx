@@ -11,6 +11,7 @@ import ReasonContent, { ReasonTextList } from '../components/ReasonContent';
 import type { Equipment, Shift } from '../types';
 import {
   getActualDateFromPlanDate,
+  formatReportDate,
   getPlanDateFromActualDate,
   getTodayPlanDate,
 } from '../utils/reportDates';
@@ -156,8 +157,8 @@ export default function PrintReportPage() {
     );
   }
 
-  const formattedActualDate = format(new Date(actualDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko });
-  const formattedPlanDate = format(new Date(reportPlanDate), 'yyyy년 MM월 dd일 (eee)', { locale: ko });
+  const formattedActualDate = formatReportDate(actualDate, 'yyyy년 MM월 dd일 (eee)');
+  const formattedPlanDate = formatReportDate(reportPlanDate, 'yyyy년 MM월 dd일 (eee)');
   const overallSummary = generateOverallSummary(targetBasedSummary);
 
   return (

@@ -10,6 +10,7 @@ import {
   isCompanyHoliday,
   isNonWorkingDay,
   getDayName,
+  formatReportDate,
 } from '../src/utils/reportDates';
 
 describe('getTodayPlanDate', () => {
@@ -153,5 +154,11 @@ describe('getDayName', () => {
     expect(getDayName('2026-01-16')).toBe('금');
     expect(getDayName('2026-01-17')).toBe('토');
     expect(getDayName('2026-01-18')).toBe('일');
+  });
+});
+
+describe('formatReportDate', () => {
+  it('formats a date-only report date without shifting it to the next day', () => {
+    expect(formatReportDate('2026-09-30')).toBe('2026년 09월 30일');
   });
 });
