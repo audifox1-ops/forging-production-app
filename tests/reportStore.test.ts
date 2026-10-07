@@ -133,6 +133,31 @@ describe('reportStore report creation', () => {
     expect(successorEntry.plan_source).toBe('carried');
   });
 
+  it('keeps an empty successor unavailable when the predecessor expected plan is empty', () => {
+    resetStore(
+      [report('source', '2026-06-01', 'collecting', '2026-06-02'), report('successor', '2026-06-02')],
+      [
+        entry({ id: 'source-entry', report_id: 'source', next_product_plan: 37036 }),
+        entry({ id: 'successor-entry', report_id: 'successor', plan_source: 'carried', product_plan: 37036 }),
+      ]
+    );
+
+    useReportStore.getState().saveEntry({
+      id: 'source-entry',
+      report_id: 'source',
+      user_id: 'user-admin',
+      equipment: 'P15',
+      shift: '주간',
+      next_product_plan: 0,
+      next_billet_plan: 0,
+    });
+
+    const successorEntry = useReportStore.getState().getEntriesByReport('successor')[0];
+    expect(successorEntry.product_plan).toBe(0);
+    expect(successorEntry.billet_plan).toBe(0);
+    expect(successorEntry.plan_source).toBe('unavailable');
+  });
+
   it('does not propagate into a reviewed successor report', () => {
     resetStore(
       [report('source', '2026-06-01', 'collecting', '2026-06-02'), report('successor', '2026-06-02', 'reviewed')],

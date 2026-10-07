@@ -590,6 +590,7 @@ export const useReportStore = create<ReportStore>((set, get) => {
       if (!existing) nextEntries.push(savedEntry);
 
       if (sourceReport && successorReport && successorReport.id !== sourceReport.id) {
+        const hasExpectedPlan = savedEntry.next_product_plan > 0 || savedEntry.next_billet_plan > 0;
         nextEntries.forEach((entry, index) => {
           if (
             entry.report_id === successorReport.id &&
@@ -599,9 +600,9 @@ export const useReportStore = create<ReportStore>((set, get) => {
           ) {
             nextEntries[index] = {
               ...entry,
-              product_plan: savedEntry.next_product_plan,
-              billet_plan: savedEntry.next_billet_plan,
-              plan_source: 'carried',
+              product_plan: hasExpectedPlan ? savedEntry.next_product_plan : 0,
+              billet_plan: hasExpectedPlan ? savedEntry.next_billet_plan : 0,
+              plan_source: hasExpectedPlan ? 'carried' : 'unavailable',
               updated_at: now,
             };
           }
